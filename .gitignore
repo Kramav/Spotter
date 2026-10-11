@@ -1,0 +1,6 @@
+# script output
+alert_*.jpg
+detections.jpg
+zone_log.csv
+*.jpg
+*.jpeg
