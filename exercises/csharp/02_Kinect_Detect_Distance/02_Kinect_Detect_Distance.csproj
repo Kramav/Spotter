@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The Kinect runtime (Kinect20.dll) and OpenCV's native DLL are both 64-bit. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The Kinect SDK 2.0 / Runtime 2.0 installer puts the real Microsoft.Kinect.dll in the
+         64-bit Global Assembly Cache. The copy in the SDK's "Assemblies" folder and the
+         "Microsoft.Kinect" NuGet package are reference-only assemblies: they compile, then crash
+         at startup with "Reference assemblies cannot be loaded for execution". -->
+    <Reference Include="Microsoft.Kinect">
+      <HintPath>$(WINDIR)\Microsoft.NET\assembly\GAC_64\Microsoft.Kinect\v4.0_2.0.0.0__31bf3856ad364e35\Microsoft.Kinect.dll</HintPath>
+    </Reference>
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+  </ItemGroup>
+
+</Project>
