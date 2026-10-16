@@ -4,3 +4,7 @@ detections.jpg
 zone_log.csv
 *.jpg
 *.jpeg
+
+# C# build output (exercises/csharp)
+bin/
+obj/
