@@ -103,3 +103,27 @@ took about 650 ms. With both turned back on it takes 130–156 ms, the same as t
 OpenCvSharp (about 155 ms). On the Pi, `intrinsics` is what enables ARM NEON, so it matters even
 more there.
 **Rule:** when trimming OpenCV features, keep `intrinsics` and `thread`.
+
+### D14 — 2026-10-25 — Reproducible build: libfreenect2 as a vcpkg overlay port, plus CMake presets
+**Supersedes** D9's hand-built `third_party/` approach. D9's choices (pinned commit, CPU only)
+still stand.
+**Why:** the repo must build the same thing from a fresh clone. Before this, OpenCV was pinned but
+libfreenect2 took eight hand-typed commands. Now:
+- `exercises/cpp/ports/libfreenect2/` holds our vcpkg recipe: upstream commit fd64c5d, checked by
+  SHA512, with `openmp.patch` applied. It disables pkg-config so the libusb paths we pass are used,
+  and installs its own relocatable `freenect2Config.cmake` (upstream's has absolute paths baked in).
+- `vcpkg.json` lists `libfreenect2` and `opencv4`, and its `vcpkg-configuration.overlay-ports`
+  points at `./ports`.
+- `CMakePresets.json` holds the configure options. A fresh clone needs only `cmake --preset default`
+  and `cmake --build --preset default`.
+- vcpkg copies every DLL next to the .exe, so the hand-maintained copy list in CMakeLists is gone.
+
+**Verified 2026-10-25:** only the files git would commit were copied into an empty folder, then
+the two commands were run. It built, all DLLs were copied, and 01 and 02 ran on the sensor.
+**Not pinned:** compiler and CMake versions (any VS 2026 Build Tools / CMake 3.20+), and the vcpkg
+tool version. The port versions are pinned by the baseline.
+**Gotchas:**
+- On Windows, clone to a short path: vcpkg's nested build folders hit the 260-character limit.
+- Linux is untested: it needs `libudev-dev`, and on a Pi the first OpenCV + GTK build takes hours.
+- The first build anywhere compiles from source (about 30 min on the PC). A shared vcpkg binary
+  cache would avoid that, but isn't needed yet.

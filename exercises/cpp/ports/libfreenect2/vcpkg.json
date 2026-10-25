@@ -1,0 +1,12 @@
+{
+  "name": "libfreenect2",
+  "version-string": "0.2.1-fd64c5d",
+  "description": "Open source Kinect v2 driver, pinned to the last upstream commit, with Spotter's OpenMP patch (D9, D11)",
+  "homepage": "https://github.com/OpenKinect/libfreenect2",
+  "license": "Apache-2.0 OR GPL-2.0-only",
+  "dependencies": [
+    "libusb",
+    "libjpeg-turbo",
+    { "name": "vcpkg-cmake", "host": true }
+  ]
+}

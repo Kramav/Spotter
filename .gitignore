@@ -9,7 +9,6 @@ zone_log.csv
 bin/
 obj/
 
-# C++ build output and fetched sources (exercises/cpp)
+# C++ build output (exercises/cpp); vcpkg installs into build/vcpkg_installed
 build/
 vcpkg_installed/
-third_party/

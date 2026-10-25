@@ -1,7 +1,6 @@
 {
   "dependencies": [
-    "libusb",
-    "libjpeg-turbo",
+    "libfreenect2",
     {
       "name": "opencv4",
       "default-features": false,
@@ -21,5 +20,10 @@
       ]
     }
   ],
-  "builtin-baseline": "817892b0ecbc6af994dd6df999c73faf795adbf2"
+  "builtin-baseline": "817892b0ecbc6af994dd6df999c73faf795adbf2",
+  "vcpkg-configuration": {
+    "overlay-ports": [
+      "./ports"
+    ]
+  }
 }
