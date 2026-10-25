@@ -56,6 +56,11 @@ const int FarMm = 4500;
 // How often the console report prints, in milliseconds.
 const int ReportEveryMs = 1000;
 
+// The live frame rate in the window's corner is smoothed so it doesn't flicker:
+// each frame moves it only (1 - FpsSmoothing) of the way toward the newest value.
+// 0 = raw and jumpy, 0.9 = steady, 0.99 = very steady but slow to react.
+const double FpsSmoothing = 0.9;
+
 // Middle value of a list. For an even count, the average of the two middle values (like numpy's median).
 float Median(std::vector<float> values)
 {
@@ -122,6 +127,10 @@ int main()
     cv::resizeWindow(windowName, depthWidth * 2, depthHeight * 2);
 
     auto reportStart = std::chrono::steady_clock::now();
+
+    // Live frame rate: the time between two shown frames, smoothed (see FpsSmoothing).
+    auto lastFrameTime = std::chrono::steady_clock::now();
+    double liveFps = 0;
 
     // -----------------------------------------------------------------
     //  Main operation
@@ -245,6 +254,13 @@ int main()
             std::string countdown = "background in " + std::to_string((int)std::ceil(SecondsBeforeBackground - secondsSinceCountdown)) + " s";
             cv::putText(picture, countdown, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
         }
+        // Live frame rate, bottom-left corner.
+        auto frameTime = std::chrono::steady_clock::now();
+        double newestFps = 1.0 / std::chrono::duration<double>(frameTime - lastFrameTime).count();
+        lastFrameTime = frameTime;
+        liveFps = (liveFps == 0) ? newestFps : FpsSmoothing * liveFps + (1 - FpsSmoothing) * newestFps;
+        cv::putText(picture, cv::format("%.1f fps", liveFps), cv::Point(10, picture.rows - 10),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);   // yellow
         cv::imshow(windowName, picture);
 
         auto now = std::chrono::steady_clock::now();
