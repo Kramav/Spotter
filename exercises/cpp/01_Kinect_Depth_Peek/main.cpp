@@ -47,6 +47,11 @@ const int CrosshairStepPixels = 10;
 // How often the console report prints, in milliseconds.
 const int ReportEveryMs = 1000;
 
+// The live frame rate in the window's corner is smoothed so it doesn't flicker:
+// each frame moves it only (1 - FpsSmoothing) of the way toward the newest value.
+// 0 = raw and jumpy, 0.9 = steady, 0.99 = very steady but slow to react.
+const double FpsSmoothing = 0.9;
+
 int main()
 {
     // -----------------------------------------------------------------
@@ -95,6 +100,10 @@ int main()
     int crosshairX = -1, crosshairY = -1;   // centred on the first frame
 
     auto reportStart = std::chrono::steady_clock::now();
+
+    // Live frame rate: the time between two shown frames, smoothed (see FpsSmoothing).
+    auto lastFrameTime = std::chrono::steady_clock::now();
+    double liveFps = 0;
     int framesSinceReport = 0;
 
     // -----------------------------------------------------------------
@@ -173,6 +182,13 @@ int main()
         cv::drawMarker(picture, cv::Point(crosshairX, crosshairY), green, cv::MARKER_CROSS, 20, 1);
         cv::putText(picture, crosshairText, cv::Point(crosshairX + 8, crosshairY - 8),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, green, 1);
+        // Live frame rate, bottom-left corner.
+        auto frameTime = std::chrono::steady_clock::now();
+        double newestFps = 1.0 / std::chrono::duration<double>(frameTime - lastFrameTime).count();
+        lastFrameTime = frameTime;
+        liveFps = (liveFps == 0) ? newestFps : FpsSmoothing * liveFps + (1 - FpsSmoothing) * newestFps;
+        cv::putText(picture, cv::format("%.1f fps", liveFps), cv::Point(10, picture.rows - 10),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);   // yellow
         cv::imshow(windowName, picture);
 
         auto now = std::chrono::steady_clock::now();

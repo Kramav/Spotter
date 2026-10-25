@@ -67,6 +67,11 @@ const double MaxDistanceMeters = 100.0;
 // How often the console report prints, in milliseconds.
 const int ReportEveryMs = 1000;
 
+// The live frame rate in the window's corner is smoothed so it doesn't flicker:
+// each frame moves it only (1 - FpsSmoothing) of the way toward the newest value.
+// 0 = raw and jumpy, 0.9 = steady, 0.99 = very steady but slow to react.
+const double FpsSmoothing = 0.9;
+
 // The 80 COCO classes yolo26n.pt was trained on, in classId order.
 const char* ClassNames[] =
 {
@@ -180,6 +185,10 @@ int main()
     cv::resizeWindow(windowName, colorWidth / 2, colorHeight / 2);
 
     auto reportStart = std::chrono::steady_clock::now();
+
+    // Live frame rate: the time between two shown frames, smoothed (see FpsSmoothing).
+    auto lastFrameTime = std::chrono::steady_clock::now();
+    double liveFps = 0;
     int framesSinceReport = 0;
 
     // -----------------------------------------------------------------
@@ -329,6 +338,13 @@ int main()
         //  Output
         // -----------------------------------------------------------------
 
+        // Live frame rate, bottom-left corner.
+        auto frameTime = std::chrono::steady_clock::now();
+        double newestFps = 1.0 / std::chrono::duration<double>(frameTime - lastFrameTime).count();
+        lastFrameTime = frameTime;
+        liveFps = (liveFps == 0) ? newestFps : FpsSmoothing * liveFps + (1 - FpsSmoothing) * newestFps;
+        cv::putText(frame, cv::format("%.1f fps", liveFps), cv::Point(10, frame.rows - 10),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);   // yellow
         cv::imshow(windowName, frame);
 
         double reportElapsedMs = MillisecondsSince(reportStart);
