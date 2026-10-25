@@ -47,37 +47,93 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 ## Status (2026-10-25)
 
 - Python exercises: done.
-- C# + Kinect SDK examples 01–03: done and running on hardware (commit cea5c21). They have not
-  been checked against a tape measure.
-- Moving to libfreenect2 in C++ (D5, D8): `exercises/cpp/`, in progress.
+- C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
+- C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
+- C++ example 06 (radar, stage A) built. Next: the Pi bring-up milestone, then stage B.
 
 ## Roadmap
 
-- [x] Decide the language for the libfreenect2 track → C++ (D8).
-- [x] Windows setup: vcpkg dependencies, libfreenect2 built and installed (D9). Done 2026-10-25.
-- [x] User swapped the Kinect USB driver to libusbK (2026-10-25).
-- [x] Port 01 Depth Peek. Runs on the sensor at 30 fps after the OpenMP patch (D11). The user
-      checked the window by eye: identical to the C# version.
-- [x] Port 03 Depth Blobs. Runs on the sensor; the intrinsics match the SDK's. The user still
-      needs to walk in and check the blobs.
-- [x] Port 02 Detect Distance with libfreenect2 `Registration`. Runs on the sensor: it detected a
-      bed at 0.95 m, and the pinhole maths agrees with `getPointXYZ`. The user still needs to check
-      the window.
-- [x] Reproducible build: fresh clone → `cmake --preset default` + `cmake --build --preset default` (D14).
-- [x] **Example 04: Track and smooth (key).** Built 2026-10-25. Runs on the sensor: still chairs kept
-      their IDs, and jitter fell from 2–4 mm to 0.4 mm per frame. Not yet tested with a moving person.
-      Original plan: Detect (as in 02), track each object across frames
-      (match detections by box overlap, as the Python exercises 06/07 did), then smooth each object's
-      distance over time with a running average or Kalman filter. A Kalman filter also gives the
-      object's speed towards or away from the camera. This works with a moving camera, because the
-      smoothing follows the object rather than a pixel. Do it after 02. See D12.
-- [ ] **Example 05: Kalman filter.** Replace 04's running average with a constant-velocity Kalman
-      filter per object. It lags less than averaging when things move, and gives each object's
-      speed towards or away from the camera. One idea: predict, then correct.
-- [ ] Build and run on Linux, then on the Raspberry Pi: measure fps with the filters on and off.
-      Check that the Pi's USB 3 port keeps up with the Kinect.
-- [ ] Tape-measure accuracy, guide §7 tests 2–4. If it comes out poor, revisit D6 (own calibration).
-- [ ] Decide whether to retire `exercises/csharp/` once the new track reaches parity.
+The ladder from here to the long-term goal (a 3D map of the space, on the Pi). One idea per
+example, each building on the one before. Numbers are the planned example folders in
+`exercises/cpp/`.
+
+### Done
+
+- [x] C++ track set up: language C++ (D8), libfreenect2 with the OpenMP patch (D9, D11), libusbK
+      driver (D10), OpenCV with `intrinsics`/`thread` (D13), reproducible build (D14).
+- [x] 01 Depth Peek: 30 fps on the sensor; the user confirmed the window matches the C# version.
+- [x] 02 Detect + Distance: runs on the sensor, about 6 fps, detection 130–180 ms.
+- [x] 03 Depth Blobs: runs on the sensor; the intrinsics match the SDK's.
+- [x] 04 Track + Smooth: IDs by box overlap, running average (D12). Still chairs: jitter fell from
+      2–4 mm to 0.4 mm per frame.
+- [x] 05 Kalman: predict then correct, matching against predicted boxes, coasting, speed.
+- [x] 05b Two thresholds: strong detections start IDs, weak ones (0.15+) only continue them;
+      MaxMissedFrames 30, with the speed fading while unseen. Same TV in 60 s: 7 IDs with 05, 1 with
+      05b. 05's logs showed the cause: detection gaps over 2 s, not matching.
+- [x] 06 Radar (stage A, below).
+
+### Open checks (the user, by eye)
+
+- [ ] 02: do the boxes sit on the objects? 03: walk in; is the height on the blob roughly right?
+- [ ] fps overlay visible in each window.
+- [ ] 04 vs 05 while walking: does 05 hold IDs better? Is its speed plausible (walking is about
+      1–1.5 m/s)? Both print `new ID` lines explaining each ID change.
+
+### Stage A — objects in 3D (fixed camera)
+
+- [x] **06 Top-down radar:** built 2026-10-25, runs on the sensor (colour FOV 83°, still objects
+      steady to about 1 cm). The user still needs to check that left/right matches the camera
+      view. each tracked object (from 05) becomes an X/Z position, drawn on a
+      bird's-eye floor plan. The first "map".
+
+### Milestone — Pi bring-up (before stage B; the biggest risk)
+
+- [ ] Build and run on Linux, then on the Raspberry Pi. Measure the depth fps with the filters on
+      and off, check the Kinect is stable on the Pi's USB 3 port, and time YOLO. Expect over 1 s
+      per frame on a Pi 5, versus about 170 ms on the Ryzen. The results decide how heavy stages B–D
+      can be. If it's too slow: a 320 YOLO input, detecting every Nth frame, or an AI accelerator
+      HAT.
+
+### Stage B — the room in 3D (fixed camera)
+
+- [ ] **07 Capture and average:** average about 30 frames from a still camera; measure the noise
+      drop.
+- [ ] **08 Depth to point cloud:** a coloured 3D point per pixel, a window you can rotate, saved
+      as `.ply`. Point clouds are captures of the room: gitignore `*.ply`/`*.pcd` and never commit
+      them.
+- [ ] **09 Find the floor:** a RANSAC plane fit gives the camera's height and tilt, so the room
+      coordinates are level.
+
+### Milestone — accuracy (before stage C; merging views exaggerates any distance error)
+
+- [ ] Tape-measure accuracy, guide §7 tests 2–4. If it comes out poor, revisit D6 (our own
+      calibration).
+
+### Stage C — several views merged (details: docs/ideas.md, "Multi-view registration")
+
+- [ ] **10 Two views, known pose:** place a second capture by a hand-measured pose; see the walls
+      show double.
+- [ ] **11 ICP:** fix that misalignment. Write a simple version ourselves first (nearest neighbours
+      + SVD); Open3D only if we outgrow it.
+- [ ] **12 ArUco pose:** a printed marker gives the camera's pose. Needs OpenCV's `calib3d` and
+      `objdetect` added to `vcpkg.json`.
+- [ ] **13 Merge many views:** 5–10 captures into one room model; downsampled points first, then a
+      TSDF mesh.
+
+### Stage D — the goal
+
+- [ ] **14 Objects in the map:** the tracked objects (05/06) placed in the room model from 13.
+
+### Stage E — moving camera (later, optional; docs/ideas.md, "Motion compensation")
+
+- [ ] **15 Visual odometry:** the camera's own motion, frame to frame (11's ICP on consecutive
+      frames).
+- [ ] **16 Live mapping:** a coarse CPU KinectFusion, or decide to adopt RTAB-Map instead.
+
+### Housekeeping
+
+- [ ] Decide whether to retire `exercises/csharp/`. Then the Microsoft Kinect SDK (KinectService)
+      can be uninstalled from the dev PC.
 
 Toolchain on the dev machine: VS Build Tools 2026 with the C++ workload, and .NET 10. Building C++
 needs `vcvars64.bat`, which puts `cmake`, `ninja` and `vcpkg` on PATH. In Git Bash, run the built

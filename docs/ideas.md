@@ -11,7 +11,7 @@ when it would pay off, and how to build it. When one gets scheduled, move it to 
 *Added 2026-10-25. The user's long-term goal is a 3D map; a fixed camera is the agreed starting
 point.*
 
-1. **Fixed camera (now).** Examples 01–04.
+1. **Fixed camera (now).** Examples 01–06.
 2. **Several fixed stations, merged offline (next step towards the map).** See below.
 3. **Moving camera, continuous.** Motion compensation / KinectFusion, further down this file.
 
@@ -20,7 +20,8 @@ a few views. Very little of it is wasted later.
 
 ## Multi-view registration: merging point clouds from several fixed positions
 
-*Added 2026-10-25.*
+*Added 2026-10-25. **Scheduled 2026-10-25:** now Roadmap stages B–C (examples 07–13) in
+`CLAUDE.md`. This entry keeps the background and how-to.*
 
 **Idea:** capture the room from several known positions, convert each capture into a point cloud,
 and merge them into one model.
@@ -136,3 +137,18 @@ It also builds on ARM64.
 - **BundleFusion**: best quality, needs a strong GPU.
 - **RTAB-Map**: SLAM (mapping while tracking position), BSD licence, ROS-friendly, runs on a Pi.
   The most realistic option if mapping on a moving robot becomes a real requirement.
+
+## Rejecting phantom detections (a "person" on a screen, in a mirror, a poster)
+
+*Added 2026-10-25.* With nobody in view, YOLO still reported a "person" now and then, with no
+depth reading. That suggests a screen, a mirror, a window, or something beyond 4.5 m. It creates
+ID churn.
+
+**Idea:** the depth camera can check what colour can't:
+- **No depth reading in the box:** probably a screen, mirror or window, so reject it, or at least
+  don't start an ID.
+- **Implausible real size:** box height in pixels × Z / fy should be about 1–2 m for a person. A
+  photo of a person at 0.5 m comes out around 0.2 m.
+
+This is example 02's experiment idea 6 and guide §10. A small example after 06, or a setting in a
+later one.
