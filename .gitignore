@@ -12,3 +12,7 @@ obj/
 # C++ build output (exercises/cpp); vcpkg installs into build/vcpkg_installed
 build/
 vcpkg_installed/
+
+# Point clouds are 3D captures of the room: never commit them
+*.ply
+*.pcd

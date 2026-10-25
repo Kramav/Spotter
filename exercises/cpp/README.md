@@ -12,6 +12,9 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `02_Kinect_Detect_Distance` | YOLO detection plus depth registration: how far away is it? | Runs on the sensor at 4–6 fps (detection 130–156 ms on the CPU, same as C#) |
 | `03_Kinect_Depth_Blobs` | Background subtraction, blob size from depth | Runs on the sensor; blobs not yet tested with a person |
 | `04_Kinect_Track_Smooth` | Tracking by box overlap (IDs), and a running average of each object's distance | Runs on the sensor at about 6 fps. Two still chairs kept their IDs; jitter fell from 2–4 mm to 0.4 mm per frame |
+| `05_Kinect_Kalman` | Kalman filter per object (predict, then correct): matching against predicted boxes, coasting through missed frames, speed | Runs on the sensor at about 6 fps. A seated person kept ID #1 and read about 0 m/s. Not yet tested walking |
+| `05b_Kinect_Two_Thresholds` | ByteTrack-style two-pass matching (strong detections start IDs, weak ones only continue them); 5 s memory with the speed fading out | A flickering TV: 7 IDs in 60 s with 05, 1 ID with 05b |
+| `06_Kinect_Radar` | Deproject tracked objects to X/Z in metres (colour intrinsics); bird's-eye radar with range rings, field of view, trails | Runs on the sensor. Colour FOV 83° (spec 84°); still objects steady to about 1 cm. The left/right direction is not yet checked by eye |
 
 ## Reproducible by design (D14)
 

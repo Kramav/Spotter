@@ -112,6 +112,9 @@ Then work through the other examples in this order:
 | 2 | `03_Kinect_Depth_Blobs` | Find people or objects from depth alone, and measure their size (no AI) |
 | 3 | `02_Kinect_Detect_Distance` | YOLO finds objects in colour, then depth tells you how far away each one is |
 | 4 | `04_Kinect_Track_Smooth` | Follow each object over time (ID numbers), and smooth its distance |
+| 5 | `05_Kinect_Kalman` | A Kalman filter: predict where each object will be, then correct. Keeps IDs better, and gives speed |
+| 5b | `05b_Kinect_Two_Thresholds` | Two confidence levels plus a longer memory: objects that flicker in and out keep their ID |
+| 6 | `06_Kinect_Radar` | Turn each tracked object into a floor position in metres, on a bird's-eye "radar" map with trails |
 
 Each example is **one file** (`main.cpp` in its folder), meant to be read from top to bottom:
 settings at the top, then setup, the main loop, output, and **experiment ideas** at the bottom.
