@@ -95,3 +95,11 @@ also gives the object's speed. Plain Gaussian blur on depth was rejected: it sme
 the background at edges (more flying pixels) and averages in the 0 values used for "no reading".
 **Plan:** example 04 (see Roadmap). A thresholded per-pixel average (reset when the change is
 large) stays a possible small setting for example 01, useful only for a fixed camera.
+
+### D13 — 2026-10-25 — OpenCV must keep vcpkg's `intrinsics` and `thread` features
+**Why:** D9 turned off vcpkg's default OpenCV features to keep the build small, and that dropped
+CPU vector instructions (`CV_ENABLE_INTRINSICS`) and multithreading. YOLO detection in example 02
+took about 650 ms. With both turned back on it takes 130–156 ms, the same as the C# version's
+OpenCvSharp (about 155 ms). On the Pi, `intrinsics` is what enables ARM NEON, so it matters even
+more there.
+**Rule:** when trimming OpenCV features, keep `intrinsics` and `thread`.

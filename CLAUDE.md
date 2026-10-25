@@ -58,8 +58,11 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - [x] User swapped the Kinect USB driver to libusbK (2026-10-25).
 - [x] Port 01 Depth Peek. Runs on the sensor at 30 fps after the OpenMP patch (D11). The user
       checked the window by eye: identical to the C# version.
-- [ ] Port 03 Depth Blobs. It needs depth and intrinsics only.
-- [ ] Port 02 Detect Distance, using libfreenect2 `Registration` in place of `CoordinateMapper`.
+- [x] Port 03 Depth Blobs. Runs on the sensor; the intrinsics match the SDK's. The user still
+      needs to walk in and check the blobs.
+- [x] Port 02 Detect Distance with libfreenect2 `Registration`. Runs on the sensor: it detected a
+      bed at 0.95 m, and the pinhole maths agrees with `getPointXYZ`. The user still needs to check
+      the window.
 - [ ] **Example 04: Track and smooth (key).** Detect (as in 02), track each object across frames
       (match detections by box overlap, as the Python exercises 06/07 did), then smooth each object's
       distance over time with a running average or Kalman filter. A Kalman filter also gives the

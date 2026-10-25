@@ -12,10 +12,12 @@ list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/install)
 find_package(freenect2 REQUIRED)
 find_package(OpenCV REQUIRED)
 
-foreach(example 01_Kinect_Depth_Peek)
+foreach(example 01_Kinect_Depth_Peek 02_Kinect_Detect_Distance 03_Kinect_Depth_Blobs)
     add_executable(${example} ${example}/main.cpp)
     target_include_directories(${example} PRIVATE ${freenect2_INCLUDE_DIRS})
     target_link_libraries(${example} PRIVATE ${freenect2_LIBRARIES} ${OpenCV_LIBS})
+    get_filename_component(repo_root ${CMAKE_CURRENT_SOURCE_DIR}/../.. ABSOLUTE)
+    target_compile_definitions(${example} PRIVATE SPOTTER_REPO_ROOT="${repo_root}")
 
     # Windows looks for DLLs next to the .exe. vcpkg copies OpenCV's; libfreenect2 and its
     # dependencies are copied here. (Linux finds them through the rpath CMake sets.)

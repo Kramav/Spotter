@@ -2,13 +2,13 @@
 
 These are the open-source versions of `exercises/csharp`. They use no Microsoft SDK and no
 Microsoft driver, and the same code builds on Windows and Linux. For the reasons behind this, see
-[docs/decisions.md](../../docs/decisions.md), entries D5 to D11.
+[docs/decisions.md](../../docs/decisions.md), entries D5 to D13.
 
 | Example | Teaches | Status |
 |---|---|---|
 | `01_Kinect_Depth_Peek` | Reading depth, what "no reading" looks like, depth noise | Runs on the sensor at 30 fps; window matches the C# version |
-| `03_Kinect_Depth_Blobs` | Background subtraction, blob size from depth | To do |
-| `02_Kinect_Detect_Distance` | YOLO detection plus depth registration: how far away is it? | To do |
+| `02_Kinect_Detect_Distance` | YOLO detection plus depth registration: how far away is it? | Runs on the sensor at 4–6 fps (detection 130–156 ms on the CPU, same as C#) |
+| `03_Kinect_Depth_Blobs` | Background subtraction, blob size from depth | Runs on the sensor; blobs not yet tested with a person |
 
 ## One-time setup: Windows
 
@@ -68,7 +68,17 @@ With apt's OpenCV, leave out the `CMAKE_TOOLCHAIN_FILE` option below.
     cmake --build build
     build\01_Kinect_Depth_Peek
 
-On Linux, run `./build/01_Kinect_Depth_Peek`.
+On Linux, run `./build/01_Kinect_Depth_Peek`. Run the examples from a terminal rather than by
+double-clicking, so error messages stay visible. Example 02 finds `yolo26n.onnx` in the repo root
+by itself.
+
+Differences from the C# versions:
+
+- **02** registers depth to colour with libfreenect2 `Registration`, in place of the SDK's
+  `CoordinateMapper`. It works on the *undistorted* depth image, so the pinhole maths is exact
+  everywhere. Its cross-check column is libfreenect2's `getPointXYZ`.
+- **03** reads the same factory intrinsics as the SDK (fx 365.1, cx 256.9, cy 209.4 on our
+  Kinect).
 
 **Before the driver swap** you get this, which is expected:
 
