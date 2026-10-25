@@ -1,5 +1,7 @@
 # Kinect v2 examples: C++ and libfreenect2
 
+Reference notes for the C++ examples. To get started, see the [main README](../../README.md).
+
 These are the open-source versions of `exercises/csharp`. They use no Microsoft SDK and no
 Microsoft driver, and the same code builds on Windows and Linux. For the reasons behind this, see
 [docs/decisions.md](../../docs/decisions.md), entries D5 to D14.
@@ -26,29 +28,14 @@ reuses its cache (`%LOCALAPPDATA%\vcpkg\archives`), and a rebuild from a clean f
 
 ## Setup and build: Windows
 
-You need **VS Build Tools 2026 with "Desktop development with C++"**. That gives you `cl`,
-`cmake`, `ninja` and `vcpkg`, and sets `VCPKG_ROOT`. Clone to a short path such as
-`E:\Company\Github\Spotter`, because vcpkg's build folders nest deeply and Windows limits paths to
-260 characters.
+**New here? Follow the step-by-step guide in the [main README](../../README.md#getting-started-the-kinect-examples-windows)**:
+what to install, the USB driver swap, and building and running.
 
-From an **"x64 Native Tools Command Prompt"**, in `exercises\cpp`:
+In short, from an **"x64 Native Tools Command Prompt"** in `exercises\cpp`:
 
     cmake --preset default
     cmake --build --preset default
     build\01_Kinect_Depth_Peek
-
-**USB driver (once per PC, by hand).** Replace the Microsoft driver with libusbK (D10), using the
-[libfreenect2 README](https://github.com/OpenKinect/libfreenect2#windows--visual-studio)
-instructions:
-
-1. Run [Zadig](https://zadig.akeo.ie/). Under Options, tick "List All Devices" and untick "Ignore Hubs or Composite Parents".
-2. Choose **"Xbox NUI Sensor (composite parent)"** (VID 045E). Do not choose "NuiSensor Adaptor".
-3. Choose libusbK as the replacement driver, then click **Replace Driver**.
-
-After this, the C# examples and anything else that uses the Microsoft SDK stop working.
-
-To undo it: in Device Manager, open "libusbK USB Devices", right-click "Xbox NUI Sensor
-(Composite Parent)", choose Uninstall and tick "Delete the driver software".
 
 ## Setup and build: Linux / Raspberry Pi
 
