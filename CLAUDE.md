@@ -64,11 +64,16 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
       bed at 0.95 m, and the pinhole maths agrees with `getPointXYZ`. The user still needs to check
       the window.
 - [x] Reproducible build: fresh clone → `cmake --preset default` + `cmake --build --preset default` (D14).
-- [ ] **Example 04: Track and smooth (key).** Detect (as in 02), track each object across frames
+- [x] **Example 04: Track and smooth (key).** Built 2026-10-25. Runs on the sensor: still chairs kept
+      their IDs, and jitter fell from 2–4 mm to 0.4 mm per frame. Not yet tested with a moving person.
+      Original plan: Detect (as in 02), track each object across frames
       (match detections by box overlap, as the Python exercises 06/07 did), then smooth each object's
       distance over time with a running average or Kalman filter. A Kalman filter also gives the
       object's speed towards or away from the camera. This works with a moving camera, because the
       smoothing follows the object rather than a pixel. Do it after 02. See D12.
+- [ ] **Example 05: Kalman filter.** Replace 04's running average with a constant-velocity Kalman
+      filter per object. It lags less than averaging when things move, and gives each object's
+      speed towards or away from the camera. One idea: predict, then correct.
 - [ ] Build and run on Linux, then on the Raspberry Pi: measure fps with the filters on and off.
       Check that the Pi's USB 3 port keeps up with the Kinect.
 - [ ] Tape-measure accuracy, guide §7 tests 2–4. If it comes out poor, revisit D6 (own calibration).
