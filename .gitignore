@@ -8,3 +8,8 @@ zone_log.csv
 # C# build output (exercises/csharp)
 bin/
 obj/
+
+# C++ build output and fetched sources (exercises/cpp)
+build/
+vcpkg_installed/
+third_party/
