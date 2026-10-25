@@ -26,7 +26,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Setup is in its README. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`. |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -63,6 +63,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - [x] Port 02 Detect Distance with libfreenect2 `Registration`. Runs on the sensor: it detected a
       bed at 0.95 m, and the pinhole maths agrees with `getPointXYZ`. The user still needs to check
       the window.
+- [x] Reproducible build: fresh clone → `cmake --preset default` + `cmake --build --preset default` (D14).
 - [ ] **Example 04: Track and smooth (key).** Detect (as in 02), track each object across frames
       (match detections by box overlap, as the Python exercises 06/07 did), then smooth each object's
       distance over time with a running average or Kalman filter. A Kalman filter also gives the

@@ -2,7 +2,7 @@
 
 These are the open-source versions of `exercises/csharp`. They use no Microsoft SDK and no
 Microsoft driver, and the same code builds on Windows and Linux. For the reasons behind this, see
-[docs/decisions.md](../../docs/decisions.md), entries D5 to D13.
+[docs/decisions.md](../../docs/decisions.md), entries D5 to D14.
 
 | Example | Teaches | Status |
 |---|---|---|
@@ -10,35 +10,35 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `02_Kinect_Detect_Distance` | YOLO detection plus depth registration: how far away is it? | Runs on the sensor at 4–6 fps (detection 130–156 ms on the CPU, same as C#) |
 | `03_Kinect_Depth_Blobs` | Background subtraction, blob size from depth | Runs on the sensor; blobs not yet tested with a person |
 
-## One-time setup: Windows
+## Reproducible by design (D14)
+
+Every dependency is pinned in this folder, so a fresh `git clone` builds the same thing:
+
+| File | Pins |
+|---|---|
+| `vcpkg.json` | OpenCV 4.14 with its features (including `intrinsics` and `thread`, D13). The `builtin-baseline` fixes the exact version of every library. |
+| `ports/libfreenect2/` | Our vcpkg recipe for libfreenect2: upstream commit `fd64c5d`, checked by SHA512, plus our OpenMP patch (D11). |
+| `CMakePresets.json` | The configure options: Ninja, Release, vcpkg toolchain. |
+
+The first build compiles everything from source, which takes about 30 minutes. After that, vcpkg
+reuses its cache (`%LOCALAPPDATA%\vcpkg\archives`), and a rebuild from a clean folder takes about
+3 minutes.
+
+## Setup and build: Windows
 
 You need **VS Build Tools 2026 with "Desktop development with C++"**. That gives you `cl`,
-`cmake`, `ninja` and `vcpkg`. Run every command below from an
-**"x64 Native Tools Command Prompt"**, in `exercises\cpp`.
+`cmake`, `ninja` and `vcpkg`, and sets `VCPKG_ROOT`. Clone to a short path such as
+`E:\Company\Github\Spotter`, because vcpkg's build folders nest deeply and Windows limits paths to
+260 characters.
 
-**1. Libraries (libusb, libjpeg-turbo, OpenCV).** This step takes about 30 minutes the first time.
+From an **"x64 Native Tools Command Prompt"**, in `exercises\cpp`:
 
-    vcpkg install --triplet x64-windows
+    cmake --preset default
+    cmake --build --preset default
+    build\01_Kinect_Depth_Peek
 
-**2. libfreenect2, built from source and pinned (D9).** Our patch spreads its CPU depth decoder
-across all CPU cores. On this PC that takes it from 7.5 to 30 fps (D11).
-
-    git clone https://github.com/OpenKinect/libfreenect2.git third_party\libfreenect2
-    git -C third_party\libfreenect2 checkout fd64c5d9b214df6f6a55b4419357e51083f15d93
-    git -C third_party\libfreenect2 apply ..\..\libfreenect2-openmp.patch
-    set V=%CD%\vcpkg_installed\x64-windows
-    cmake -S third_party\libfreenect2 -B third_party\libfreenect2\build -G Ninja ^
-      -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
-      -DCMAKE_INSTALL_PREFIX=%CD:\=/%/third_party/install ^
-      -DBUILD_EXAMPLES=OFF -DBUILD_OPENNI2_DRIVER=OFF -DENABLE_CXX11=ON ^
-      -DENABLE_OPENCL=OFF -DENABLE_CUDA=OFF -DENABLE_OPENGL=OFF -DENABLE_VAAPI=OFF -DENABLE_TEGRAJPEG=OFF ^
-      -DLibUSB_INCLUDE_DIRS=%V%\include\libusb-1.0 -DLibUSB_LIBRARIES=%V%\lib\libusb-1.0.lib ^
-      -DTurboJPEG_INCLUDE_DIRS=%V%\include -DTurboJPEG_LIBRARIES=%V%\lib\turbojpeg.lib
-    cmake --build third_party\libfreenect2\build
-    cmake --install third_party\libfreenect2\build
-
-**3. USB driver.** You do this step yourself. Replace the Microsoft driver with libusbK, using
-the [libfreenect2 README](https://github.com/OpenKinect/libfreenect2#windows--visual-studio)
+**USB driver (once per PC, by hand).** Replace the Microsoft driver with libusbK (D10), using the
+[libfreenect2 README](https://github.com/OpenKinect/libfreenect2#windows--visual-studio)
 instructions:
 
 1. Run [Zadig](https://zadig.akeo.ie/). Under Options, tick "List All Devices" and untick "Ignore Hubs or Composite Parents".
@@ -48,29 +48,27 @@ instructions:
 After this, the C# examples and anything else that uses the Microsoft SDK stop working.
 
 To undo it: in Device Manager, open "libusbK USB Devices", right-click "Xbox NUI Sensor
-(Composite Parent)", choose Uninstall and tick "Delete the driver software". UsbDk is an
-alternative to libusbK (see the libfreenect2 README); install only one of the two.
+(Composite Parent)", choose Uninstall and tick "Delete the driver software".
 
-## One-time setup: Linux (Ubuntu/Debian)
+## Setup and build: Linux / Raspberry Pi
 
-Not yet tested on Linux. These are the expected steps:
+**Not yet tested.** These are the expected steps:
 
-    sudo apt install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev libturbojpeg0-dev libopencv-dev
-    # Step 2 above, without the LibUSB_ / TurboJPEG_ lines (pkg-config finds them),
-    # and with -DCMAKE_INSTALL_PREFIX=$PWD/third_party/install
-    sudo cp third_party/libfreenect2/platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/   # USB access without root
+    sudo apt install build-essential cmake ninja-build pkg-config git curl zip unzip tar libudev-dev
+    git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
+    export VCPKG_ROOT=~/vcpkg
+    cmake --preset default && cmake --build --preset default
+    # USB access without root: libfreenect2's udev rule
+    sudo curl -L -o /etc/udev/rules.d/90-kinect2.rules https://raw.githubusercontent.com/OpenKinect/libfreenect2/fd64c5d9b214df6f6a55b4419357e51083f15d93/platform/linux/udev/90-kinect2.rules
 
-With apt's OpenCV, leave out the `CMAKE_TOOLCHAIN_FILE` option below.
+OpenCV's window support on Linux (`gtk`) makes vcpkg build GTK too. Expect a long first build on
+a Pi (hours), and possibly a few more `apt` packages that vcpkg asks for.
 
-## Build and run
+## Running
 
-    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake"
-    cmake --build build
-    build\01_Kinect_Depth_Peek
-
-On Linux, run `./build/01_Kinect_Depth_Peek`. Run the examples from a terminal rather than by
-double-clicking, so error messages stay visible. Example 02 finds `yolo26n.onnx` in the repo root
-by itself.
+Run the examples from a terminal rather than by double-clicking, so error messages stay visible.
+Example 02 finds `yolo26n.onnx` in the repo root by itself. On Linux, run
+`./build/01_Kinect_Depth_Peek`.
 
 Differences from the C# versions:
 
@@ -87,9 +85,8 @@ Differences from the C# versions:
 
 libfreenect2 can see the Kinect on the USB bus, but the Microsoft driver still owns it.
 
-If the program exits silently with code C0000135, a DLL is missing. Run
-`dumpbin /dependents` on the program to find which one, then add it to the copy list in
-`CMakeLists.txt`.
+If the program exits silently with code C0000135, a DLL is missing next to the .exe. vcpkg
+normally copies them all. Run `dumpbin /dependents` on the program to find which one.
 
 ## Known limits
 
