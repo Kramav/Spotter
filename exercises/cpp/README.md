@@ -11,6 +11,7 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `01_Kinect_Depth_Peek` | Reading depth, what "no reading" looks like, depth noise | Runs on the sensor at 30 fps; window matches the C# version |
 | `02_Kinect_Detect_Distance` | YOLO detection plus depth registration: how far away is it? | Runs on the sensor at 4–6 fps (detection 130–156 ms on the CPU, same as C#) |
 | `03_Kinect_Depth_Blobs` | Background subtraction, blob size from depth | Runs on the sensor; blobs not yet tested with a person |
+| `04_Kinect_Track_Smooth` | Tracking by box overlap (IDs), and a running average of each object's distance | Runs on the sensor at about 6 fps. Two still chairs kept their IDs; jitter fell from 2–4 mm to 0.4 mm per frame |
 
 ## Reproducible by design (D14)
 

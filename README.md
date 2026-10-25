@@ -111,6 +111,7 @@ Then work through the other examples in this order:
 | 1 | `01_Kinect_Depth_Peek` | What the depth camera measures, and where it fails |
 | 2 | `03_Kinect_Depth_Blobs` | Find people or objects from depth alone, and measure their size (no AI) |
 | 3 | `02_Kinect_Detect_Distance` | YOLO finds objects in colour, then depth tells you how far away each one is |
+| 4 | `04_Kinect_Track_Smooth` | Follow each object over time (ID numbers), and smooth its distance |
 
 Each example is **one file** (`main.cpp` in its folder), meant to be read from top to bottom:
 settings at the top, then setup, the main loop, output, and **experiment ideas** at the bottom.
