@@ -4,7 +4,7 @@ Reference notes for the C++ examples. To get started, see the [main README](../.
 
 These are the open-source versions of `exercises/csharp`. They use no Microsoft SDK and no
 Microsoft driver, and the same code builds on Windows and Linux. For the reasons behind this, see
-[docs/decisions.md](../../docs/decisions.md), entries D5 to D14.
+[docs/decisions.md](../../docs/decisions.md), entries D5 to D15.
 
 | Example | Teaches | Status |
 |---|---|---|
@@ -14,6 +14,7 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `04_Kinect_Track_Smooth` | Tracking by box overlap (IDs), and a running average of each object's distance | Runs on the sensor at about 6 fps. Two still chairs kept their IDs; jitter fell from 2–4 mm to 0.4 mm per frame |
 | `05_Kinect_Kalman` | Kalman filter per object (predict, then correct): matching against predicted boxes, coasting through missed frames, speed | Runs on the sensor at about 6 fps. A seated person kept ID #1 and read about 0 m/s. Not yet tested walking |
 | `05b_Kinect_Two_Thresholds` | ByteTrack-style two-pass matching (strong detections start IDs, weak ones only continue them); 5 s memory with the speed fading out | A flickering TV: 7 IDs in 60 s with 05, 1 ID with 05b |
+| `05c_Kinect_Background_Detect` | YOLO on a background thread; the main loop predicts boxes and re-measures depth every frame. Settings: `DetectInBackground`, `ModelInputSize` 640/320 | Display: 4 fps when waiting for YOLO; 24–27 fps in the background with the exposure capped (main loop 3–5 ms per frame). YOLO about 200 ms at 640, 45–60 ms at 320 |
 | `06_Kinect_Radar` | Deproject tracked objects to X/Z in metres (colour intrinsics); bird's-eye radar with range rings, field of view, trails | Runs on the sensor. Colour FOV 83° (spec 84°); still objects steady to about 1 cm. The left/right direction is not yet checked by eye |
 
 ## Reproducible by design (D14)
@@ -80,6 +81,10 @@ If the program exits silently with code C0000135, a DLL is missing next to the .
 normally copies them all. Run `dumpbin /dependents` on the program to find which one.
 
 ## Known limits
+
+- **The colour camera drops to about 15 fps in a dim room** (auto exposure needs more than one
+  frame's time). 05c's `CapColorExposure` keeps it at about 29 fps, with a darker, grainier
+  picture. In a dim room that combined with the 320 model found nothing (D15).
 
 - Depth is decoded on the CPU across all cores (D11), because the target Raspberry Pi has no GPU
   path. Measured on a Ryzen 5 3600: 30 fps with the filters on. The Pi is not yet measured.

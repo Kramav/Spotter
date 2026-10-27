@@ -127,3 +127,16 @@ tool version. The port versions are pinned by the baseline.
 - Linux is untested: it needs `libudev-dev`, and on a Pi the first OpenCV + GTK build takes hours.
 - The first build anywhere compiles from source (about 30 min on the PC). A shared vcpkg binary
   cache would avoid that, but isn't needed yet.
+
+### D15 — 2026-10-25 — OpenMP `schedule(dynamic, 8)` in the depth decoder patch; colour exposure cap as a setting
+**Why (scheduling):** with colour on, depth fell to about 15 fps. libfreenect2 drops ("loses") any
+depth packet that arrives while the decoder is still busy, so decoding must take under 33 ms. With
+OpenMP's default static split (equal fixed slices of rows), one thread sharing its core with the
+JPEG decoder or YOLO held up all the others. Dynamic scheduling hands out 8-row chunks to whichever
+thread is free.
+**Measured (colour on, no other work):** depth 14.4 → 27.4 fps; colour 27–29 fps.
+**Why (exposure):** in a dim room, auto exposure holds the colour camera at 12–15 fps.
+`setColorSemiAutoExposure(16)` gives about 29 fps, at the cost of a darker, grainier picture.
+05c has a `CapColorExposure` setting (default true): its display went from 15 to 24–27 fps.
+**Trade-off found:** capped exposure plus the 320 model detected nothing in a dim room (640 still
+found 4 objects). Detection quality, not just speed, has to be checked on the Pi.

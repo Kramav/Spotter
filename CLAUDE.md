@@ -70,6 +70,14 @@ example, each building on the one before. Numbers are the planned example folder
 - [x] 05b Two thresholds: strong detections start IDs, weak ones (0.15+) only continue them;
       MaxMissedFrames 30, with the speed fading while unseen. Same TV in 60 s: 7 IDs with 05, 1 with
       05b. 05's logs showed the cause: detection gaps over 2 s, not matching.
+- [x] 05c Background detect: YOLO on its own thread; the main loop predicts and re-measures depth
+      every frame. Display 4 → 15 fps (later 24–27, D15). `ModelInputSize` 320 setting
+      (`yolo26n_320.onnx`): 175 → 55–80 ms per YOLO run, but it misses objects cut off at the image
+      edge. A dynamic-size ONNX does NOT load in OpenCV 4.14 DNN (Concat shape error), hence two
+      files.
+- [x] Camera frame rate fixed (D15): OpenMP `schedule(dynamic, 8)` (depth with colour on
+      14 → 27 fps), plus 05c's `CapColorExposure` setting. 05c display: 15 → 24–27 fps. Capped
+      exposure plus the 320 model found nothing in a dim room.
 - [x] 06 Radar (stage A, below).
 
 ### Open checks (the user, by eye)
@@ -91,8 +99,14 @@ example, each building on the one before. Numbers are the planned example folder
 - [ ] Build and run on Linux, then on the Raspberry Pi. Measure the depth fps with the filters on
       and off, check the Kinect is stable on the Pi's USB 3 port, and time YOLO. Expect over 1 s
       per frame on a Pi 5, versus about 170 ms on the Ryzen. The results decide how heavy stages B–D
-      can be. If it's too slow: a 320 YOLO input, detecting every Nth frame, or an AI accelerator
-      HAT.
+      can be. Already available: background detection (05c) and the 320 model.
+- [ ] **Lever 3, NCNN** (BSD, the usual YOLO engine on a Pi): export `yolo26n.pt` to NCNN and
+      compare its speed with OpenCV DNN on the Pi at 640 and 320. Adding it means a vcpkg
+      dependency (`ncnn`) and a second detector backend. Decide from the measurements.
+- [ ] **Lever 4, INT8 quantisation:** an 8-bit model (NCNN int8, needs a calibration image set).
+      Measure the speed gain against the accuracy loss on the same test scene.
+- [ ] If the CPU still isn't enough: the Raspberry Pi AI HAT (Hailo) is the only non-CPU option.
+      It would mean revisiting the CPU-only rule (D11).
 
 ### Stage B — the room in 3D (fixed camera)
 
