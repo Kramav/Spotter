@@ -21,7 +21,7 @@ are.
 | `exercises/csharp/` | An earlier version of the Kinect examples, on Microsoft's Kinect SDK. Kept as a reference, no longer developed | Windows + Microsoft Kinect SDK |
 | `docs/` | `decisions.md` records why things are built the way they are. `ideas.md` holds researched ideas for later | — |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method behind the Kinect examples | — |
-| `yolo26n.pt`, `yolo26n.onnx` | The object detector (YOLO), already trained. Python uses `.pt`, C++ uses `.onnx` | — |
+| `yolo26n.pt`, `yolo26n.onnx`, `yolo26n_320.onnx` | The object detector (YOLO), already trained. Python uses `.pt`; C++ uses `.onnx` (640 px input, or the faster 320 px one) | — |
 
 ### Words you'll see
 
@@ -114,6 +114,7 @@ Then work through the other examples in this order:
 | 4 | `04_Kinect_Track_Smooth` | Follow each object over time (ID numbers), and smooth its distance |
 | 5 | `05_Kinect_Kalman` | A Kalman filter: predict where each object will be, then correct. Keeps IDs better, and gives speed |
 | 5b | `05b_Kinect_Two_Thresholds` | Two confidence levels plus a longer memory: objects that flicker in and out keep their ID |
+| 5c | `05c_Kinect_Background_Detect` | Run YOLO on a second thread so the picture, tracking and distances keep the camera's pace |
 | 6 | `06_Kinect_Radar` | Turn each tracked object into a floor position in metres, on a bird's-eye "radar" map with trails |
 
 Each example is **one file** (`main.cpp` in its folder), meant to be read from top to bottom:

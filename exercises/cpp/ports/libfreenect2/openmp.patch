@@ -22,7 +22,7 @@ index 85966b7..f514cce 100644
 -  float *m_ptr = (m.ptr(0, 0)->val);
 -
 +  // Every pixel is independent, so each pass below is split across CPU cores by row (OpenMP).
-+  #pragma omp parallel for
++  #pragma omp parallel for schedule(dynamic, 8)
    for(int y = 0; y < 424; ++y)
 -    for(int x = 0; x < 512; ++x, m_ptr += 9)
 +    for(int x = 0; x < 512; ++x)
@@ -39,7 +39,7 @@ index 85966b7..f514cce 100644
 -    float *m_filtered_ptr = (m_filtered.ptr(0, 0)->val);
 -    unsigned char *m_max_edge_test_ptr = m_max_edge_test.ptr(0, 0);
 -
-+    #pragma omp parallel for
++    #pragma omp parallel for schedule(dynamic, 8)
      for(int y = 0; y < 424; ++y)
 -      for(int x = 0; x < 512; ++x, m_filtered_ptr += 9, ++m_max_edge_test_ptr)
 +      for(int x = 0; x < 512; ++x)
@@ -67,7 +67,7 @@ index 85966b7..f514cce 100644
 -    Vec<float, 3> *depth_ir_sum_ptr = depth_ir_sum.ptr(0, 0);
 -    unsigned char *m_max_edge_test_ptr = m_max_edge_test.ptr(0, 0);
 -
-+    #pragma omp parallel for
++    #pragma omp parallel for schedule(dynamic, 8)
      for(int y = 0; y < 424; ++y)
 -      for(int x = 0; x < 512; ++x, m_ptr += 9, ++m_max_edge_test_ptr, ++depth_ir_sum_ptr)
 +      for(int x = 0; x < 512; ++x)
@@ -84,7 +84,7 @@ index 85966b7..f514cce 100644
  
 -    m_max_edge_test_ptr = m_max_edge_test.ptr(0, 0);
 -
-+    #pragma omp parallel for
++    #pragma omp parallel for schedule(dynamic, 8)
      for(int y = 0; y < 424; ++y)
 -      for(int x = 0; x < 512; ++x, ++m_max_edge_test_ptr)
 +      for(int x = 0; x < 512; ++x)
@@ -95,7 +95,7 @@ index 85966b7..f514cce 100644
    }
    else
    {
-+    #pragma omp parallel for
++    #pragma omp parallel for schedule(dynamic, 8)
      for(int y = 0; y < 424; ++y)
 -      for(int x = 0; x < 512; ++x, m_ptr += 9)
 +      for(int x = 0; x < 512; ++x)
