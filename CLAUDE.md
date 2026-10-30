@@ -49,7 +49,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ example 06 (radar, stage A) built. Next: the Pi bring-up milestone, then stage B.
+- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07 and 07b built; next 08 (point cloud).
 
 ## Roadmap
 
@@ -94,7 +94,7 @@ example, each building on the one before. Numbers are the planned example folder
       view. each tracked object (from 05) becomes an X/Z position, drawn on a
       bird's-eye floor plan. The first "map".
 
-### Milestone — Pi bring-up (before stage B; the biggest risk)
+### Milestone — Pi bring-up (PAUSED by the user 2026-10-30; stage B goes ahead on the PC meanwhile)
 
 - [ ] Build and run on Linux, then on the Raspberry Pi. Measure the depth fps with the filters on
       and off, check the Kinect is stable on the Pi's USB 3 port, and time YOLO. Expect over 1 s
@@ -110,8 +110,12 @@ example, each building on the one before. Numbers are the planned example folder
 
 ### Stage B — the room in 3D (fixed camera)
 
-- [ ] **07 Capture and average:** average about 30 frames from a still camera; measure the noise
-      drop.
+- [x] **07 Capture and average:** built 2026-10-30. Runs on the sensor: one frame ±1.2 mm (0.5–1 m),
+      average measured ±0.3 mm (expected ±0.2). Space capture not yet tried by the user.
+- [x] **07b Far range:** built 2026-10-30. `Config::MaxDepth` 4.5 → 8 m: never-read pixels
+      33.8% → 2.3% in the same scene; a 4–6 m wall read at ±5 mm one-frame noise (no worse than
+      3–4 m); past 6 m almost nothing reads. The user confirmed the blue (past 4.5 m) covers the right parts of the room. Accuracy (bias) at range is unmeasured: tape measure.
+      Later examples still use the 4.5 m default; decide when 08 is built.
 - [ ] **08 Depth to point cloud:** a coloured 3D point per pixel, a window you can rotate, saved
       as `.ply`. Point clouds are captures of the room: gitignore `*.ply`/`*.pcd` and never commit
       them.

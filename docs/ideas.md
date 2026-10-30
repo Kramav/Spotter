@@ -152,3 +152,29 @@ ID churn.
 
 This is example 02's experiment idea 6 and guide §10. A small example after 06, or a setting in a
 later one.
+
+## Distance beyond the depth camera's range, from the colour image
+
+*Added 2026-10-30.* The depth camera reads 0.5–4.5 m, and the colour camera sees further. Ways to
+estimate distance from colour alone, cheapest first:
+
+0. **Raise the cap first.** 4.5 m is libfreenect2's default `Config::MaxDepth`, not the sensor's
+   limit. Every example uses the default. Set `MaxDepth` to 8 m and measure the noise with 07.
+   Readings past 4.5 m are reported to be noisier but usable.
+   *Measured with 07b (2026-10-30):* a wall at 4–6 m read at ±5 mm, and almost nothing read past
+   6 m. So this covers up to about 6 m, and colour is only needed beyond that.
+1. **Known size:** Z = fy × real height / box height in pixels. Take the real height from depth
+   while the object is in range, then keep using it after it leaves. Accuracy is about ±10–20%,
+   because people's heights vary. Cheap.
+2. **Floor contact:** if the floor plane is known (09), a ray through the bottom of the box hits
+   the floor at the object's distance. Pixel error is small (about 6 cm at 8 m with the camera
+   1 m high), but tilt error grows with Z²: a 1° tilt error is about 1 m at 8 m. So it needs 09.
+3. **Monocular depth network** (Depth Anything V2 Small, Apache-2.0; MiDaS, MIT): depth for every
+   colour pixel, relative only, scaled with the in-range depth pixels. Gives the whole room, not
+   just objects, but it is several times heavier than YOLO and probably seconds per frame on the
+   Pi.
+
+Not usable: stereo or structure-from-motion, which need a second camera or a moving camera.
+
+**When:** 1 and 2 fit after 09, as one small example ("distance past the depth range"). 3 only if
+the room map needs far walls that the depth camera can't reach.
