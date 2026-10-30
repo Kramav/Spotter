@@ -140,3 +140,16 @@ thread is free.
 05c has a `CapColorExposure` setting (default true): its display went from 15 to 24–27 fps.
 **Trade-off found:** capped exposure plus the 320 model detected nothing in a dim room (640 still
 found 4 objects). Detection quality, not just speed, has to be checked on the Pi.
+
+### D16 — 2026-10-30 — Removing people: depth blobs decide, YOLO boxes label, carried objects stay
+**What:** 07d removes a person by painting their pixels with a remembered picture of the room.
+Which pixels: a depth-foreground blob (07c) that lies mostly inside YOLO "person" boxes, minus
+the pixels inside any other detected object's box.
+**Why blobs, not boxes:** YOLO runs about 6 times a second on its own thread, so its boxes lag a
+moving person. The depth blob is fresh every frame and follows the outline; the box only labels it.
+**Why carried objects stay:** the user's requirement: a cup picked up and carried must not vanish
+with the person. The cost: the fingers holding it stay visible too, inside its box.
+**Why the colour memory learns only away from person boxes:** so it keeps what was behind a person
+who stands still, and a person is never absorbed into the room.
+**Rejected for now:** YOLO-seg masks (cleaner edges, too heavy for every frame on the Pi);
+deep inpainting such as LaMa (too heavy). Never-seen pixels show magenta until 07e.

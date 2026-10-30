@@ -49,7 +49,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view.
+- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Stage C: 10 built. Side branch: 07c/07d (remove people from the picture) built.
 
 ## Roadmap
 
@@ -120,6 +120,15 @@ example, each building on the one before. Numbers are the planned example folder
       can rotate (our own z-buffered viewer, no extra library), P saves `.ply`. Cut-off 6 m (07b).
       Runs on the sensor: about 193k points, 14 loops/s. The user still needs to check the viewer.
       Point clouds are captures of the room: `*.ply`/`*.pcd` are gitignored; never commit them.
+- [x] **07c Depth background:** built 2026-10-30. Remembers the room's depth per pixel; anything
+      clearly nearer is foreground. Something must read farther for `LeaveFrames` (10) before it
+      counts as gone: taking one reading at once let ceiling noise make 2–6 false blobs. Still
+      scene: 0 blobs.
+- [x] **07d Remove person:** built 2026-10-30. Blobs mostly inside YOLO person boxes are painted
+      with the remembered colour; other objects' boxes stay live, so a carried cup stays visible
+      (the user's requirement). 28 fps. Removal untested: nobody in view, YOLO found nothing.
+- [ ] **07e Fill never-seen pixels** (needed later, the user's call): what nobody has seen yet
+      (magenta in 07d) gets a guess: `cv::inpaint` for colour, plane fill for depth (09).
 - [x] **09 Find the floor:** built 2026-10-30. A RANSAC plane fit gives the camera's height, tilt
       and roll, and any point's height above the floor. Three random points from anywhere almost
       never all hit a small floor, so it picks three neighbours. Run with no floor in view, it
@@ -134,8 +143,11 @@ example, each building on the one before. Numbers are the planned example folder
 
 ### Stage C — several views merged (details: docs/ideas.md, "Multi-view registration")
 
-- [ ] **10 Two views, known pose:** place a second capture by a hand-measured pose; see the walls
-      show double.
+- [x] **10 Two views, known pose:** built 2026-10-30. Capture A, move the Kinect, B is placed by
+      the pose from the settings (shift + turn left), keys nudge it, plus a median gap number.
+      Runs on the sensor (Kinect not moved): gap 0.5 cm at the true pose, only 1.2 cm at 5 cm
+      sideways, because the gap is measured along A's line of sight (blind to sliding along a
+      wall). The user still needs to try a real measured move and look at the double walls.
 - [ ] **11 ICP:** fix that misalignment. Write a simple version ourselves first (nearest neighbours
       + SVD); Open3D only if we outgrow it.
 - [ ] **12 ArUco pose:** a printed marker gives the camera's pose. Needs OpenCV's `calib3d` and

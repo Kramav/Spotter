@@ -178,3 +178,78 @@ Not usable: stereo or structure-from-motion, which need a second camera or a mov
 
 **When:** 1 and 2 fit after 09, as one small example ("distance past the depth range"). 3 only if
 the room map needs far walls that the depth camera can't reach.
+
+## Object scans: cut a detected object out and mesh it
+
+*Added 2026-10-30.* Pull a detected object out of the depth data and turn it into a mesh you can
+view. One camera position only sees the front of an object, so a closed mesh needs views from
+around it.
+
+**Plan: cheap cut-out live, segmentation once at export.**
+- **Live, every frame (cheap):** the YOLO box (02/05c), plus the depth pixels inside it. Keep the
+  points near the box's median depth (03's blob idea) and remove the table or floor plane (09).
+  Good enough to show and track the object, and light enough for the Pi.
+- **At export (one key press):**
+  1. Freeze that frame: the full-size colour image and depth mapped onto it ("bigdepth", from
+     `Registration::apply`).
+  2. Run YOLO-seg once. If it finds several objects, pick the mask that overlaps the live box
+     best.
+  3. Mask × bigdepth gives the object's points with clean edges. Shrinking the mask by a pixel or
+     two trims most of the flying pixels. The cheap cut-out was only the preview.
+  4. Mesh and save `.ply`/`.obj`.
+- **Why at export, not later from a saved file:** segmentation needs the colour image. Running it
+  at export keeps the image in memory and writes only the object's points or mesh, so the privacy
+  rule holds. Re-running it later means saving the colour image. That's the user's call; if so,
+  crop it to the box, never save it for the "person" class, gitignore it and delete it after
+  processing.
+
+**Costs and risks:**
+- **Speed:** one segmentation run is about 200 ms on the PC and probably a few seconds on the Pi.
+  Run it in the background (05c) so the live view keeps going.
+- **Model:** export `yolo26n-seg` like the detector (`nms=False`, fixed size). Whether OpenCV
+  4.14 DNN loads it is untested; the dynamic-size detector export failed before, so test this
+  first.
+- **Mask decoding:** the model outputs mask coefficients plus prototype masks. Turning those into
+  a mask is a matrix multiply, a sigmoid, a crop and a resize: about 30 lines.
+- **Accuracy:** the colour and depth cameras don't line up perfectly, so mask edges can be off by
+  a few mm at depth edges.
+- **What the Kinect v2 can scan:** at 1 m one depth pixel covers about 2.7 mm, with about 1 mm of
+  noise, so a chair or a box comes out well. A cup at 2 m gets only a few hundred points and will
+  be blobby; averaging frames (07) helps. Black, shiny and see-through objects read badly, and
+  nothing closer than 0.5 m reads.
+
+**Meshing:**
+- **One view:** connect neighbouring depth pixels into triangles and drop any triangle that spans
+  a depth jump. That gives a 2.5D shell: the front surface only, but cheap to build.
+- **All sides:** turn the object (a lazy Susan in front of the fixed camera), align the views
+  with ICP (11) or a marker on the turntable (12), and merge them with a TSDF (13) into a closed
+  mesh.
+- **Viewing:** 08's viewer draws points, not triangles. Save `.ply`/`.obj` and open it in
+  MeshLab, CloudCompare or Blender (all free and open source).
+
+**Existing tools:** Open3D (MIT: TSDF, Poisson and ball-pivoting meshing, a viewer; runs on the
+CPU, including the Pi). PCL (BSD: fast triangulation). Meshroom (MPL: photogrammetry from colour
+photos alone; slow, and a different approach).
+
+**As a ladder:**
+- A. Cheap cut-out: live, the object's points in 08's viewer.
+- B. Export with segmentation: one frame, YOLO-seg mask, clean points, saved `.ply`.
+- C. Single-view mesh from B.
+- D. Turntable scan: after 11–13.
+
+**When:** A–C need only 02, 03, 08 and 09, so they could start any time. D comes after stage C.
+Object scans are captures of the room: never commit them (`*.ply` is already gitignored; add
+`*.obj` when C is built).
+
+## Removing people: later refinements
+
+*Added 2026-10-30.* 07c/07d remove people using a depth background plus YOLO person boxes, and
+07e (on the Roadmap) will fill never-seen pixels. Not scheduled:
+- **Moved objects via the tracker:** when the tracker (05) sees an object's ID move, refresh the
+  memory at both spots at once, instead of waiting for `LeaveFrames` and `AbsorbFrames`.
+- **YOLO-seg masks** instead of boxes: cleaner person outlines, and cup-only masks (no fingers).
+  Heavy for every frame on the Pi; see "Object scans" for running it once instead.
+- **Deep inpainting** (LaMa, Apache-2.0) for large never-seen areas: convincing, but far too heavy
+  for the Pi live.
+- **People-free room map:** feed the "removed" depth into stage C, so people don't end up as ghosts
+  in the merged model.
