@@ -18,6 +18,7 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `06_Kinect_Radar` | Deproject tracked objects to X/Z in metres (colour intrinsics); bird's-eye radar with range rings, field of view, trails | Runs on the sensor. Colour FOV 83° (spec 84°); still objects steady to about 1 cm. The left/right direction is not yet checked by eye |
 | `07_Kinect_Capture_Average` | Per-pixel average over `CaptureFrames` still frames: one-frame noise by distance, expected noise of the average (÷√N), and its real noise measured from two captures | Runs on the sensor: one frame ±1.2 mm at 0.5–1 m; average expected ±0.2, measured ±0.3 mm. Tested with a temporary auto-capture build (no key presses sent) |
 | `07b_Kinect_Far_Range` | `Config::MaxDepth` raised from libfreenect2's default 4.5 m to `MaxDepthMeters` (8); per 1 m band: share of view, flaky pixels, one-frame noise | Runs on the sensor: never-read pixels 33.8% (4.5 m) → 2.3% (8 m); 4–6 m noise ±5 mm, about the same as 3–4 m; past 6 m almost nothing reads. Same auto-capture test |
+| `08_Kinect_Point_Cloud` | `getPointXYZ` for every pixel plus registered colour; its own z-buffered viewer (drag/wheel or WASD/ZX); P saves ASCII `.ply` (Y up), cut-off 6 m | Runs on the sensor: about 193k points, 14 loops/s; test `.ply` had z 0.5–5.7 m, 11.6% black points (outside the colour camera's view). Tested with a temporary auto-save build; the file was deleted. Viewer not yet checked by eye |
 
 ## Reproducible by design (D14)
 
