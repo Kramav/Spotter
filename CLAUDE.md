@@ -49,7 +49,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b and 08 built; next 09 (find the floor).
+- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view.
 
 ## Roadmap
 
@@ -120,8 +120,12 @@ example, each building on the one before. Numbers are the planned example folder
       can rotate (our own z-buffered viewer, no extra library), P saves `.ply`. Cut-off 6 m (07b).
       Runs on the sensor: about 193k points, 14 loops/s. The user still needs to check the viewer.
       Point clouds are captures of the room: `*.ply`/`*.pcd` are gitignored; never commit them.
-- [ ] **09 Find the floor:** a RANSAC plane fit gives the camera's height and tilt, so the room
-      coordinates are level.
+- [x] **09 Find the floor:** built 2026-10-30. A RANSAC plane fit gives the camera's height, tilt
+      and roll, and any point's height above the floor. Three random points from anywhere almost
+      never all hit a small floor, so it picks three neighbours. Run with no floor in view, it
+      reported a different level-ish surface every second (6–8% of points), so `MinFloorFraction`
+      (5%) is too low to say "no floor". Needs a test with the floor in view, and a tape check of
+      the height.
 
 ### Milestone — accuracy (before stage C; merging views exaggerates any distance error)
 
