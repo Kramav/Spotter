@@ -41,8 +41,9 @@ const float NearerMeters = 0.10f;
 // How long something new must stay put before it becomes part of the room. In frames: ~30 a second.
 const int AbsorbFrames = 300;
 
-// How long something must read farther before it counts as gone. One frame isn't enough: noisy
-// pixels (a ceiling seen at a steep angle) sometimes read far too far, and the memory would follow.
+// How long something must read farther before it counts as gone. One frame isn't enough: a
+// ceiling fan's blades uncover the ceiling for a moment, the memory would jump to it, and the
+// next blade would show as "new". With 10 frames the fan just becomes part of the room.
 const int LeaveFrames = 10;
 
 // How fast the background blends towards what it sees (0..1 per frame). Small = steadier.
@@ -211,6 +212,7 @@ int main()
 //  5. Black clothes or hair often give no depth reading at all. They never turn green: the
 //     method can't see what the depth camera can't.
 //  6. Set MinBlobPixels = 0 and watch object edges: thin green outlines from flying pixels.
-//  7. Set LeaveFrames = 1: with nobody in view, blobs appear on noisy surfaces (first test: 2-6
-//     blobs on the ceiling, live 3 m vs remembered 4.7 m). One too-far reading pushed the memory
-//     too far, and every normal reading after it looked "nearer". With 10: 0 blobs.
+//  7. Set LeaveFrames = 1 under a spinning ceiling fan: with nobody in view, 2-6 blobs appear on
+//     it (first test: blades 3 m, ceiling 4.7 m). Each gap between blades pulled the memory up to
+//     the ceiling, and the next blade looked "nearer". With 10: 0 blobs. Anything that keeps
+//     moving in place (a fan, curtains) is handled the same way.

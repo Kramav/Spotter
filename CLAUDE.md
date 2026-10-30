@@ -122,8 +122,8 @@ example, each building on the one before. Numbers are the planned example folder
       Point clouds are captures of the room: `*.ply`/`*.pcd` are gitignored; never commit them.
 - [x] **07c Depth background:** built 2026-10-30. Remembers the room's depth per pixel; anything
       clearly nearer is foreground. Something must read farther for `LeaveFrames` (10) before it
-      counts as gone: taking one reading at once let ceiling noise make 2–6 false blobs. Still
-      scene: 0 blobs.
+      counts as gone: taking one reading at once made 2–6 blobs on a spinning ceiling fan (the
+      user confirmed it was the fan, not noise). With 10, the fan blends into the background: 0 blobs.
 - [x] **07d Remove person:** built 2026-10-30. Blobs mostly inside YOLO person boxes are painted
       with the remembered colour; other objects' boxes stay live, so a carried cup stays visible
       (the user's requirement). 28 fps. Removal untested: nobody in view, YOLO found nothing.
