@@ -16,6 +16,8 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 | `05b_Kinect_Two_Thresholds` | ByteTrack-style two-pass matching (strong detections start IDs, weak ones only continue them); 5 s memory with the speed fading out | A flickering TV: 7 IDs in 60 s with 05, 1 ID with 05b |
 | `05c_Kinect_Background_Detect` | YOLO on a background thread; the main loop predicts boxes and re-measures depth every frame. Settings: `DetectInBackground`, `ModelInputSize` 640/320 | Display: 4 fps when waiting for YOLO; 24–27 fps in the background with the exposure capped (main loop 3–5 ms per frame). YOLO about 200 ms at 640, 45–60 ms at 320 |
 | `06_Kinect_Radar` | Deproject tracked objects to X/Z in metres (colour intrinsics); bird's-eye radar with range rings, field of view, trails | Runs on the sensor. Colour FOV 83° (spec 84°); still objects steady to about 1 cm. The left/right direction is not yet checked by eye |
+| `07_Kinect_Capture_Average` | Per-pixel average over `CaptureFrames` still frames: one-frame noise by distance, expected noise of the average (÷√N), and its real noise measured from two captures | Runs on the sensor: one frame ±1.2 mm at 0.5–1 m; average expected ±0.2, measured ±0.3 mm. Tested with a temporary auto-capture build (no key presses sent) |
+| `07b_Kinect_Far_Range` | `Config::MaxDepth` raised from libfreenect2's default 4.5 m to `MaxDepthMeters` (8); per 1 m band: share of view, flaky pixels, one-frame noise | Runs on the sensor: never-read pixels 33.8% (4.5 m) → 2.3% (8 m); 4–6 m noise ±5 mm, about the same as 3–4 m; past 6 m almost nothing reads. Same auto-capture test |
 
 ## Reproducible by design (D14)
 
