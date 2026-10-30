@@ -49,7 +49,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07 and 07b built; next 08 (point cloud).
+- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b and 08 built; next 09 (find the floor).
 
 ## Roadmap
 
@@ -116,9 +116,10 @@ example, each building on the one before. Numbers are the planned example folder
       33.8% → 2.3% in the same scene; a 4–6 m wall read at ±5 mm one-frame noise (no worse than
       3–4 m); past 6 m almost nothing reads. The user confirmed the blue (past 4.5 m) covers the right parts of the room. Accuracy (bias) at range is unmeasured: tape measure.
       Later examples still use the 4.5 m default; decide when 08 is built.
-- [ ] **08 Depth to point cloud:** a coloured 3D point per pixel, a window you can rotate, saved
-      as `.ply`. Point clouds are captures of the room: gitignore `*.ply`/`*.pcd` and never commit
-      them.
+- [x] **08 Depth to point cloud:** built 2026-10-30. A coloured 3D point per pixel, a window you
+      can rotate (our own z-buffered viewer, no extra library), P saves `.ply`. Cut-off 6 m (07b).
+      Runs on the sensor: about 193k points, 14 loops/s. The user still needs to check the viewer.
+      Point clouds are captures of the room: `*.ply`/`*.pcd` are gitignored; never commit them.
 - [ ] **09 Find the floor:** a RANSAC plane fit gives the camera's height and tilt, so the room
       coordinates are level.
 
