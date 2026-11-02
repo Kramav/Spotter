@@ -13,6 +13,7 @@ obj/
 build/
 vcpkg_installed/
 
-# Point clouds are 3D captures of the room: never commit them
+# Point clouds and meshes are 3D captures of the room: never commit them
 *.ply
 *.pcd
+*.obj

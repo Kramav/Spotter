@@ -153,3 +153,18 @@ with the person. The cost: the fingers holding it stay visible too, inside its b
 who stands still, and a person is never absorbed into the room.
 **Rejected for now:** YOLO-seg masks (cleaner edges, too heavy for every frame on the Pi);
 deep inpainting such as LaMa (too heavy). Never-seen pixels show magenta until 07e.
+
+### D17 — 2026-11-01 — Object scans: mesh before segmentation, OBJ with vertex colours, guessed back kept apart
+**What:** 08b turns a clicked YOLO box into an `.obj`: a 30-frame average, a box + depth band +
+support plane cut-out, grid triangles, and a guessed back.
+**Why the mesh before YOLO-seg:** the seg model is the risky part (OpenCV 4.14 DNN failed to load
+our dynamic-size export before), while the box cut works today. The mask can replace the cut later
+(08c) without touching the meshing.
+**Why OBJ with vertex colours:** plain text, opens in Blender, MeshLab and CloudCompare, and needs
+no texture image. A texture would mean saving a colour picture, which the privacy rule avoids.
+**Why the person class is refused:** a coloured 3D scan of a person is an image of a person.
+**Why the back is guessed but kept apart:** the user asked for a guess at the hidden side. It's grey
+and in its own group (`guessed_back`), so seen and made-up surfaces never mix, the same rule as
+07d's magenta. Mirror ("as deep as it is wide") was the simplest guess that closes the model.
+**Support plane:** RANSAC (09) over the object's own pixels, keeping only planes with few points
+below them, so a chair seat (legs below) isn't taken for the floor.
