@@ -231,15 +231,24 @@ around it.
 CPU, including the Pi). PCL (BSD: fast triangulation). Meshroom (MPL: photogrammetry from colour
 photos alone; slow, and a different approach).
 
-**As a ladder:**
-- A. Cheap cut-out: live, the object's points in 08's viewer.
-- B. Export with segmentation: one frame, YOLO-seg mask, clean points, saved `.ply`.
-- C. Single-view mesh from B.
+**As a ladder** (reordered 2026-11-01, D17: the mesh comes before segmentation):
+- A+C. **Built as 08b:** box + depth band + support plane cut-out, grid mesh, guessed back, `.obj`.
+- B. **08c, segmentation:** swap 08b's box-and-band cut for a YOLO-seg mask. First test whether
+  OpenCV DNN loads `yolo26n-seg`.
 - D. Turntable scan: after 11–13.
 
-**When:** A–C need only 02, 03, 08 and 09, so they could start any time. D comes after stage C.
-Object scans are captures of the room: never commit them (`*.ply` is already gitignored; add
-`*.obj` when C is built).
+**Guessing the back** (08b does the simplest guess: mirror, assuming as deep as wide). Better
+guesses, later:
+- **Shape by class:** YOLO's class picks a shape. Cup, bottle, bowl → fit circles to horizontal
+  slices of the front shell and spin them into a cylinder or vase shape. Box, TV, microwave → a
+  cuboid from the visible faces. The best cheap guess for round things.
+- **Learned shape completion:** networks that complete a partial point cloud, or turn one image
+  into a 3D model. Needs a GPU (out on the Pi, D11), so at most an offline PC tool.
+- Whatever the guess, keep it separate from the scan (08b: grey, group `guessed_back`), and let a
+  real view replace it.
+
+**When:** 08c needs only the seg model test. D comes after stage C.
+Object scans are captures of the room: never commit them (`*.ply` and `*.obj` are gitignored).
 
 ## Removing people: later refinements
 

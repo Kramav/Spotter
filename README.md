@@ -121,6 +121,7 @@ Then work through the other examples in this order:
 | 7c | `07c_Kinect_Depth_Background` | Remember the room's depth; anything clearly nearer is new (a person, a moved cup). No neural network |
 | 7d | `07d_Kinect_Remove_Person` | Paint people out with the remembered room behind them; anything they carry stays visible |
 | 8 | `08_Kinect_Point_Cloud` | Turn every depth pixel into a coloured 3D point, and turn the room around with the mouse. P saves a `.ply` (never commit it) |
+| 8b | `08b_Kinect_Object_Mesh` | Click a detected object: its depth pixels become a triangle mesh with a guessed (grey) back, saved as `.obj` for Blender or MeshLab (never commit it) |
 | 9 | `09_Kinect_Find_Floor` | Find the floor with RANSAC: the camera's height, tilt and roll, and any point's height above the floor |
 | 10 | `10_Kinect_Two_Views` | Two captures merged by a hand-measured pose: see the walls show double, nudge the pose until they meet |
 

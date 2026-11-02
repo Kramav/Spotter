@@ -44,12 +44,12 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Lean towards our own software and open source over vendor SDKs (D5). New code must build on
   Linux as well as Windows (D7).
 
-## Status (2026-10-25)
+## Status (2026-11-01)
 
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Stage C: 10 built. Side branch: 07c/07d (remove people from the picture) built.
+- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built, not yet run on the sensor.
 
 ## Roadmap
 
@@ -120,6 +120,13 @@ example, each building on the one before. Numbers are the planned example folder
       can rotate (our own z-buffered viewer, no extra library), P saves `.ply`. Cut-off 6 m (07b).
       Runs on the sensor: about 193k points, 14 loops/s. The user still needs to check the viewer.
       Point clouds are captures of the room: `*.ply`/`*.pcd` are gitignored; never commit them.
+- [x] **08b Object mesh:** built 2026-11-01 (D17). Click a YOLO box: 30-frame average, cut-out
+      (box + depth band + support plane + biggest blob), grid triangles, a guessed grey back
+      (mirror, as deep as wide) in its own group, saved `.obj` (gitignored). A synthetic
+      ball-on-table check passed (closed mesh, back 1.077 vs 1.080 m). Not yet run on the sensor
+      (Kinect unplugged): the user to click a chair or box and open the file in Blender/MeshLab.
+- [ ] **08c Object mask:** 08b with a YOLO-seg mask instead of box + depth band. First test
+      whether OpenCV DNN loads `yolo26n-seg`. Better back guesses (shape by class): ideas.md.
 - [x] **07c Depth background:** built 2026-10-30. Remembers the room's depth per pixel; anything
       clearly nearer is foreground. Something must read farther for `LeaveFrames` (10) before it
       counts as gone: taking one reading at once made 2–6 blobs on a spinning ceiling fan (the
