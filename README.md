@@ -12,6 +12,68 @@ are.
 
 ---
 
+## How it fits together
+
+```mermaid
+flowchart TB
+    K["Kinect v2<br/>colour 1920×1080 · depth 512×424"]
+
+    subgraph DRV["Driver layer: open source, CPU only"]
+        U["libusbK USB driver"] --> F["libfreenect2<br/>decodes depth on the CPU"]
+        F --> R["Registration<br/>matches depth pixels to colour pixels"]
+    end
+    K -->|USB 3| U
+
+    subgraph OBJ["Objects lane: what is where (02–06)"]
+        Y["YOLO detector<br/>OpenCV DNN · yolo26n.onnx<br/>on its own thread (05c)"]
+        D["Distance to each box (02)"]
+        T["Tracker: ID numbers + Kalman filter (04–05b)"]
+        X["Floor position in metres<br/>bird's-eye radar (06)"]
+        Y --> D --> T --> X
+    end
+
+    subgraph ROOM["Room lane: the space in 3D (07–13)"]
+        AV["Depth noise and range<br/>(07, 07b)"]
+        BG["Remember the empty room<br/>paint people out (07c, 07d)"]
+        PC["Point cloud (08)"]
+        FL["Find the floor (09)"]
+        V10["Two views, known pose (10)"]
+        V11["ICP alignment (11)"]
+        V12["ArUco marker pose (12)"]
+        V13["Merge many views (13)"]
+        AV -.->|6 m cut-off| PC
+        PC --> FL
+        PC --> V10 --> V11 --> V13
+        V12 --> V13
+    end
+
+    R -->|colour| Y
+    R -->|depth| D
+    F -->|depth| AV
+    F -->|depth| BG
+    R -->|depth + colour| PC
+    Y -.->|person boxes| BG
+
+    MAP["3D map of the space<br/>with the tracked objects in it (14)"]
+    X --> MAP
+    V13 --> MAP
+
+    classDef planned stroke-dasharray: 5 5
+    class V11,V12,V13,MAP planned
+```
+
+The Kinect's colour and depth come in through an open-source driver, then split into two lanes.
+The **objects lane** finds things in the colour image and uses depth to place them; the **room
+lane** turns depth into 3D points of the room itself. The goal is where they meet: a 3D map with
+the tracked objects in it. Solid boxes are built, dashed boxes are planned, and the numbers are
+the example folders in `exercises/cpp/`. Everything runs on the CPU, so the same code can move
+from the Windows PC to the Raspberry Pi.
+
+How each example works, and what it adds to the one before, is drawn in
+[exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
+
+---
+
 ## What's in this repository
 
 | Folder | What it is | Needs |
@@ -123,6 +185,9 @@ Then work through the other examples in this order:
 | 8 | `08_Kinect_Point_Cloud` | Turn every depth pixel into a coloured 3D point, and turn the room around with the mouse. P saves a `.ply` (never commit it) |
 | 9 | `09_Kinect_Find_Floor` | Find the floor with RANSAC: the camera's height, tilt and roll, and any point's height above the floor |
 | 10 | `10_Kinect_Two_Views` | Two captures merged by a hand-measured pose: see the walls show double, nudge the pose until they meet |
+
+Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
+[exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
 
 Each example is **one file** (`main.cpp` in its folder), meant to be read from top to bottom:
 settings at the top, then setup, the main loop, output, and **experiment ideas** at the bottom.
