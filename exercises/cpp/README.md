@@ -6,6 +6,9 @@ These are the open-source versions of `exercises/csharp`. They use no Microsoft 
 Microsoft driver, and the same code builds on Windows and Linux. For the reasons behind this, see
 [docs/decisions.md](../../docs/decisions.md), entries D5 to D15.
 
+Each example's pipeline, and what it adds to the one before, is drawn in
+[EXAMPLES.md](EXAMPLES.md).
+
 | Example | Teaches | Status |
 |---|---|---|
 | `01_Kinect_Depth_Peek` | Reading depth, what "no reading" looks like, depth noise | Runs on the sensor at 30 fps; window matches the C# version |

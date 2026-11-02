@@ -19,6 +19,11 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - **[docs/ideas.md](docs/ideas.md)**: techniques researched but not scheduled, with when each would
   pay off and how to build it. Add to it when a "maybe later" topic comes up. Move an item to the
   Roadmap once it's scheduled.
+- **README "How it fits together"**: the Mermaid system map. When a planned step is built, drop
+  it from the `class … planned` line; add new steps as nodes.
+- **[exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md)**: one Mermaid flowchart per example.
+  Every new example gets a section there (its pipeline, with the steps it adds in the thick-border
+  `new` class) and a node in the family tree.
 
 ## Layout
 
@@ -26,7 +31,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`. |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
