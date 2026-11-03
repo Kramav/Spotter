@@ -264,3 +264,32 @@ second thread. Naming what's in the room (YOLO, 05's tracks) is roadmap step 14 
 **Why Demo 5 measures height from each end's own depth:** 03's box height × one depth is wrong
 once the Kinect is tilted (the feet are nearer than the head). Measuring between the top and bottom
 rows as 3D points holds at any tilt.
+
+### D23 — 2026-11-03 — Demo 4's fallback lives in its own file
+**What:** with no room file from 13, Demo 4 used to stop. It now calls `OneViewRoom.h` next to its
+`main.cpp`: the Kinect's empty view, averaged over 15 frames, levelled by the Kinect's tilt
+(`OneView::LevelDegrees`, 14 for the Kinect on the floor) and given normals, becomes the room.
+**Why a second file, against the one-file rule:** the user asked for it to be a separate file, so the
+fallback reads as its own idea and Demo 4's main file stays about the room twin. It's a header, so
+CMake needs no change.
+**Why it's only for rehearsing:** one view is 08's shell. Visitors appear inside the front of what
+the Kinect sees, not inside a room seen from all sides.
+
+### D24 — 2026-11-03 — 13b: CLAHE and a gentler FAST test for features; room scans trade time for quality
+**What:** a copy of 13 that evens out the grey picture's contrast tile by tile (CLAHE) before ORB,
+and lowers ORB's FAST corner threshold from 20 to 7. It also raises the settings that buy quality
+with time.
+**Why:** a probe of the real view, through 13's own code, found 48–73 features in a dim room
+(brightness 57/255). 13 needs 100, so it refused the scan. Measured on that view: CLAHE alone gave
+about 125, FAST 7 alone about 170, both together about 1250 (with up to 3000 allowed). A second
+scan from the same spot was then placed 0.5 mm off, with 285 matches agreeing.
+**Why only the features see the evened-out picture:** CLAHE changes the colours. The mesh keeps
+the camera's true colours.
+**Why quality over time:** the user's call ("we prefer high quality over quick time"). 60 frames
+per scan (13: 30), 3000 features, 5000 RANSAC tries, ICP on every 2nd pixel with 50 rounds, 20
+agreeing matches needed (fewer wrong placements with so many features), and 2 cm cubes with room
+for 80M of them (about 1.9 GB: fine on the PC, not on a Pi). In the synthetic room: placements
+1.4–1.9 s instead of 0.3–0.4 s, and the same accuracy. Its file has the same name as 13's, so
+Demo 4 reads it too.
+**Why a new example, not a change to 13:** the user asked for an iteration, and 13 stays the
+quicker one to learn from.

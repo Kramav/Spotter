@@ -48,8 +48,10 @@ With one Kinect, run one demo at a time and switch.
 ## Each demo, before the doors open
 
 **1 You in 3D.** Start it, stand on the mark, and check you're in the middle as the view swings.
-If not, change `PivotMeters` to the mark's distance. To show only people with nothing behind them,
-set `MaxDepthMeters` to 3.
+If not, change `PivotMeters` to the mark's distance. If the room looks tilted, press `[` or `]`
+until the floor and walls look level, then put the printed `LevelDegrees` in the file (14 suits
+the Kinect sitting on the floor and aimed up; use 0 when it stands level on a tripod). To show
+only people with nothing behind them, set `MaxDepthMeters` to 3.
 
 **2 Invisibility Cloak.** Start it with **nobody in view** and wait about 10 s while it learns the
 empty stand. Then walk through: you should vanish on the right. If the stand has changed (a bag
@@ -60,8 +62,11 @@ clothes and hair give no depth reading, so they stay visible. Fast walkers leave
 a busy stand, set `RadarClasses = { "person" }` so chairs and bottles don't clutter the radar. C
 clears the trails between visitors.
 
-**4 Room Twin.** This needs the most preparation:
-1. The day before, or in the morning, scan the stand with `13_Kinect_Room_Scan`, following
+**4 Room Twin.** Without a room file it still runs. It then takes the Kinect's own empty view
+as the room (`OneViewRoom.h`: clear the view when the console says so). That's one view only, but
+it's good for rehearsing. Set `OneView::LevelDegrees` in that file to the Kinect's tilt (14 on
+the floor, 0 level). The real thing needs the most preparation:
+1. The day before, or in the morning, scan the stand with `13b_Kinect_Room_Scan_HQ` (or 13), following
    "Recreate a room" in the [main README](../../../README.md#recreate-a-room-example-13), with
    nobody in view. Press E. It writes `room_scan_<time>.obj` into the folder you ran it from.
    The file has the line `# first camera turn:` at the end; Demo 4 needs it, so use a scan made
@@ -86,7 +91,7 @@ depth reading). "step back" means head or feet are cut off. T resets "tallest to
 | 1 | Builds; it's 08 (runs on the sensor, 14 loops/s) plus the swing | Run on the sensor |
 | 2 | Builds; it's 07d (28 fps) plus the side-by-side view | 07d has never removed a real person (nobody was in view): test with a person first |
 | 3 | Builds; it's 06c (runs on the sensor) in one window | Run on the sensor |
-| 4 | Synthetic test (bare room, the worst case): located within 0.2 mm when put back up to 15° and 58 cm off, in 0.3 s; at 20° and 30° it's lost and warns (38–40% matched). 13's own test: the saved turn lands 94% of scan 1's points within 3 cm of the merged mesh | 13 has never run in a lit room, so there's no real room file yet |
+| 4 | Fallback without a room file (`OneViewRoom.h`): a synthetic wall seen 14° tilted comes out upright to ±1.5 mm. Synthetic test (bare room, the worst case): located within 0.2 mm when put back up to 15° and 58 cm off, in 0.3 s; at 20° and 30° it's lost and warns (38–40% matched). 13's own test: the saved turn lands 94% of scan 1's points within 3 cm of the merged mesh | 13 has never run in a lit room, so there's no real room file yet |
 | 5 | Builds; the height now uses each end's own depth | Run on the sensor; check against a known height |
 
 Rehearse on the sensor before the day. For each demo, look at the points under "Each demo" and

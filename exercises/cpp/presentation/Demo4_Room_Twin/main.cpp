@@ -30,6 +30,8 @@
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset
 //          F  fullscreen on/off      Q or Esc  quit
 //  Run:    Demo4_Room_Twin [room.obj]   (default: the newest room_scan_*.obj here)
+//  No room file? It takes the Kinect's own empty view as the room instead (OneViewRoom.h): one
+//  view only, good for rehearsing.
 // =====================================================================
 
 #include <algorithm>
@@ -47,6 +49,8 @@
 #include <libfreenect2/registration.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/flann.hpp>
+
+#include "OneViewRoom.h"   // the fallback when there's no room file (its own file: the user's call, D23)
 
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
@@ -74,7 +78,11 @@ const float MinLocatedShare = 0.6f;        // below this share of matched points
 // --- Viewer ---
 const int ViewWidth = 1280, ViewHeight = 720;
 const float ViewFocalPixels = 930;
-const int RoomPointSize = 2, VisitorPointSize = 3;
+// Each point is drawn as big as the patch it stands for, so nothing behind shows through the
+// gaps (a fixed 2 px did: the room's points are 3 cm apart, at 9 m that's 3 px on screen).
+const float RoomPointMeters = 0.03f;    // 13's cube size: its export prints it ("3.0 cm cubes")
+const float DepthFocalPixels = 365;     // a visitor's point covers distance / this (03 prints it)
+const int MaxPointPixels = 8;
 const float TurnStepDegrees = 5;
 const float ZoomStepMeters = 0.25f;
 
@@ -123,21 +131,23 @@ bool Project(const cv::Point3f& point, cv::Point& pixel, float& depth)
     return pixel.x >= 0 && pixel.y >= 0 && pixel.x < ViewWidth && pixel.y < ViewHeight;
 }
 
-// As 08's Render, drawing into an image and z-buffer shared by the room and the visitors.
+// As 08's Render, drawing into an image and z-buffer shared by the room and the visitors. Each
+// point is a square as big as its patch (patchMeters) looks from the viewer.
 void Render(cv::Mat& image, cv::Mat& nearest, const std::vector<cv::Point3f>& points,
-            const std::vector<cv::Vec3b>& colours, int size)
+            const std::vector<cv::Vec3b>& colours, const std::vector<float>& patchMeters)
 {
     for (size_t i = 0; i < points.size(); i++)
     {
         cv::Point pixel;
         float depth;
         if (!Project(points[i], pixel, depth)) continue;
-        for (int dy = 0; dy < size; dy++)
+        int size = std::clamp((int)std::ceil(ViewFocalPixels * patchMeters[i] / depth), 1, MaxPointPixels);
+        for (int dy = -size / 2; dy < size - size / 2; dy++)
         {
-            for (int dx = 0; dx < size; dx++)
+            for (int dx = -size / 2; dx < size - size / 2; dx++)
             {
                 int u = pixel.x + dx, v = pixel.y + dy;
-                if (u >= ViewWidth || v >= ViewHeight || depth >= nearest.at<float>(v, u)) continue;
+                if (u < 0 || v < 0 || u >= ViewWidth || v >= ViewHeight || depth >= nearest.at<float>(v, u)) continue;
                 nearest.at<float>(v, u) = depth;
                 image.at<cv::Vec3b>(v, u) = colours[i];
             }
@@ -335,10 +345,29 @@ void ToggleFullscreen(const std::string& window)
 int main(int argc, char** argv)
 {
     // -----------------------------------------------------------------
-    //  Setup: the room file, then the Kinect (depth + colour + registration, as in 08)
+    //  Setup: the Kinect (depth + colour + registration, as in 08), then the room: 13's file, or
+    //  without one, the Kinect's own view (OneViewRoom.h)
     // -----------------------------------------------------------------
 
     std::setvbuf(stdout, nullptr, _IONBF, 0);
+    libfreenect2::setGlobalLogger(libfreenect2::createConsoleLogger(libfreenect2::Logger::Warning));
+    libfreenect2::Freenect2 freenect2;
+    libfreenect2::Freenect2Device* device = freenect2.enumerateDevices() > 0 ? freenect2.openDefaultDevice() : nullptr;
+    if (device == nullptr)
+    {
+        std::printf("No Kinect v2 found, or it is in use. See the main README's troubleshooting table.\n");
+        return 1;
+    }
+    libfreenect2::Freenect2Device::Config config;
+    config.MaxDepth = MaxDepthMeters;
+    device->setConfiguration(config);
+    libfreenect2::SyncMultiFrameListener listener(libfreenect2::Frame::Color | libfreenect2::Frame::Depth);
+    device->setColorFrameListener(&listener);
+    device->setIrAndDepthFrameListener(&listener);
+    device->start();
+    libfreenect2::Registration registration(device->getIrCameraParams(), device->getColorCameraParams());
+    libfreenect2::Frame undistorted(Width, Height, 4), registered(Width, Height, 4);
+
     std::string roomPath = argc > 1 ? argv[1] : NewestRoomFile();
     std::vector<cv::Point3f> room;
     std::vector<cv::Vec3b> roomColours;
@@ -346,9 +375,20 @@ int main(int argc, char** argv)
     cv::Matx33f firstCamera;
     if (roomPath.empty() || !LoadRoom(roomPath, room, roomColours, roomNormals, firstCamera))
     {
-        std::printf("No room file. Scan the room with 13_Kinect_Room_Scan, press E, then run this from the\n"
-                    "folder the room_scan_*.obj landed in (or give its path: Demo4_Room_Twin room.obj).\n");
-        return 1;
+        std::printf("%s For the real thing, scan the room with 13_Kinect_Room_Scan, press E, and run this from\n"
+                    "the folder the room_scan_*.obj landed in (or give its path: Demo4_Room_Twin room.obj).\n",
+                    roomPath.empty() ? "No room_scan_*.obj in this folder." : ("Could not read " + roomPath + ".").c_str());
+        room.clear();
+        roomColours.clear();
+        roomNormals.clear();
+        roomPath = "the Kinect's own view";
+        if (!OneViewRoom(listener, registration, room, roomColours, roomNormals, firstCamera))
+        {
+            std::printf("The Kinect saw nothing.\n");
+            device->stop();
+            device->close();
+            return 1;
+        }
     }
 
     // The doll's house: the floor is the lowest 2% of the room; everything above the cut is hidden.
@@ -380,23 +420,6 @@ int main(int argc, char** argv)
     cv::Mat roomData((int)room.size(), 3, CV_32F, room.data());
     cv::flann::Index tree(roomData, cv::flann::KDTreeIndexParams(4));
 
-    libfreenect2::setGlobalLogger(libfreenect2::createConsoleLogger(libfreenect2::Logger::Warning));
-    libfreenect2::Freenect2 freenect2;
-    libfreenect2::Freenect2Device* device = freenect2.enumerateDevices() > 0 ? freenect2.openDefaultDevice() : nullptr;
-    if (device == nullptr)
-    {
-        std::printf("No Kinect v2 found, or it is in use. See the main README's troubleshooting table.\n");
-        return 1;
-    }
-    libfreenect2::Freenect2Device::Config config;
-    config.MaxDepth = MaxDepthMeters;
-    device->setConfiguration(config);
-    libfreenect2::SyncMultiFrameListener listener(libfreenect2::Frame::Color | libfreenect2::Frame::Depth);
-    device->setColorFrameListener(&listener);
-    device->setIrAndDepthFrameListener(&listener);
-    device->start();
-    libfreenect2::Registration registration(device->getIrCameraParams(), device->getColorCameraParams());
-    libfreenect2::Frame undistorted(Width, Height, 4), registered(Width, Height, 4);
 
     std::vector<float> backgroundMm(Width * Height, 0);
     bool located = false;
@@ -409,6 +432,7 @@ int main(int argc, char** argv)
     bool highlight = true, orbit = true;
     std::vector<cv::Point3f> visitors;
     std::vector<cv::Vec3b> visitorColours;
+    std::vector<float> visitorPatches, housePatches(house.size(), RoomPointMeters);
 
     const std::string window = "Demo 4 - room twin";
     cv::namedWindow(window, cv::WINDOW_NORMAL);
@@ -455,13 +479,16 @@ int main(int argc, char** argv)
         listener.release(frames);
         const float* depthMm = (const float*)undistorted.data;
 
-        // A depth pixel -> a Kinect point -> by the pose into the room.
+        // A depth pixel -> a Kinect point -> by the pose into the room. "range" = its distance from
+        // the Kinect.
+        float range = 0;
         auto ToRoom = [&](int row, int column, cv::Point3f& p)
         {
             float x, y, z;
             registration.getPointXYZ(&undistorted, row, column, x, y, z);
             if (std::isnan(z)) return false;
             p = pose(cv::Point3f(x, y, z));
+            range = std::sqrt(x * x + y * y + z * z);
             return true;
         };
 
@@ -496,6 +523,7 @@ int main(int argc, char** argv)
         // --- Step 4: visitors = what's clearly nearer than the empty view (03), into the room ---
         visitors.clear();
         visitorColours.clear();
+        visitorPatches.clear();
         if (located)
         {
             cv::Mat foreground(Height, Width, CV_8U, cv::Scalar(0));
@@ -514,6 +542,7 @@ int main(int argc, char** argv)
                     const uchar* bgrx = registered.data + 4 * (row * Width + column);
                     cv::Vec3b colour(bgrx[0], bgrx[1], bgrx[2]);
                     visitors.push_back(p);
+                    visitorPatches.push_back(range / DepthFocalPixels);
                     visitorColours.push_back(highlight ? colour / 2 + cv::Vec3b(0, 80, 127) : colour);   // half orange
                 }
             }
@@ -525,8 +554,8 @@ int main(int argc, char** argv)
 
         cv::Mat image(ViewHeight, ViewWidth, CV_8UC3, cv::Scalar(20, 20, 20));
         cv::Mat nearest(ViewHeight, ViewWidth, CV_32F, cv::Scalar(1e9));
-        Render(image, nearest, house, houseColours, RoomPointSize);
-        Render(image, nearest, visitors, visitorColours, VisitorPointSize);
+        Render(image, nearest, house, houseColours, housePatches);
+        Render(image, nearest, visitors, visitorColours, visitorPatches);
         cv::Point pixel;
         float depth;
         if (located && Project(pose(cv::Point3f(0, 0, 0)), pixel, depth))

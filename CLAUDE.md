@@ -54,7 +54,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
 
 ## Roadmap
 
@@ -203,6 +203,11 @@ example, each building on the one before. Numbers are the planned example folder
       Synthetic textured room from 4 poses: placed within 2.1 mm / 0.08°, mesh 0.6 mm median off,
       clean model right. On the sensor only a dark-room smoke test (scans refused, as designed).
       The user still needs a real scan in a lit room. Later: loop closure for long loops.
+- [x] **13b Room Scan HQ:** built 2026-11-03 (D24). 13 with CLAHE before ORB and a FAST
+      threshold of 7 (the user prefers quality over time for room scans), plus more frames,
+      features, RANSAC tries, ICP points and rounds, and 2 cm cubes. Same dim view on the sensor:
+      13 found 48–73 features (refused), 13b 1225–1271, with a second scan placed 0.5 mm off.
+      The user's choice for real scans; not yet tried with real moves.
 
 ### Stage D — the goal
 

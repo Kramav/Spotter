@@ -33,6 +33,7 @@ flowchart LR
     E09 -.->|RANSAC, turned upright| E06b
     E05 -.->|Kalman filter, matching| E06c
 
+    E13 --> E13b["13b Room Scan HQ"]
     E13 --> E14["14 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
@@ -538,6 +539,25 @@ flowchart LR
 
 **What to compare:** press C while scanning: a scan's colour should lie on the others. In the
 saved file, `seen_room` against the clean groups.
+
+## 13b Room Scan HQ
+
+Starts from 13. Better recognition in dim light, and quality over time everywhere else (more
+frames, features, RANSAC tries, ICP points and rounds; 2 cm cubes).
+
+```mermaid
+flowchart LR
+    P["Colour picture<br/>on the depth grid"] --> G["Grey"]
+    G --> CL["CLAHE: contrast evened out<br/>tile by tile"]
+    CL --> ORB["ORB, gentler corner test<br/>FAST 7, up to 3000"]
+    ORB --> PL["Place: features + ICP (13)<br/>every 2nd pixel, 20 must agree"]
+    PL --> E["E: TSDF at 2 cm + surface net,<br/>clean model (13)"]
+
+    classDef new stroke-width:3px
+    class CL,ORB new
+```
+
+**What to compare:** the "N features" in the console, against 13 in the same spot and light.
 
 ## Presentation demos
 
