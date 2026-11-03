@@ -12,6 +12,7 @@
 //  Nothing is saved: 08's P key is gone (privacy, visitors are in view).
 //
 //  Keys:   C  true colour / colour by distance    O  swing on/off
+//          [ ]  level: the Kinect's tilt, 1° per press (see LevelDegrees)
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset
 //          F  fullscreen on/off    Q or Esc  quit
 // =====================================================================
@@ -45,11 +46,23 @@ const float OrbitSeconds = 16;
 // only the visitors (the shell effect is clearer with nothing behind them).
 const float MaxDepthMeters = 4.5f;
 
+// The Kinect's own tilt, upwards positive: on the floor ours looks up about 14°. The cloud is
+// turned back by this, so the room stands level and the swing turns about the room's real up, not
+// the camera's. [ and ] change it by 1° while it runs (the console prints it); put the value
+// that looks level here. 0 = the Kinect stands level (on a tripod at the stand).
+float LevelDegrees = 14;
+
 // The viewer: 1280 x 720 scaled to the screen. 930 px across 1280 is about 69°, the depth
 // camera's own field of view (08 used 700 across 960).
 const int ViewWidth = 1280, ViewHeight = 720;
 const float ViewFocalPixels = 930;
-const int PointSizePixels = 2;
+
+// Each depth pixel covers (distance / DepthFocalPixels) metres. Each point is drawn at least that
+// big on screen, so the cloud stays solid at any zoom. A fixed 2 px left gaps here (930 vs the
+// depth camera's 365 px focal length puts neighbours 2.5 px apart), and the wall behind showed
+// through. MaxPointPixels stops points seen from very close becoming big squares.
+const float DepthFocalPixels = 365;   // the depth camera's focal length (03 prints it)
+const int MaxPointPixels = 8;
 const float TurnStepDegrees = 5;
 const float ZoomStepMeters = 0.25f;
 
@@ -103,12 +116,15 @@ cv::Mat Render(const std::vector<cv::Point3f>& points, const std::vector<cv::Vec
         cv::Point pixel;
         float depth;
         if (!Project(points[i], pixel, depth)) continue;
-        for (int dy = 0; dy < PointSizePixels; dy++)
+        // How big this point's patch looks from the viewer (see DepthFocalPixels), centred on it.
+        float patchMeters = (float)cv::norm(points[i]) / DepthFocalPixels;
+        int size = std::clamp((int)std::ceil(ViewFocalPixels * patchMeters / depth), 1, MaxPointPixels);
+        for (int dy = -size / 2; dy < size - size / 2; dy++)
         {
-            for (int dx = 0; dx < PointSizePixels; dx++)
+            for (int dx = -size / 2; dx < size - size / 2; dx++)
             {
                 int u = pixel.x + dx, v = pixel.y + dy;
-                if (u >= ViewWidth || v >= ViewHeight || depth >= nearest.at<float>(v, u)) continue;
+                if (u < 0 || v < 0 || u >= ViewWidth || v >= ViewHeight || depth >= nearest.at<float>(v, u)) continue;
                 nearest.at<float>(v, u) = depth;
                 image.at<cv::Vec3b>(v, u) = colours[i];
             }
@@ -184,6 +200,11 @@ int main()
         if (key == 'c') byDistance = !byDistance;
         if (key == 'o') orbit = !orbit;
         if (key == 'f') ToggleFullscreen(window);
+        if (key == '[' || key == ']')
+        {
+            LevelDegrees += key == ']' ? 1 : -1;
+            std::printf("LevelDegrees = %.0f\n", LevelDegrees);
+        }
         pitchDegrees = std::clamp(pitchDegrees, -89.0f, 89.0f);
         viewDistance = std::max(viewDistance, 0.1f);
 
@@ -199,6 +220,9 @@ int main()
 
         // --- Every depth pixel -> a coloured 3D point (08) ----------------------
         registration.apply(frames[libfreenect2::Frame::Color], frames[libfreenect2::Frame::Depth], &undistorted, &registered);
+        // Level (new): turn about the Kinect's left-right axis by its tilt. A level line straight
+        // ahead, which a tilted-up Kinect sees below the middle, comes out level again.
+        const float levelCos = std::cos(LevelDegrees * (float)CV_PI / 180), levelSin = std::sin(LevelDegrees * (float)CV_PI / 180);
         points.clear();
         colours.clear();
         for (int row = 0; row < 424; row++)
@@ -208,7 +232,7 @@ int main()
                 float x, y, z;
                 registration.getPointXYZ(&undistorted, row, column, x, y, z);
                 if (std::isnan(z)) continue;
-                points.emplace_back(x, y, z);
+                points.emplace_back(x, levelCos * y - levelSin * z, levelSin * y + levelCos * z);
                 if (byDistance)
                     colours.push_back(distanceColours.at<cv::Vec3b>(std::clamp((int)(255 * (z - 0.5f) / (MaxDepthMeters - 0.5f)), 0, 255)));
                 else

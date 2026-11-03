@@ -200,6 +200,7 @@ Then work through the other examples in this order:
 | 11 | `11_Kinect_ICP` | ICP lines the two captures up by itself: pair each point with its nearest neighbour, fit, repeat. Needs a roughly right start |
 | 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
 | 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
+| 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere. **Use this one for a real scan** |
 
 **Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
@@ -232,6 +233,12 @@ More detail (Linux and Raspberry Pi setup, how the build stays reproducible, kno
 
 Scan the room from several spots; each scan is placed automatically, and E saves one 3D model of
 the whole room. It takes about 10 minutes for a first try.
+
+**Use 13b (`13b_Kinect_Room_Scan_HQ`) for a real scan.** It works exactly like 13, keys and all,
+but finds far more details in a dim picture. On the sensor, in the same room and light, 13 found
+48–67 (it refuses a scan under 100), and 13b found about 1250. It's also slower and finer
+everywhere: hold still about **4 s** per scan instead of 2, and E takes longer. The steps below
+say 13; for 13b, use `13b_Kinect_Room_Scan_HQ` in step 4, and the counter in step 6 runs to 60.
 
 ### Before you start
 
