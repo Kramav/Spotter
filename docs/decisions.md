@@ -238,3 +238,29 @@ scan; it costs one bigger k-d tree. Loop closure (a pose graph) is left for late
 (privacy rule). Only the final `.obj` is written, as with 08b and 09b.
 **Why refuse scans with under 100 features:** a dark room gives a black colour picture (seen on the
 sensor: brightness 5/255) and 0 features; no later scan could ever be matched to such a scan.
+
+### D22 — 2026-11-03 — Presentation demos: a separate folder of remixes; Demo 4 locates itself from a turn that 13 saves
+**What:** the user asked for "the most visually impressive things" for a small exhibition, then
+for all of them in a `presentation` folder. Five demos: 08 → You in 3D, 07d → Invisibility Cloak,
+06c → Booth Radar, 13 → Room Twin (new), 03 → How Tall.
+**Why a separate folder, not more ladder examples:** the demos teach nothing new, except Demo 4. They're
+fullscreen copies of examples with the save keys removed, and the ladder stays one idea per step.
+Each is still a single file with the usual sections, so a visitor who asks "how" can be shown it.
+**Why no save keys, and "live only" on screen:** at a stand, every frame has strangers in it
+(privacy rule: never save images of people).
+**Why Demo 4 starts from a turn saved by 13:** two other ways were tried first, in a synthetic bare room:
+- *54 starting guesses* (every 20° of turn × 3 tilts) with 11's point-to-point ICP: 4–6 s, and wrong
+  in most cases. A box-shaped room looks alike turned 90°, and a view of one wall can slide along it.
+- *A pull towards scan 1's spot* (extra ICP pairs): it also dragged directions that the room does
+  pin down (5 cm off where the truth was 5 cm away).
+
+13 already knows how scan 1's camera sat in the room (its levelling turn). It now writes that as
+an OBJ comment (`# first camera turn:`, ignored by Blender and MeshLab), and Demo 4 starts there
+with 13's point-to-plane ICP (gate 0.50 m). Result: found within 0.2 mm from up to 15° and 58 cm
+off, in 0.3 s. Past that it's lost and says so (38–40% matched, warning under 60%). 11's
+point-to-point ICP from the same start failed at 5° and 11 cm: again D21's lesson.
+**Why Demo 4's visitors are depth blobs (03), not YOLO tracks:** it works in the dark, and needs no
+second thread. Naming what's in the room (YOLO, 05's tracks) is roadmap step 14 proper.
+**Why Demo 5 measures height from each end's own depth:** 03's box height × one depth is wrong
+once the Kinect is tilted (the feet are nearer than the head). Measuring between the top and bottom
+rows as 3D points holds at any tilt.

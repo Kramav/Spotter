@@ -35,8 +35,16 @@ flowchart LR
 
     E13 --> E14["14 Objects in the map"]
 
+    E08 --> D1["Demo 1 You in 3D"]
+    E07d --> D2["Demo 2 Invisibility Cloak"]
+    E06c --> D3["Demo 3 Booth Radar"]
+    E13 --> D4["Demo 4 Room Twin"]
+    E03 --> D5["Demo 5 How Tall"]
+
     classDef planned stroke-dasharray: 5 5
     class E14 planned
+    classDef demo fill:#fff3d6,stroke:#c08a00
+    class D1,D2,D3,D4,D5 demo
 ```
 
 ---
@@ -530,6 +538,33 @@ flowchart LR
 
 **What to compare:** press C while scanning: a scan's colour should lie on the others. In the
 saved file, `seen_room` against the clean groups.
+
+## Presentation demos
+
+Five fullscreen remixes for an exhibition, in [presentation/](presentation/README.md) (yellow in
+the family tree). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
+save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
+14, for people.
+
+```mermaid
+flowchart LR
+    OBJ["13's room_scan_&lt;time&gt;.obj<br/>seen_room points + normals,<br/>scan 1's camera turn"] --> DH["Doll's house<br/>ceiling cut off, turning"]
+    K["Kinect, empty view"] --> BG["Empty view's depth (03)"]
+    BG --> LOC["Locate: start at scan 1's turn,<br/>13's point-to-plane ICP"]
+    OBJ --> LOC
+    K2["Kinect, every frame"] --> FG["Nearer than the empty view<br/>= visitors (03's blobs)"]
+    BG --> FG
+    FG --> MOVE["Visitors' points<br/>moved into the room"]
+    LOC --> MOVE
+    MOVE --> V["Viewer: the room + visitors,<br/>orange, live"]
+    DH --> V
+
+    classDef new stroke-width:3px
+    class DH,LOC,MOVE new
+```
+
+**What to compare:** walk to a corner of the stand: does your orange shell stand in the same
+corner of the doll's house?
 
 ---
 
