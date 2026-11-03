@@ -6,9 +6,13 @@
 //  triangles: a 3D model you can open in Blender or MeshLab.
 //
 //    1. Click a YOLO box (02). Keep the object and the camera still.
+//       No box (YOLO missed it, or named it wrong)? Click the object
+//       anyway: it grows out from the clicked point instead.
 //    2. Average 30 depth frames (07): less noise, a smoother surface.
 //    3. Cut the object out: inside the box, near the box's middle depth
 //       (02), above the surface it stands on (09's RANSAC), one blob.
+//       Clicked without a box: near the click, above the surface, and
+//       joined to the click without a depth jump (a flood fill).
 //    4. Mesh: the depth image is already a grid. Each 2x2 square of
 //       object pixels becomes two triangles, unless its corners jump in
 //       depth (that's an edge, not a surface).
@@ -20,12 +24,14 @@
 //
 //  Window: colour (half size) with YOLO's boxes. After a capture, the
 //          pixels that went into the mesh are tinted green.
-//  Keys:   click a box  capture it     C  clear the tint
+//  Keys:   click an object  capture it     C  clear the tint
 //          Q or Esc  quit
 //
 //  Privacy: an .obj is a 3D capture of part of the room. *.obj is
 //  gitignored: never commit one. The person class is refused: a
-//  coloured 3D scan of a person is an image of a person.
+//  coloured 3D scan of a person is an image of a person. A scan made
+//  without a box is refused if it lies mostly inside a person's box,
+//  which only works if YOLO saw the person.
 // =====================================================================
 
 #include <algorithm>
@@ -55,11 +61,20 @@
 // Depth frames averaged per pixel (07). 1 = a single noisy frame: compare the surfaces.
 const int AverageFrames = 30;
 
+// The depth cut-off (07b, as in 08). At the 4.5 m default, a TV at 4.47 m lost its far half.
+const float MaxDepthMeters = 6.0f;
+
 // --- Cut-out ---
 // Keep pixels within this distance (metres) of the box's middle depth. It must cover the object's
 // own depth: 0.3 fits a chair, not a couch. Too big and the wall behind comes along.
 const float DepthBandMeters = 0.3f;
 const double BoxShrink = 0.5;   // the middle depth comes from the centre half of the box (02)
+
+// Clicked without a box: the object grows out from the click, at most this far (metres). Big
+// enough for the object; too big and it can creep along a wall the object touches.
+const float ClickReachMeters = 0.5f;
+const int ClickSnapPixels = 30;     // the click snaps to the nearest depth reading this close (colour pixels)
+const double PersonShare = 0.3;     // refused if this share of it lies inside person boxes (07d)
 
 // The surface the object stands on (a table, the floor), found by RANSAC as in 09. Points on it
 // or below it are dropped.
@@ -242,6 +257,21 @@ bool FindSupport(const cv::Mat& mask, const std::vector<cv::Vec3f>& cloud, std::
     return true;
 }
 
+// Drop the points on or below the surface the object stands on, if there is one.
+void RemoveSupport(cv::Mat& mask, const std::vector<cv::Vec3f>& cloud, std::mt19937& random)
+{
+    Plane support;
+    if (!RemoveSupportPlane) return;
+    if (!FindSupport(mask, cloud, random, support))
+    {
+        std::printf("  no surface found under it (none removed)\n");
+        return;
+    }
+    for (int i = 0; i < Width * Height; i++)
+        if (mask.data[i] && support.HeightOf(cloud[i]) < PlaneMarginMeters) mask.data[i] = 0;
+    std::printf("  above the surface it stands on: %d\n", cv::countNonZero(mask));
+}
+
 // The object's depth pixels: in the box, near its middle depth, above its support, one blob.
 // Prints how many pixels each step leaves, so you can see which step does what.
 cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Vec3f>& cloud,
@@ -273,20 +303,7 @@ cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Vec3f>& cloud,
         count += mask.data[i] ? 1 : 0;
     }
     std::printf("  within %.2f m of its middle depth (%.2f m): %d\n", DepthBandMeters, middle, count);
-
-    Plane support;
-    if (RemoveSupportPlane && FindSupport(mask, cloud, random, support))
-    {
-        count = 0;
-        for (int i = 0; i < Width * Height; i++)
-        {
-            if (mask.data[i] && support.HeightOf(cloud[i]) < PlaneMarginMeters) mask.data[i] = 0;
-            count += mask.data[i] ? 1 : 0;
-        }
-        std::printf("  above the surface it stands on: %d\n", count);
-    }
-    else if (RemoveSupportPlane)
-        std::printf("  no surface found under it (none kept)\n");
+    RemoveSupport(mask, cloud, random);
 
     // Keep only the biggest connected blob (07c): stray bits of other things go.
     cv::Mat labels, stats, centroids;
@@ -298,6 +315,55 @@ cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Vec3f>& cloud,
     mask = labels == biggest;
     std::printf("  biggest blob: %d\n", stats.at<int>(biggest, cv::CC_STAT_AREA));
     return mask;
+}
+
+// Clicked without a box: grow the object out from the clicked depth pixel. The points near the
+// click, minus the surface it stands on, then a flood fill from the click that only steps to a
+// neighbour less than MaxJumpMm away in depth. It stops at the object's edges, where the depth
+// jumps to whatever is behind.
+cv::Mat CutOutAround(int seed, const std::vector<cv::Vec3f>& cloud, std::mt19937& random)
+{
+    cv::Mat mask(Height, Width, CV_8U, cv::Scalar(0));
+    if (std::isnan(cloud[seed][2]))
+    {
+        std::printf("  no steady depth reading at the click\n");
+        return mask;
+    }
+    for (int i = 0; i < Width * Height; i++)
+        if (!std::isnan(cloud[i][2]) && cv::norm(cloud[i] - cloud[seed]) < ClickReachMeters) mask.data[i] = 255;
+    std::printf("  within %.2f m of the click (%.2f m away): %d pixels\n", ClickReachMeters, cloud[seed][2], cv::countNonZero(mask));
+    RemoveSupport(mask, cloud, random);
+    if (!mask.data[seed])
+    {
+        std::printf("  the click was on the surface itself: click the object\n");
+        return mask * 0;
+    }
+
+    // floodFill's mask is one pixel bigger all round; it never fills where the mask isn't 0, and
+    // with FLOODFILL_MASK_ONLY it marks what it fills there (here with 128) instead of painting.
+    cv::Mat depthMm(Height, Width, CV_32F), fill(Height + 2, Width + 2, CV_8U, cv::Scalar(255));
+    for (int i = 0; i < Width * Height; i++) depthMm.at<float>(i) = mask.data[i] ? cloud[i][2] * 1000 : 0;
+    fill(cv::Rect(1, 1, Width, Height)).setTo(0, mask);
+    cv::floodFill(depthMm, fill, cv::Point(seed % Width, seed / Width), 0, nullptr, MaxJumpMm, MaxJumpMm,
+                  8 | cv::FLOODFILL_MASK_ONLY | (128 << 8));
+    mask = fill(cv::Rect(1, 1, Width, Height)) == 128;
+    std::printf("  joined to the click without a depth jump: %d\n", cv::countNonZero(mask));
+    return mask;
+}
+
+// The depth pixel seen nearest to a colour pixel (within ClickSnapPixels), or -1.
+int DepthPixelAt(int x, int y, const float* depthMm, const std::vector<int>& colorIndexOfDepthPixel)
+{
+    int best = -1;
+    double bestDistance = ClickSnapPixels;
+    for (int i = 0; i < Width * Height; i++)
+    {
+        int colorIndex = colorIndexOfDepthPixel[i];
+        if (colorIndex < 0 || !(depthMm[i] > 0) || std::isinf(depthMm[i])) continue;
+        double distance = std::hypot(colorIndex % ColorWidth - x, colorIndex / ColorWidth - y);
+        if (distance < bestDistance) { bestDistance = distance; best = i; }
+    }
+    return best;
 }
 
 // The depth image is already a grid: each 2x2 square of object pixels gives two triangles,
@@ -370,6 +436,9 @@ void AddGuessedBack(Mesh& mesh)
         mesh.guessedFaces.emplace_back(f[0] + count, f[2] + count, f[1] + count);
     }
     // The rim: an edge whose reverse no triangle uses is on the border. Join it to its twin.
+    // ponytail: where two parts of the border touch at one pixel ("pinch"), that pixel's rim edge
+    // is used twice. Still closed, and Blender and MeshLab don't mind; a 3D-print slicer would.
+    // Split pinch points if that matters.
     for (const auto& [a, b] : edges)
     {
         if (edges.count({ b, a })) continue;
@@ -421,6 +490,9 @@ int main()
         std::printf("No Kinect v2 found, or it is in use. See the main README's troubleshooting table.\n");
         return 1;
     }
+    libfreenect2::Freenect2Device::Config config;
+    config.MaxDepth = MaxDepthMeters;
+    device->setConfiguration(config);
     libfreenect2::SyncMultiFrameListener listener(libfreenect2::Frame::Color | libfreenect2::Frame::Depth);
     device->setColorFrameListener(&listener);
     device->setIrAndDepthFrameListener(&listener);
@@ -433,6 +505,8 @@ int main()
 
     std::vector<Detection> detections;
     Detection chosen{};
+    int seedPixel = -1;                            // clicked without a box: the depth pixel clicked, else -1
+    cv::Point clicked;
     int framesCaptured = -1;                       // -1 = not capturing (07)
     std::vector<double> sumMm(Width * Height);
     std::vector<int> readings(Width * Height);
@@ -442,10 +516,10 @@ int main()
     double fps = 0;
     auto lastFrameTime = std::chrono::steady_clock::now();
 
-    const std::string window = "08b object mesh  (click a box to capture, C clear, Q quit)";
+    const std::string window = "08b object mesh  (click an object to capture, C clear, Q quit)";
     cv::namedWindow(window, cv::WINDOW_AUTOSIZE);
     cv::setMouseCallback(window, OnMouse);
-    std::printf("Click an object's box. Keep it and the camera still for %d frames.\n", AverageFrames);
+    std::printf("Click an object (its box, or the object itself if it has none). Keep it and the camera still for %d frames.\n", AverageFrames);
 
     // -----------------------------------------------------------------
     //  Main operation
@@ -481,17 +555,19 @@ int main()
             const Detection* hit = nullptr;   // the smallest box under the click
             for (const Detection& d : detections)
                 if (d.box.contains(cv::Point2d(clickX, clickY)) && (hit == nullptr || d.box.area() < hit->box.area())) hit = &d;
-            if (hit == nullptr)
-                std::printf("No box there.\n");
-            else if (hit->classId == 0)
+            seedPixel = hit == nullptr ? DepthPixelAt(clickX, clickY, (const float*)undistorted.data, colorIndexOfDepthPixel) : -1;
+            if (hit != nullptr && hit->classId == 0)
                 std::printf("Not capturing a person (privacy).\n");
+            else if (hit == nullptr && seedPixel < 0)
+                std::printf("No box and no depth reading there.\n");
             else
             {
-                chosen = *hit;
+                if (hit != nullptr) chosen = *hit;
+                clicked = cv::Point(clickX, clickY);
                 framesCaptured = 0;
                 std::fill(sumMm.begin(), sumMm.end(), 0.0);
                 std::fill(readings.begin(), readings.end(), 0);
-                std::printf("Capturing %s: hold still...\n", ClassNames[chosen.classId]);
+                std::printf("Capturing %s: hold still...\n", hit != nullptr ? ClassNames[chosen.classId] : "the clicked object (no box)");
             }
         }
         clickX = -1;
@@ -525,7 +601,27 @@ int main()
                     cloud[row * Width + column] = cv::Vec3f(x, y, z);
                 }
 
-            cv::Mat mask = CutOut(chosen.box, cloud, colorIndexOfDepthPixel, random);
+            cv::Mat mask = seedPixel >= 0 ? CutOutAround(seedPixel, cloud, random)
+                                          : CutOut(chosen.box, cloud, colorIndexOfDepthPixel, random);
+
+            // No box means no class to refuse, so check the scan isn't mostly a person (07d's idea).
+            if (seedPixel >= 0)
+            {
+                int inPerson = 0;
+                for (int i = 0; i < Width * Height; i++)
+                {
+                    if (!mask.data[i] || colorIndexOfDepthPixel[i] < 0) continue;
+                    cv::Point2d pixel(colorIndexOfDepthPixel[i] % ColorWidth, colorIndexOfDepthPixel[i] / ColorWidth);
+                    for (const Detection& d : detections)
+                        if (d.classId == 0 && d.box.contains(pixel)) { inPerson++; break; }
+                }
+                if (inPerson > PersonShare * cv::countNonZero(mask))
+                {
+                    std::printf("Mostly inside a person's box: not saved (privacy).\n");
+                    continue;
+                }
+            }
+
             Mesh mesh = MeshFromMask(mask, cloud, registered.data);
             size_t seenPoints = mesh.points.size();
             AddGuessedBack(mesh);
@@ -537,10 +633,10 @@ int main()
                     tintPixels.emplace_back(colorIndexOfDepthPixel[i] % ColorWidth, colorIndexOfDepthPixel[i] / ColorWidth);
 
             if (mesh.seenFaces.empty())
-                std::printf("Nothing left to mesh. Too far, too dark or shiny, or try a bigger DepthBandMeters.\n");
+                std::printf("Nothing left to mesh. Too far, too dark or shiny, or try a bigger DepthBandMeters / ClickReachMeters.\n");
             else
             {
-                std::string name = ClassNames[chosen.classId];
+                std::string name = seedPixel >= 0 ? "clicked" : ClassNames[chosen.classId];
                 std::replace(name.begin(), name.end(), ' ', '_');   // "potted plant" -> potted_plant
                 std::string path = (std::filesystem::current_path() /
                                     cv::format("object_%s_%lld.obj", name.c_str(), (long long)std::time(nullptr))).string();
@@ -570,12 +666,14 @@ int main()
             cv::rectangle(display, box, colour, 2);
             cv::putText(display, ClassNames[d.classId], box.tl() + cv::Point(3, 16), cv::FONT_HERSHEY_SIMPLEX, 0.5, colour, 1);
         };
-        if (framesCaptured >= 0)
+        if (framesCaptured >= 0 && seedPixel >= 0)
+            cv::circle(display, clicked / 2, 8, cv::Scalar(0, 255, 255), 2);
+        else if (framesCaptured >= 0)
             drawBox(chosen, cv::Scalar(0, 255, 255));
         else
             for (const Detection& d : detections) drawBox(d, d.classId == 0 ? cv::Scalar(0, 0, 255) : cv::Scalar(0, 255, 0));
         std::string status = framesCaptured >= 0 ? cv::format("HOLD STILL  %d / %d", framesCaptured, AverageFrames)
-                                                 : cv::format("%.1f fps   click a box to capture", fps);
+                                                 : cv::format("%.1f fps   click an object to capture", fps);
         cv::putText(display, status, cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
         cv::imshow(window, display);
     }
@@ -601,3 +699,8 @@ int main()
 //     Try Flat on the box.
 //  8. Tape-measure the object's real depth and compare it with the guess (half its width behind
 //     the nearest point, times two).
+//  9. Click an object YOLO has no box for (a cup on the floor seen side-on came out as "fire
+//     hydrant 0.05"). Then click the same object's box, if it has one: do the two scans match?
+// 10. Click-mode on something touching a wall: ClickReachMeters 0.2 versus 1.0. Where does the
+//     flood fill creep along the wall, and where does MaxJumpMm stop it?
+// 11. Click the floor or the table itself: the support plane removes it, nothing to scan.

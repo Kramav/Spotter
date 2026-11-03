@@ -154,7 +154,7 @@ who stands still, and a person is never absorbed into the room.
 **Rejected for now:** YOLO-seg masks (cleaner edges, too heavy for every frame on the Pi);
 deep inpainting such as LaMa (too heavy). Never-seen pixels show magenta until 07e.
 
-### D17 � 2026-11-01 � Object scans: mesh before segmentation, OBJ with vertex colours, guessed back kept apart
+### D17 — 2026-11-01 — Object scans: mesh before segmentation, OBJ with vertex colours, guessed back kept apart
 **What:** 08b turns a clicked YOLO box into an `.obj`: a 30-frame average, a box + depth band +
 support plane cut-out, grid triangles, and a guessed back.
 **Why the mesh before YOLO-seg:** the seg model is the risky part (OpenCV 4.14 DNN failed to load
@@ -168,3 +168,73 @@ and in its own group (`guessed_back`), so seen and made-up surfaces never mix, t
 07d's magenta. Mirror ("as deep as it is wide") was the simplest guess that closes the model.
 **Support plane:** RANSAC (09) over the object's own pixels, keeping only planes with few points
 below them, so a chair seat (legs below) isn't taken for the floor.
+
+### D18 — 2026-11-02 — Walls on the radar: repeated RANSAC for upright planes, one connected piece each
+**What:** 06b finds walls as the biggest upright planes in a sparse depth grid: RANSAC (09), take
+the plane's biggest connected piece away, search again (up to 4). Too short (under 0.8 m of height)
+counts as furniture. Each wall is drawn from above as one line.
+**Why planes, not lines in a top-down picture (Hough):** 09's RANSAC is already in the project,
+and a plane also gives the wall's height, which tells a wall from a couch back.
+**Why the biggest connected piece:** a plane slices thin strips off the floor, the ceiling and
+other walls. On the first try a couch front's plane picked up a ceiling strip and passed as 2.4 m
+tall.
+**Why "upright" is judged by the camera, not the floor:** like 06, it assumes the camera is
+roughly level. Taking 09's floor would fix tilt, at the cost of one more idea per example; worth
+it when the camera is tilted on purpose.
+
+### D19 — 2026-11-02 — Wall filter: an extended Kalman filter per wall, state as a point on the floor
+**What:** 06c gives each wall from 06b its own EKF. The state is the wall's foot (its nearest
+point to the camera) as X, Z in metres, plus how far along the wall each end is. The measurement is
+the plane's distance, the angle to the foot, and the two ends. Walls are matched frame to frame by
+distance and angle (as 05 matched boxes), drawn after 3 sightings, forgotten after 30 misses.
+**Why an EKF (the user asked for one), and why the state is a point:** with a fixed camera, a plain
+Kalman filter on (distance, angle) would do almost the same. The foot as X, Z is what can be moved
+when the camera moves (stage E: every foot shifts by the camera's own step). The measurement then
+stays a distance and an angle, which is the nonlinear part an EKF exists for.
+**Why the plane's distance, not the radar line's:** 06b's line sits at distance ÷ cos(tilt), so a
+camera tilted 14° read 3.255 m against the plane's 3.16 m. The filter takes the plane's, so a
+tilted camera no longer pushes the walls out.
+**Why a fixed match gate in metres and degrees, not the filter's own (Mahalanobis) gate:** easier
+to read and tune; revisit if walls swap IDs.
+
+### D20 — 2026-11-02 — Room recreation: one view first (raw + clean), then automatic poses like Meshroom
+**What:** the user wants a room recreated from a scan: one view first, then several spots aligned
+automatically, "like Meshroom", and both a raw and a clean result. 09b meshes the whole view; 09c
+adds a clean model (planes and boxes) in separate OBJ groups. Several spots: 11 ICP refines a pose,
+11b finds the rough pose itself from colour features, 13 merges.
+**Why both outputs in one file, in groups:** the same rule as 08b's guessed back: what was seen and
+what was made up stay apart, and Blender/MeshLab hide a group with one click.
+**Why the clean model is planes + boxes:** walls, floor and ceiling come straight from 06b's and
+09's RANSAC; boxes are the simplest furniture that stands on a floor. Boxes line up with the
+biggest wall (most furniture does) and are partly guessed (only the front is seen).
+**Why up can come from the ceiling or two walls:** the user's Kinect sits on the floor looking up,
+where the floor is a sliver or not seen at all.
+**Why a jump threshold as a share of the distance (09b), not 08b's fixed mm:** neighbouring pixels
+are farther apart far away, so a slanted wall at 4 m steps about 3 cm per pixel.
+**Why 11b (features) before 12 (ArUco) for several spots:** Meshroom finds poses from matching
+image features, with no markers; with depth it's simpler (3D matches, then RANSAC + SVD).
+`features2d` is already in our OpenCV build; ArUco would add `calib3d` and `objdetect`.
+12 stays as a fallback for blank walls with nothing to match.
+
+### D21 — 2026-11-02 — Room scan (13): point-to-plane ICP that leaves bare-wall directions alone, TSDF + surface nets, scans in memory only
+**What:** the user asked for the room recreation "built out fully". 11 (ICP), 11b (feature pose)
+and 13 (any number of scans, placed automatically, merged and saved) were built in one go, still
+as a ladder of single-idea examples.
+**Why 13's ICP differs from 11's:** the synthetic test showed it. Point-to-point ICP on a sparse
+sample (every 4th pixel, about 3 cm apart at 3 m) slid 3.4 cm along a wall, because no point can
+get closer to its neighbour than the sample spacing. Point-to-plane (the gap along the surface
+normal) fixed that, but on a view of one wall plus floor and ceiling it slid 21 cm, because
+nothing pins where along the wall the camera is. So the 6x6 equations are linearised about the
+pairs' centre (turns and shifts stay apart) and solved per eigen-direction; a direction pinned by
+under 2% of the pairs keeps the features' value. With features within 1 cm, ICP also starts at a
+5 cm gate, not 11's 20 cm. Result: 0.2–2.1 mm, under 0.1°. 11 keeps point-to-point: it's the
+textbook version, and its experiment 3 shows the weakness.
+**Why TSDF + surface nets, not marching cubes:** the same TSDF as KinectFusion (ideas.md), and
+surface nets need no 256-case lookup table: one point per cube where the sign changes, a square
+per edge that crosses. About 80 readable lines.
+**Why ICP against all earlier scans, not just the previous one:** errors don't pile up scan by
+scan; it costs one bigger k-d tree. Loop closure (a pose graph) is left for later.
+**Why the scans live in memory only:** colour pictures are images of the room and maybe of people
+(privacy rule). Only the final `.obj` is written, as with 08b and 09b.
+**Why refuse scans with under 100 features:** a dark room gives a black colour picture (seen on the
+sensor: brightness 5/255) and 0 features; no later scan could ever be matched to such a scan.

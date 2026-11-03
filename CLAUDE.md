@@ -49,12 +49,12 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Lean towards our own software and open source over vendor SDKs (D5). New code must build on
   Linux as well as Windows (D7).
 
-## Status (2026-11-01)
+## Status (2026-11-02)
 
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c. Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built, not yet run on the sensor.
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor.
 
 ## Roadmap
 
@@ -98,6 +98,16 @@ example, each building on the one before. Numbers are the planned example folder
       steady to about 1 cm). The user still needs to check that left/right matches the camera
       view. each tracked object (from 05) becomes an X/Z position, drawn on a
       bird's-eye floor plan. The first "map".
+- [x] **06b Radar + walls:** built 2026-11-02 (D18). Walls from depth alone: 09's RANSAC for
+      upright planes, biggest connected piece, repeated (up to 4), under 0.8 m tall = furniture;
+      drawn as lines on 06's radar. Synthetic room passed (4.000 m and 1.500 m walls, couch
+      skipped). On the sensor: 5.6–5.7 fps (same as 06), a wall at 3.15 m steady to 1 cm, plus
+      some near surfaces (0.26–0.88 m) the user should identify. Not yet checked by eye or tape.
+- [x] **06c Wall filter:** built 2026-11-02 (D19). An extended Kalman filter per wall (state: the
+      foot as X, Z plus the ends; measurement: distance and angle, hence the Jacobian), matched as
+      in 05, drawn after 3 sightings. On the sensor the wobble fell 3–6× (wall ahead 1.7 → 0.3 mm).
+      It also takes the plane's own distance, fixing 06b's tilt error (3.255 → 3.16 m at about
+      14°). Radar not yet checked by eye.
 
 ### Milestone — Pi bring-up (PAUSED by the user 2026-10-30; stage B goes ahead on the PC meanwhile)
 
@@ -128,8 +138,14 @@ example, each building on the one before. Numbers are the planned example folder
 - [x] **08b Object mesh:** built 2026-11-01 (D17). Click a YOLO box: 30-frame average, cut-out
       (box + depth band + support plane + biggest blob), grid triangles, a guessed grey back
       (mirror, as deep as wide) in its own group, saved `.obj` (gitignored). A synthetic
-      ball-on-table check passed (closed mesh, back 1.077 vs 1.080 m). Not yet run on the sensor
-      (Kinect unplugged): the user to click a chair or box and open the file in Blender/MeshLab.
+      ball-on-table check passed (closed mesh, back 1.077 vs 1.080 m). On the sensor: a TV at
+      4.5 m measured 1.55–1.57 m wide, repeatable to 2 cm; needed `MaxDepthMeters` 6 (at 4.5 m
+      its far half was cut off). Mirror makes the TV 1.5 m deep: Flat suits it. A paper cup on the
+      floor, seen side-on, was "toilet"/"fire hydrant", never "cup" (ideas.md); scanned by its
+      box it measured 8–9 cm × 13.5 cm, right.
+      Click-anywhere added 2026-11-02: with no box under the click, grow the object from the
+      clicked point (flood fill stopping at depth jumps). Synthetic check passed; not yet run on
+      the sensor. The user still needs to open a file in Blender/MeshLab.
 - [ ] **08c Object mask:** 08b with a YOLO-seg mask instead of box + depth band. First test
       whether OpenCV DNN loads `yolo26n-seg`. Better back guesses (shape by class): ideas.md.
 - [x] **07c Depth background:** built 2026-10-30. Remembers the room's depth per pixel; anything
@@ -146,12 +162,25 @@ example, each building on the one before. Numbers are the planned example folder
       never all hit a small floor, so it picks three neighbours. Run with no floor in view, it
       reported a different level-ish surface every second (6–8% of points), so `MinFloorFraction`
       (5%) is too low to say "no floor". Needs a test with the floor in view, and a tape check of
-      the height.
+      the height. The Kinect sits ON the floor (2026-11-02), where the floor is seen edge-on and
+      gives no depth: raise it (table or tripod, tilted slightly down) before this test.
+
+- [x] **09b Room mesh:** built 2026-11-02 (D20). The user's ask: recreate the room from a scan,
+      one view first, then several spots like Meshroom, raw and clean. S scans: 30-frame average,
+      the whole view as a coloured grid mesh (jumps over 3% of the distance skipped), `.obj`.
+      Runs on the sensor (46k points, 89k triangles, 3.8 MB). Not yet opened in Blender.
+- [x] **09c Room model:** built 2026-11-02 (D20). 09b plus a clean model in its own OBJ groups:
+      planes facing any way (06b's search), sorted into floor/ceiling/walls, levelled (up from the
+      floor, ceiling or two walls), walls joined at corners, left-overs as boxes on the floor.
+      Synthetic room passed at 0°, 10° down and 14° up. On the sensor the view held only things
+      0.5–1.5 m away (the Kinect seems to have moved), so it hasn't modelled a real room view yet.
 
 ### Milestone — accuracy (before stage C; merging views exaggerates any distance error)
 
 - [ ] Tape-measure accuracy, guide §7 tests 2–4. If it comes out poor, revisit D6 (our own
-      calibration).
+      calibration). The user has no tape measure (2026-11-02): use things of known size instead
+      (the TV's spec-sheet width against 08b's 1.55–1.57 m, A4 paper 297 × 210 mm, a door) or a
+      phone measuring app.
 
 ### Stage C — several views merged (details: docs/ideas.md, "Multi-view registration")
 
@@ -160,12 +189,20 @@ example, each building on the one before. Numbers are the planned example folder
       Runs on the sensor (Kinect not moved): gap 0.5 cm at the true pose, only 1.2 cm at 5 cm
       sideways, because the gap is measured along A's line of sight (blind to sliding along a
       wall). The user still needs to try a real measured move and look at the double walls.
-- [ ] **11 ICP:** fix that misalignment. Write a simple version ourselves first (nearest neighbours
-      + SVD); Open3D only if we outgrow it.
+- [x] **11 ICP:** built 2026-11-02 (D21). Point-to-point, k-d tree (FLANN) + Kabsch/SVD, P runs
+      it. On the sensor (Kinect not moved) it held 0.000 m / 0.00°. Not yet tried with a real move.
+- [x] **11b Feature pose (Meshroom-style, D20):** built 2026-11-02. ORB on the registered colour,
+      ratio-test matches lifted to 3D, RANSAC + Kabsch, then 11's ICP. On the sensor it found 0
+      features: the colour picture was black (dark room or covered lens). Needs a lit room.
 - [ ] **12 ArUco pose:** a printed marker gives the camera's pose. Needs OpenCV's `calib3d` and
-      `objdetect` added to `vcpkg.json`.
-- [ ] **13 Merge many views:** 5–10 captures into one room model; downsampled points first, then a
-      TSDF mesh.
+      `objdetect` added to `vcpkg.json`. Now a fallback after 11b (blank walls, nothing to match).
+- [x] **13 Room scan:** built 2026-11-02 (D21). The full tool; the user's guide is "Recreate a
+      room" in the README. SPACE per spot (scans refused under 100 features, i.e. in the dark),
+      placed by features + point-to-plane ICP against all earlier scans (bare-wall directions keep
+      the features' value), U undo, E = TSDF + surface nets + 09c's clean model across scans.
+      Synthetic textured room from 4 poses: placed within 2.1 mm / 0.08°, mesh 0.6 mm median off,
+      clean model right. On the sensor only a dark-room smoke test (scans refused, as designed).
+      The user still needs a real scan in a lit room. Later: loop closure for long loops.
 
 ### Stage D — the goal
 

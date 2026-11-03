@@ -262,3 +262,66 @@ Object scans are captures of the room: never commit them (`*.ply` and `*.obj` ar
   for the Pi live.
 - **People-free room map:** feed the "removed" depth into stage C, so people don't end up as ghosts
   in the merged model.
+
+## Post-capture object detection (hybrid: cheap live, heavy afterwards)
+
+*Added 2026-11-02.* The user expects to move, long term, to detecting objects after capture rather
+than live. Feasible, and it fits the plan: stage C already merges views offline.
+
+**Why it pays off:**
+- **No time limit:** the Pi's CPU (or the PC) can run a model 10x bigger overnight, which keeps
+  us within the CPU-only rule (D11).
+- **Many views per object:** each keyframe that saw an object votes, and the votes are pooled in
+  3D. 2026-11-02 shows why: a paper cup on the floor seen side-on (no rim visible) was "fire
+  hydrant 0.05" (box right, label wrong). Next to the toilet with a glossy floor, it was "toilet
+  0.31-0.55" with a box 3x too tall (probably the reflection). A view from above would very
+  likely say "cup".
+- **Re-run later:** a better model, or open-vocabulary detection ("paper cup" instead of the 80
+  COCO classes), on old captures without going back.
+- **Heavier tools:** segmentation masks (08c) on every frame.
+
+**The hybrid:**
+- **Live, cheap (yolo26n or none):** tracking, radar, and finding people so they're kept out of
+  saved frames.
+- **After capture, heavy:** naming objects, masks, voting across views, placing objects in the map.
+
+**Costs:**
+- **Privacy (needs the user's decision before building):** this means saving colour frames, which
+  the current rule forbids. Proposed policy, not yet decided:
+  - people painted out at capture, by the live person check plus 07d's removal;
+  - saved only to a gitignored capture folder;
+  - deleted once the detections and the map are built;
+  - never uploaded.
+  Record it as a D-entry once agreed.
+- **Storage:** colour as the Kinect delivers it (JPEG, about 150 KB per frame) plus depth (16-bit
+  PNG, about 250 KB). That's about 12 MB/s at 30 fps, too much for a Pi's SD card. Keyframes only
+  (1 a second, or on each camera move) come to about 0.4 MB/s.
+- **Saved with each capture:**
+  - colour and depth taken at the same moment, with timestamps;
+  - the camera's calibration (IR and colour camera parameters), so depth can be mapped onto colour
+    later as 05c does live;
+  - the camera's pose per keyframe (stage C).
+- **No live reactions from the heavy model:** radar, tracking and person removal still need the
+  live pass.
+
+**As a ladder (after 11-13):**
+1. **Record:** keyframes plus calibration plus pose, people painted out.
+2. **Detect offline:** a program reads the capture folder, runs the big model and writes the
+   detections to a file.
+3. **Vote in 3D:** detections become 3D points, and labels are merged across views. This feeds
+   14, objects in the map.
+
+## Detection misses: fallbacks
+
+*Added 2026-11-02.* When YOLO doesn't name an object (the cup above), these help:
+- **08b click-anywhere: built 2026-11-02.** With no box under the click, 08b grows the object
+  out from the clicked point (near the click, minus the support plane, flood fill stopping at depth
+  jumps). Scanning no longer depends on YOLO's label.
+- **Lower `Confidence` with a label warning:** shows weak boxes such as "fire hydrant 0.05", but
+  also more junk.
+- **A bigger model** (yolo26s, about 3x slower; yolo26m) or **fine-tuning** on the user's own
+  objects. Too heavy live on the Pi; a natural fit for post-capture detection.
+- **Change the view:** look down on objects. The cup's rim is what makes it a cup.
+- **08b mesh:** rim edges at "pinch" points (two parts of the outline touching at one pixel) are
+  used twice. The model is closed but not strictly manifold. Fine for Blender and MeshLab; for 3D
+  printing, split the pinch points, or use MeshLab's "Repair non Manifold Vertices by splitting".
