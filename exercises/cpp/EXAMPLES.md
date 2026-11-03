@@ -15,19 +15,28 @@ dotted arrow means "borrows one idea from it". Dashed boxes are planned.
 flowchart LR
     E01["01 Depth Peek"] --> E02["02 Detect + Distance"] --> E04["04 Track + Smooth"] --> E05["05 Kalman"]
     E05 --> E05b["05b Two Thresholds"] --> E05c["05c Background Detect"]
-    E05 --> E06["06 Radar"]
+    E05 --> E06["06 Radar"] --> E06b["06b Radar + Walls"] --> E06c["06c Wall Filter"]
     E01 --> E03["03 Depth Blobs"] --> E07c["07c Depth Background"] --> E07d["07d Remove Person"]
     E01 --> E07["07 Capture + Average"] --> E07b["07b Far Range"]
     E03 --> E08["08 Point Cloud"]
     E08 --> E09["09 Find the Floor"]
-    E08 --> E10["10 Two Views"] --> E11["11 ICP"]
+    E08 --> E08b["08b Object Mesh"] --> E09b["09b Room Mesh"] --> E09c["09c Room Model"]
+    E09 -.->|level planes, up| E09c
+    E06b -.->|repeated RANSAC| E09c
+    E08 --> E10["10 Two Views"] --> E11["11 ICP"] --> E11b["11b Feature Pose"] --> E13["13 Room Scan"]
+    E09c -.->|clean model| E13
+    E07 -.->|averaging| E13
     E07 -.->|running average| E07c
     E05c -.->|YOLO thread| E07d
     E08 -.->|colour on depth pixels| E07d
     E07b -.->|6 m cut-off| E08
+    E09 -.->|RANSAC, turned upright| E06b
+    E05 -.->|Kalman filter, matching| E06c
+
+    E13 --> E14["14 Objects in the map"]
 
     classDef planned stroke-dasharray: 5 5
-    class E11 planned
+    class E14 planned
 ```
 
 ---
@@ -200,6 +209,56 @@ flowchart LR
 
 **What to compare:** still objects stay steady to about 1 cm. Walk left: does your dot move left?
 
+## 06b Radar + Walls
+
+Starts from 06; the plane finder comes from 09. 06's map has objects but no room around them. A
+wall is a big, flat, upright surface, so 09's floor finder, turned on its side, finds them.
+
+```mermaid
+flowchart LR
+    K["Kinect"] --> T["Detect, track, deproject<br/>(as in 06)"]
+    K --> G["9. Sparse grid of 3D points<br/>every 4th depth pixel"]
+    G --> R["10. RANSAC (09)<br/>skip planes that aren't upright"]
+    R --> P["11. Biggest connected piece<br/>refit, take it away"]
+    P -->|"search again, up to 4"| R
+    P --> H["Tall enough?<br/>else furniture, skipped"]
+    H --> L["12. Wall = a line<br/>end to end, from above"]
+    T --> MAP["Radar from above<br/>(as in 06)"]
+    L --> MAP
+
+    classDef new stroke-width:3px
+    class G,R,P,H,L new
+```
+
+**What to compare:** the printed distance to the wall ahead against a tape measure, and two walls
+in a corner about 90° apart.
+
+## 06c Wall Filter
+
+Starts from 06b; the filter and the matching come from 05. 06b finds the walls afresh every frame,
+so they wobble. Walls don't move, so each one gets its own extended Kalman filter. "Extended",
+because the filter keeps the wall's nearest point as X, Z on the floor, but the wall finder
+measures a distance and an angle: curved maths (hypot, atan2) that the EKF straightens out around
+its current guess every frame (the Jacobian, H).
+
+```mermaid
+flowchart LR
+    W["Walls found this frame<br/>(as in 06b)"] --> M["13. Measure<br/>distance, angle to the foot,<br/>where the two ends are"]
+    S["Tracked walls<br/>foot X, Z + ends"] --> PR["14. Predict<br/>same place, a bit less sure"]
+    PR --> MA["15. Match (as in 05)<br/>nearest in distance and angle"]
+    M --> MA
+    MA --> C["16. Correct (EKF)<br/>H = slopes of hypot and atan2"]
+    C --> S
+    MA -->|unmatched| N["New wall<br/>drawn after 3 frames"]
+    C --> MAP["Radar: raw walls thin,<br/>filtered walls thick"]
+
+    classDef new stroke-width:3px
+    class M,S,PR,MA,C,N new
+```
+
+**What to compare:** "m away" against "raw" in the console, and the thick grey line against the
+thin dark one on the radar.
+
 ## 07 Capture + Average
 
 Starts from 01. The first room-lane example: a map is built from still captures, so noise matters
@@ -337,6 +396,49 @@ flowchart LR
 **What to compare:** tilt the Kinect down so some floor shows, then check its reported height with a
 tape measure.
 
+## 09b Room Mesh
+
+Starts from 08b. 08b meshed one object; 09b meshes everything in view: the first recreation of the
+room, from one view. The holes behind every object are why the next examples take several views.
+
+```mermaid
+flowchart LR
+    S["S: scan"] --> AV["Average 30 frames (07)"]
+    AV --> PTS["A 3D point per pixel<br/>coloured (08)"]
+    PTS --> M["Grid triangles, every 2nd pixel<br/>skip jumps over 3% of the distance"]
+    M --> OBJ["room_&lt;time&gt;.obj"]
+
+    classDef new stroke-width:3px
+    class M,OBJ new
+```
+
+**What to compare:** turn the mesh in Blender: every hole is a shadow pointing away from the camera.
+
+## 09c Room Model
+
+Starts from 09b; the plane search comes from 06b, "up" from 09. Next to the raw mesh it builds the
+room the way you'd draw it: flat walls, floor and ceiling, furniture as boxes, all stood straight.
+
+```mermaid
+flowchart LR
+    PTS["Points (09b)"] --> P["4. Biggest planes, any way<br/>(06b's repeated RANSAC)"]
+    P --> K["5. Sort: floor (lowest level),<br/>ceiling (high level), walls (upright, tall)"]
+    K --> UP["6. Up from floor, ceiling or 2 walls<br/>ahead from the biggest wall"]
+    UP --> W["7. Walls floor to ceiling<br/>joined at corners"]
+    UP --> B["8. Left-overs split at depth jumps<br/>each a box on the floor"]
+    PTS --> RAW["Raw mesh (09b), levelled"]
+    UP --> RAW
+    W --> OBJ["9. One .obj, separate groups<br/>seen vs clean"]
+    B --> OBJ
+    RAW --> OBJ
+
+    classDef new stroke-width:3px
+    class P,K,UP,W,B,OBJ new
+```
+
+**What to compare:** hide groups in Blender: the raw mesh against the clean model. Does the model
+stand straight, and do the corners meet?
+
 ## 10 Two Views
 
 Starts from 08. One position only sees the front of things, so a map needs captures from several
@@ -360,6 +462,76 @@ double? The gap can't see sliding along a wall: 5 cm sideways only raised it fro
 
 ---
 
-**Next (planned):** 11 ICP finds the pose by itself, 12 gets it from a printed marker, 13 merges
-many views, and 14 places the tracked objects in that map. See the Roadmap in
-[CLAUDE.md](../../CLAUDE.md).
+## 11 ICP
+
+Starts from 10. Instead of nudging the pose by hand, ICP nudges it: pair every point with its
+nearest neighbour in the other view, find the one turn + shift that brings the pairs closest
+(Kabsch: an SVD), apply it, repeat.
+
+```mermaid
+flowchart LR
+    B["View B (10)"] --> MOVE["1. Move B by the pose<br/>(10's settings to start)"]
+    MOVE --> NN["2. Nearest A point to each<br/>k-d tree; far pairs ignored"]
+    A["View A (10)"] --> NN
+    NN --> FIT["3. Best turn + shift<br/>for the pairs (Kabsch, SVD)"]
+    FIT --> MOVE
+    FIT --> VIEW["Viewer + gap (10)"]
+
+    classDef new stroke-width:3px
+    class MOVE,NN,FIT new
+```
+
+**What to compare:** a small move (20 cm, 10°) lines up; a big one (50 cm, 30°) settles on a wrong
+fit. ICP needs a rough start.
+
+## 11b Feature Pose
+
+Starts from 11. The rough start found automatically, the way Meshroom does it: details in the
+colour pictures matched between the views. Depth makes it simpler than Meshroom: each match is
+already a pair of 3D points.
+
+```mermaid
+flowchart LR
+    CA["A's colour picture"] --> ORB["1. ORB features<br/>where there's depth"]
+    CB["B's colour picture"] --> ORB
+    ORB --> M["2. Match descriptions<br/>ratio test"]
+    M --> L["3. Depth under each<br/>= pairs of 3D points"]
+    L --> R["4. RANSAC: pose from 3 pairs,<br/>keep the one most agree with"]
+    R --> ICP["5. ICP (11)"]
+    ICP --> VIEW["Viewer + match window"]
+
+    classDef new stroke-width:3px
+    class ORB,M,L,R new
+```
+
+**What to compare:** the match window: do the lines join the same things? How far can the Kinect
+move before too few matches agree?
+
+## 13 Room Scan
+
+Starts from 11b; the averaging comes from 07, the clean model from 09c. Any number of scans, each
+placed against all earlier ones, then merged into one mesh. The step-by-step guide is in the
+[main README](../../README.md#recreate-a-room-example-13).
+
+```mermaid
+flowchart LR
+    S["SPACE: average 30 frames (07)<br/>points, normals, features"] --> F["Features vs every earlier scan<br/>best one: rough pose (11b)"]
+    F --> I["ICP vs all earlier scans<br/>point to plane, bare-wall safe"]
+    I -->|"placed (U undoes)"| ALL["All scans in the room<br/>viewer, C = colour by scan"]
+    ALL -->|E| T["TSDF grid<br/>distance to the surface, averaged"]
+    T --> N["Surface net<br/>one mesh, no double walls"]
+    ALL -->|E| CM["Clean model (09c)<br/>planes merged across scans,<br/>boxes joined"]
+    N --> OBJ["room_scan_&lt;time&gt;.obj"]
+    CM --> OBJ
+
+    classDef new stroke-width:3px
+    class S,F,I,ALL,T,N,CM new
+```
+
+**What to compare:** press C while scanning: a scan's colour should lie on the others. In the
+saved file, `seen_room` against the clean groups.
+
+---
+
+**Next (planned):** 12 gets a pose from a printed marker (a fallback for bare walls), and 14 places
+the tracked objects in the scanned room. See the Roadmap in [CLAUDE.md](../../CLAUDE.md).

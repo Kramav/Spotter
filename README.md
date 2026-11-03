@@ -28,7 +28,7 @@ flowchart TB
         Y["YOLO detector<br/>OpenCV DNN · yolo26n.onnx<br/>on its own thread (05c)"]
         D["Distance to each box (02)"]
         T["Tracker: ID numbers + Kalman filter (04–05b)"]
-        X["Floor position in metres<br/>bird's-eye radar (06)"]
+        X["Floor position in metres<br/>bird's-eye radar (06), walls (06b)<br/>steadied by a filter (06c)"]
         Y --> D --> T --> X
     end
 
@@ -37,14 +37,21 @@ flowchart TB
         BG["Remember the empty room<br/>paint people out (07c, 07d)"]
         PC["Point cloud (08)"]
         FL["Find the floor (09)"]
+        RM["The room from one view<br/>raw mesh + clean model (09b, 09c)"]
+        V11b["Automatic pose from<br/>colour features (11b)"]
         V10["Two views, known pose (10)"]
         V11["ICP alignment (11)"]
         V12["ArUco marker pose (12)"]
-        V13["Merge many views (13)"]
+        V13["Room scan: many spots merged (13)<br/>TSDF mesh + clean model"]
         AV -.->|6 m cut-off| PC
         PC --> FL
+        PC --> RM
+        FL -.->|up| RM
         PC --> V10 --> V11 --> V13
-        V12 --> V13
+        V11b -->|rough pose| V11
+        V11b --> V13
+        V12 -.->|fallback| V13
+        RM -.->|clean model of the merged room| V13
     end
 
     R -->|colour| Y
@@ -59,7 +66,7 @@ flowchart TB
     V13 --> MAP
 
     classDef planned stroke-dasharray: 5 5
-    class V11,V12,V13,MAP planned
+    class V12,MAP planned
 ```
 
 The Kinect's colour and depth come in through an open-source driver, then split into two lanes.
@@ -178,6 +185,8 @@ Then work through the other examples in this order:
 | 5b | `05b_Kinect_Two_Thresholds` | Two confidence levels plus a longer memory: objects that flicker in and out keep their ID |
 | 5c | `05c_Kinect_Background_Detect` | Run YOLO on a second thread so the picture, tracking and distances keep the camera's pace |
 | 6 | `06_Kinect_Radar` | Turn each tracked object into a floor position in metres, on a bird's-eye "radar" map with trails |
+| 6b | `06b_Kinect_Radar_Walls` | 06's radar plus the walls, found in the depth alone: the biggest upright flat surfaces, drawn as lines |
+| 6c | `06c_Kinect_Wall_Filter` | Steady the walls: each one gets an extended Kalman filter, because walls don't move but each frame's measurement wobbles |
 | 7 | `07_Kinect_Capture_Average` | Average many still frames to cut depth noise, and measure how much it helps (first step toward a 3D map) |
 | 7b | `07b_Kinect_Far_Range` | Raise the depth cut-off from 4.5 m to 8 m, and see how much noisier the far readings are |
 | 7c | `07c_Kinect_Depth_Background` | Remember the room's depth; anything clearly nearer is new (a person, a moved cup). No neural network |
@@ -185,7 +194,12 @@ Then work through the other examples in this order:
 | 8 | `08_Kinect_Point_Cloud` | Turn every depth pixel into a coloured 3D point, and turn the room around with the mouse. P saves a `.ply` (never commit it) |
 | 8b | `08b_Kinect_Object_Mesh` | Click a detected object: its depth pixels become a triangle mesh with a guessed (grey) back, saved as `.obj` for Blender or MeshLab (never commit it) |
 | 9 | `09_Kinect_Find_Floor` | Find the floor with RANSAC: the camera's height, tilt and roll, and any point's height above the floor |
+| 9b | `09b_Kinect_Room_Mesh` | Press S: the whole view becomes a coloured mesh, saved as `.obj`. The first recreation of the room, holes and all (never commit it) |
+| 9c | `09c_Kinect_Room_Model` | The same scan, plus a clean model next to it: flat walls, floor and ceiling, furniture as boxes, stood straight. Both in one `.obj`, in separate groups |
 | 10 | `10_Kinect_Two_Views` | Two captures merged by a hand-measured pose: see the walls show double, nudge the pose until they meet |
+| 11 | `11_Kinect_ICP` | ICP lines the two captures up by itself: pair each point with its nearest neighbour, fit, repeat. Needs a roughly right start |
+| 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
+| 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
 
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
 [exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
@@ -206,6 +220,91 @@ Change a setting and rebuild with `cmake --build --preset default` to see what i
 
 More detail (Linux and Raspberry Pi setup, how the build stays reproducible, known limits) is in
 [exercises/cpp/README.md](exercises/cpp/README.md).
+
+---
+
+## Recreate a room (example 13)
+
+Scan the room from several spots; each scan is placed automatically, and E saves one 3D model of
+the whole room. It takes about 10 minutes for a first try.
+
+### Before you start
+
+1. **Turn the lights on.** Each scan is placed by matching details in the colour picture. In the
+   dark the colour camera sees black, and every scan is refused with "too dark or too plain".
+   (Depth still works in the dark, but depth alone can't place the scans.)
+2. **Nobody in view.** The model is a colour capture of the room (privacy), and people moving
+   between scans smear it.
+3. **Pick 4–8 spots** around the room. The Kinect stays plugged into the PC, so the cable decides
+   how far you can go. At each spot it must stand **still** on something steady for about
+   2 seconds: a chair, a box, a shelf, or the floor. On the floor, tilt it up a little so the
+   ceiling is in view: the model is levelled by the floor or the ceiling.
+4. **Build and start it** from the x64 Native Tools Command Prompt:
+
+       cd /d E:\Spotter\exercises\cpp
+       cmake --build --preset default --target 13_Kinect_Room_Scan
+       build\13_Kinect_Room_Scan.exe
+
+   The model is saved in the folder you run it from.
+
+### Scan
+
+5. Two windows open: **camera** (what the Kinect sees, and what to do next) and **the room so far**.
+   The keys work in either window.
+6. **Spot 1:** aim at the busiest part of the room (furniture, shelves, posters, a corner), not
+   a bare wall. Press **SPACE**. The camera window shows `HOLD STILL 1/30 ... 30/30`; don't touch
+   the Kinect until it's done. The console prints `Scan 1: ... the room's starting point`.
+7. **Spot 2:** move the Kinect **0.5–1 m**, or turn it **about 30°**, so that at least half of
+   what it sees now was also in an earlier scan. Set it down still, press **SPACE**.
+8. **Read the console line for each scan:**
+
+   | It says | Meaning | Do |
+   |---|---|---|
+   | `matched scan 1 (54 features agree); ICP: 60% of points overlap, 3.0 mm apart` | Placed. Under about 5 mm apart is good | Go on to the next spot |
+   | `... (1 direction not pinned by the shape ...)` | Placed, but the view was mostly flat walls; the colour details decided that direction | Fine. Check it in the viewer (step 9) |
+   | `Scan refused: only 8 feature matches agree` or `too little overlap` | Too far from every earlier spot | Go back halfway towards an earlier spot and scan again |
+   | `Scan refused: only 12 features ... too dark or too plain` | The colour picture has too little detail | Lights on, or aim at something with more pattern |
+
+9. **Check it in the viewer:** drag with the mouse to turn the room, wheel to zoom. Press **C**:
+   each scan gets its own colour. A good scan's colour lies on top of the others' surfaces. A
+   scan placed wrong shows as a shifted copy (a second wall beside the first): press **U** to
+   remove the last scan, then scan that spot again with more overlap.
+10. **Carry on round the room.** Corners and furniture help; overlapping too much is fine,
+    too little isn't. Keep the Kinect roughly upright. Scan every place you want in the model:
+    anything no scan saw stays a hole.
+
+### Save and look at it
+
+11. Press **E**. After a few seconds the console prints the file name (`room_scan_<number>.obj`),
+    the room's height, its walls and furniture boxes. You can keep scanning and press E again:
+    each export is a new file. **Q** quits; the scans themselves are thrown away.
+12. **Open it in Blender** (free): File > Import > Wavefront (.obj). In the import options tick
+    **Split by Group**. To see the colours: in the viewport's Solid shading menu, set Color to
+    **Attribute**. Or in **MeshLab**: File > Import Mesh; colours show by themselves.
+13. **The parts**, one object each (hide them in Blender's Outliner):
+
+    | Group | What it is |
+    |---|---|
+    | `seen_room` | Every scan merged into one mesh: what was really seen. Holes = nobody saw there |
+    | `clean_walls`, `clean_floor`, `clean_ceiling` | The tidy room: flat walls from floor to ceiling, joined at the corners. Grey floor or ceiling = guessed (not seen) |
+    | `furniture_blocks` | Everything else, as boxes standing on the floor, in each thing's average colour. Only the front of each was seen, so their depth is a guess |
+
+14. **Never commit the `.obj`** (it's a capture of your room; `*.obj` is gitignored). Delete it
+    when you're done if it shows anything private.
+
+### If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| Every scan is refused as "too dark" | Lights on. The colour camera needs light; check nothing covers the Kinect's lenses |
+| Double walls in the saved model | One scan was placed slightly wrong. Rescan: watch the viewer with C on and press U as soon as a scan shows as a copy |
+| "nothing level found" in the export | No scan saw the floor or ceiling well. Tilt the Kinect so some scans include them |
+| Export is slow or the file is huge | Set `VoxelMeters` to 0.04 at the top of `13_Kinect_Room_Scan/main.cpp` and rebuild |
+| The room drifts: the last scan doesn't meet the first | Small errors add up over many scans. Scan in a loop with plenty of overlap; see experiment 5 in the file |
+
+The examples that build up to this one, one idea each: 09b (one view as a mesh), 09c (the clean
+model), 10 (two views by hand), 11 (ICP), 11b (features). Their flowcharts are in
+[exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
 
 ---
 
