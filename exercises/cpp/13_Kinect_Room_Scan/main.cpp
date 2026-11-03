@@ -808,6 +808,7 @@ struct Room
     bool floorSeen = false, ceilingSeen = false;
     std::vector<std::pair<cv::Point2f, cv::Point2f>> walls;
     std::vector<std::pair<cv::Vec3f, cv::Vec3f>> blocks;
+    cv::Matx33f firstCamera = cv::Matx33f::eye();   // scan 1's camera (X right, Y down, Z ahead) -> room
 };
 
 // Step 4c: 09c's clean model from every scan. Each scan's planes are found as in 09c, moved into
@@ -926,6 +927,7 @@ Room BuildRoom(const std::vector<Scan>& scans, const Mesh& seen, std::mt19937& r
     cv::Vec3f right = up.cross(towards);
     auto ToRoom = [&](const cv::Vec3f& p) { return cv::Vec3f(right.dot(p), up.dot(p), towards.dot(p)); };
     for (cv::Vec3f& p : room.mesh.points) p = ToRoom(p);
+    room.firstCamera = cv::Matx33f(right[0], right[1], right[2], up[0], up[1], up[2], towards[0], towards[1], towards[2]);
 
     std::vector<float> roomHeights, roomX, roomZ;
     for (auto& grid : roomGrid)
@@ -1125,6 +1127,10 @@ void Export(const std::vector<Scan>& scans, const Lens& lens, std::mt19937& rand
     double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     std::string path = (std::filesystem::current_path() / cv::format("room_scan_%lld.obj", (long long)std::time(nullptr))).string();
     if (!SaveObj(path, room.mesh)) { std::printf("Could not write %s\n", path.c_str()); return; }
+    // How scan 1's camera sat in the room, for presentation/Demo4_Room_Twin (an OBJ comment, ignored elsewhere).
+    const cv::Matx33f& t = room.firstCamera;
+    std::ofstream(path, std::ios::app) << cv::format("# first camera turn: %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
+                                                     t(0, 0), t(0, 1), t(0, 2), t(1, 0), t(1, 1), t(1, 2), t(2, 0), t(2, 1), t(2, 2));
     std::printf("Saved %s (%.1f MB, %.1f s). A capture of the room: never commit it.\n", path.c_str(),
                 std::filesystem::file_size(path) / 1e6, seconds);
     std::printf("  merged mesh: %zu triangles, %.1f cm cubes\n", room.mesh.groups["seen_room"].size(), voxel * 100);

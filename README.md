@@ -201,6 +201,11 @@ Then work through the other examples in this order:
 | 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
 | 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
 
+**Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
+of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
+[exercises/cpp/presentation/](exercises/cpp/presentation/README.md), with a set-up checklist.
+They build with the examples.
+
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
 [exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
 

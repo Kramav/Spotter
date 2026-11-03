@@ -31,7 +31,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. `presentation/` = five fullscreen exhibition demos remixed from the examples (D22). |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`. |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -49,12 +49,12 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Lean towards our own software and open source over vendor SDKs (D5). New code must build on
   Linux as well as Windows (D7).
 
-## Status (2026-11-02)
+## Status (2026-11-03)
 
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor.
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
 
 ## Roadmap
 
@@ -207,6 +207,8 @@ example, each building on the one before. Numbers are the planned example folder
 ### Stage D — the goal
 
 - [ ] **14 Objects in the map:** the tracked objects (05/06) placed in the room model from 13.
+      A first cut for people exists: presentation Demo 4 (D22) puts depth blobs into 13's room,
+      located from the camera turn 13 saves. Still to do: YOLO names and 05's tracks instead of blobs.
 
 ### Stage E — moving camera (later, optional; docs/ideas.md, "Motion compensation")
 
