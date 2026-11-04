@@ -542,6 +542,7 @@ including `../Demo4_Room_Twin/OneViewRoom.h` (one copy, D23).
 Not run on the sensor. Like Demo 4, it inherits the left-right mirror (Housekeeping).
 
 ### D32 — 2026-11-04 — Demo 6, round 2: walls traced from above, a slab for "seen", legs and dark things from the readings
+*(How it finds the floor is superseded by D33, after it ran on the sensor.)*
 **What went wrong on the first real room** (a 13e `.obj`, the user's screenshots):
 - blue was painted over a wall that had clearly been seen;
 - a blue sheet floated in front of the table, from the floor to the cut;
@@ -624,3 +625,68 @@ camera by a box dropped):**
     table legs;
   - a short post can appear at the corner of a box under a table.
 - Not yet run on the real room again.
+
+### D33 — 2026-11-04 — Demo 6's floor from its own readings; Demos 4 and 6 locate from several starts
+**What the user saw on the sensor** (Demo 6, the real 13e room, round 2):
+- the filled floor sat too low, under the floor patches the scans had seen;
+- the visitor showed up in the wrong spot. The Kinect was "roughly" where scan 1 was, not exactly
+  there.
+
+**The mirror is not the cause (investigated).** 13e builds the room with libfreenect2's
+`getPointXYZ`, and Demos 4 and 6 place visitors with it too. The room and the live view are mirrored
+the same way, so a visitor's place relative to the furniture is unaffected. The user's call: the
+mirror fix stays in Housekeeping.
+
+**The floor: why it was too low.** Every height in Demo 6 came from one number, the lowest 2% of
+all room points.
+- A Kinect at chest height sees the floor at a grazing angle, so the floor is a small share of a
+  scan.
+- Readings under it (flying pixels, multipath in the corners, a slightly misplaced scan) are enough
+  to drag that mark below the real floor.
+- The real floor was then looked for only within 15 cm of the mark. Missing that, the floor counted
+  as never seen and was laid at the walls' lowest 0.2%, which is lower still.
+- The walls were filled down to the mark too.
+
+**What changed in the floor** (`FindFloor`, Demo 6):
+- **The floor is the lowest level surface with 0.25 m² in one connected piece,** seen from above
+  in 5 cm cells.
+  - It's measured by footprint, not point count. Grazing-angle readings are sparse but wide; stray
+    readings never make one big connected piece.
+  - Its height is the median of that piece's points.
+- **The walls' foot gates it.** The foot is the lowest 2 cm step whose upright readings number at
+  least a third of a typical step up the walls; stray readings under the floor are far sparser. A
+  level surface more than 25 cm above the foot is a table top or the ceiling, never the floor.
+  - *Why:* the first try of the rule, in the test, took the ceiling for an unseen floor. A seen
+    table would have gone the same way.
+- **The floor never seen:** laid at the walls' foot.
+- **Readings more than 10 cm under the floor** are noise: hidden in the doll's house and left out of
+  the filling. Locating still uses every point.
+- **The console says how it chose:** the floor line, with the old 2% mark beside it for
+  comparison, and each level surface it passed over with why.
+
+**Locating: why the visitor was in the wrong spot.** Locating ran one ICP from one start: scan 1's
+turn, at the room's origin. From about 15° or 30 cm off, it settled on a wrong fit. In the test,
+that fit matched 46–64% of the view, sometimes over the 60% warning line, so nothing warned.
+
+**What changed in locating** (`Locate`, Demos 4 and 6, the same code):
+- **ICP is tried from up to 63 starts:** scan 1's turn and 0, ±10, ±20 or ±30° about the room's up,
+  each at scan 1's spot or 0.4 m away (the 8 neighbours).
+- **The search:** each start runs on a quarter of the view, and the best is refined on all of it.
+- **Nearest start first.** The search stops at a start that matches 95%, so a Kinect put back on the
+  spot takes one try. In the test, wrong fits reached at most 87%.
+- **The console lists the best three distinct fits** (match, turn, shift from scan 1's spot). It
+  warns when two fits far apart match almost alike: the room looks the same from both.
+
+**Tests (synthetic, scratchpad, through the real `FindFloor`, `FillHoles`, `Icp` and `Locate`):**
+
+| Case | Result |
+|---|---|
+| A far floor strip (about 3% of points), 4% stray readings 15–40 cm under it, wall readings dribbling 20 cm below | old mark 27 cm too low (outside the old 15 cm search); found at −1.200 m (true −1.20), no fill under the floor |
+| As above, plus a 1.9 m² table top 0.45 m up (the seen floor: 1.4 m²) | the floor still found at −1.200 m |
+| The floor never seen, with stray readings and dribble | guessed at −1.209 m; the ceiling rejected (2.61 m above the walls' foot) |
+| The floor never seen, plus the table | guessed at −1.209 m; the table rejected (0.46 m above the foot) |
+| Kinect put back 0°/0 m, 15°/0.36 m, 25°/0.50 m, −30°/0.64 m, 20°/0.50 m, −20°/0.60 m off, tilted 3° | old single start: from 15° on, 0.29–0.91 m and 15–31° off. New: all within 1 mm and 0.04°, in 0.4–5.4 s (1 start when on the spot) |
+
+- Demo 4 gives the same locating results.
+- D31's and D32's checks still pass, with the same numbers.
+- Not yet run on the sensor.

@@ -9,9 +9,10 @@
 //                 points: what was really seen), and how scan 1's camera
 //                 sat in the room (13 writes that as a comment).
 //    2. Learn     the empty view's depth, as in 03.
-//    3. Locate    where the Kinect stands in the room: start where scan 1
-//                 was, then 13's ICP (point to plane, along the room's
-//                 surface normals). The empty view is matched, so
+//    3. Locate    where the Kinect stands in the room: 13's ICP (point to
+//                 plane, along the room's surface normals), tried from
+//                 several starts around scan 1's spot, turned and shifted;
+//                 the best match wins (D33). The empty view is matched, so
 //                 visitors don't confuse it.
 //    4. Live      every frame: what is clearly nearer than the empty view
 //                 (03's blobs) becomes 3D points, moved into the room by
@@ -19,8 +20,8 @@
 //
 //  Before the show: scan the stand with 13 (README, "Recreate a room"),
 //  press E, then put the Kinect back where scan 1 was taken, aimed the
-//  same way (within about 50 cm and 15°: ICP finds the rest). Run this
-//  from the folder the .obj is in, with nobody in view.
+//  same way (within about 50 cm and 30°: the starts and ICP find the
+//  rest). Run this from the folder the .obj is in, with nobody in view.
 //
 //  Nothing is saved. The room file holds no people (13 is run with
 //  nobody in view); the visitors are only drawn on screen.
@@ -74,6 +75,13 @@ const int IcpRounds = 30;
 const float IcpStartPairMeters = 0.50f;    // 13 used 0.05 after its features; here the Kinect may be put back 50 cm off
 const float IcpFinalPairMeters = 0.02f;
 const float MinLocatedShare = 0.6f;        // below this share of matched points, warn (lost: 40%, found: 100% in the test)
+// New (D33): ICP from several starts around scan 1's spot, each turned by these about the room's
+// up and shifted by -1, 0, +1 times LocateShiftMeters sideways and ahead; each tried on every
+// LocateSearchEvery-th point of the view, the best refined on all of it.
+const float LocateTurnsDegrees[] = { 0, -10, 10, -20, 20, -30, 30 };
+const float LocateShiftMeters = 0.4f;
+const int LocateSearchEvery = 4;
+const float LocateEnoughShare = 0.95f;     // a start matching this much is taken at once (wrong fits reached 87% in the test)
 
 // --- Viewer ---
 const int ViewWidth = 1280, ViewHeight = 720;
@@ -338,6 +346,63 @@ Pose Icp(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& t
     return pose;
 }
 
+// New (D33): Icp from several starts. The Kinect is put back only roughly where scan 1 was, and one
+// ICP reaches about 15 degrees and 50 cm; from further it settles on a wrong fit, and every visitor
+// lands in the wrong spot. So scan 1's spot is tried turned (LocateTurnsDegrees, about the room's
+// up) and shifted (LocateShiftMeters sideways and ahead), each on part of the view, nearest first,
+// until one matches LocateEnoughShare; the best is refined on all of it. Prints the best distinct fits; two alike ones far apart = a room that looks
+// the same from both spots. "share" as in Icp.
+Pose Locate(const std::vector<cv::Point3f>& view, const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals,
+            cv::flann::Index& tree, const cv::Matx33f& firstCamera, float& share)
+{
+    auto start = std::chrono::steady_clock::now();
+    std::vector<cv::Point3f> part;
+    for (size_t i = 0; i < view.size(); i += LocateSearchEvery) part.push_back(view[i]);
+    // Nearest first: scan 1's own spot, then the shifts, then further turns.
+    const cv::Point2i shifts[] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } };
+    std::vector<std::pair<float, Pose>> tried;   // (share, pose)
+    for (float degrees : LocateTurnsDegrees)
+    {
+        for (const cv::Point2i& shift : shifts)
+        {
+            Pose from;
+            from.turn = TurnAbout(cv::Vec3d(0, degrees * CV_PI / 180, 0)) * firstCamera;
+            from.shift = cv::Point3f(shift.x * LocateShiftMeters, 0, shift.y * LocateShiftMeters);
+            float s;
+            Pose found = Icp(part, room, normals, tree, from, s);
+            tried.emplace_back(s, found);
+            if (s >= LocateEnoughShare) break;
+        }
+        if (tried.back().first >= LocateEnoughShare) break;
+    }
+    std::sort(tried.begin(), tried.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    Pose pose = Icp(view, room, normals, tree, tried[0].second, share);
+
+    // How far each fit is from scan 1's spot: the turn about up, and the shift seen from above.
+    auto Turned = [&](const Pose& p)
+    {
+        cv::Matx33f r = p.turn * firstCamera.t();
+        return std::atan2(r(0, 2), r(0, 0)) * 180 / (float)CV_PI;
+    };
+    std::printf("Locating: tried %zu starts in %.1f s. Best fits (share of a quarter of the view):\n", tried.size(),
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    std::vector<Pose> listed;
+    for (const auto& [s, p] : tried)
+    {
+        bool same = false;
+        for (const Pose& q : listed)
+            same = same || (cv::norm(p.shift - q.shift) < 0.1 && std::abs(Turned(p) - Turned(q)) < 3);
+        if (same) continue;
+        if (listed.size() == 1 && s > tried[0].first - 0.05f &&
+            (cv::norm(p.shift - listed[0].shift) > 0.3 || std::abs(Turned(p) - Turned(listed[0])) > 10))
+            std::printf("  (two fits almost alike: the room looks the same from both. Put the Kinect nearer scan 1's spot, press L.)\n");
+        std::printf("  %3.0f%%  turned %+4.0f deg, moved (%+.2f, %+.2f) m from scan 1's spot\n", s * 100, Turned(p), p.shift.x, p.shift.z);
+        listed.push_back(p);
+        if (listed.size() == 3) break;
+    }
+    return pose;
+}
+
 void ToggleFullscreen(const std::string& window)
 {
     bool full = cv::getWindowProperty(window, cv::WND_PROP_FULLSCREEN) == cv::WINDOW_FULLSCREEN;
@@ -510,9 +575,7 @@ int main(int argc, char** argv)
                     if (ToRoom(row, column, p)) view.push_back(p);
                 }
             }
-            Pose start;
-            start.turn = firstCamera;   // where scan 1 was
-            pose = Icp(view, room, roomNormals, tree, start, locatedShare);
+            pose = Locate(view, room, roomNormals, tree, firstCamera, locatedShare);   // around where scan 1 was
             located = true;
             cv::Point3f at = pose(cv::Point3f(0, 0, 0));
             std::printf("Located: %.0f%% of the view within %.0f cm of the room. Camera at (%+.2f, %.2f, %+.2f) m, "
