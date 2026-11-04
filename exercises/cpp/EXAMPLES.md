@@ -47,7 +47,7 @@ flowchart LR
     E03 --> D5["Demo 5 How Tall"]
 
     classDef planned stroke-dasharray: 5 5
-    class E13z,E14,E15 planned
+    class E14,E15 planned
     classDef demo fill:#fff3d6,stroke:#c08a00
     class D1,D2,D3,D4,D5 demo
 ```
@@ -618,12 +618,36 @@ flowchart LR
 **What to compare:** a hallway scan in 13c (refused) and in 13d; then the far_landmarks group in
 Blender against where the far doorway really is.
 
+## 13z Room Rebuild
+
+Starts from 13c's export and viewer, with no Kinect. In 13c and 13d, **K** keeps the scans in a
+folder; 13z reads such folders back, so a room can be looked at and rebuilt any time later.
+
+```mermaid
+flowchart LR
+    SC["Scans in 13c / 13d"] -->|K| FO["A folder per room:<br/>points, pictures, poses,<br/>points.ply"]
+    FO --> FIND["Find saved rooms<br/>(room.txt), list them"]
+    FIND --> PICK["Pick rooms, then<br/>which scans to load"]
+    PICK --> LOAD["Read cloud, picture, pose<br/>(no placing: poses are saved)"]
+    LOAD --> VIEW["13c's viewer<br/>X excludes, saved to pose.txt"]
+    LOAD --> OBJ["13c's E: TSDF + surface net<br/>+ clean model, .obj"]
+    LOAD --> PLY["Every scan's own points<br/>and colours, .ply"]
+    VIEW --> OBJ
+    VIEW --> PLY
+
+    classDef new stroke-width:3px
+    class FO,FIND,PICK,LOAD,PLY new
+```
+
+**What to compare:** the same room's `points.ply` and `.obj` in MeshLab (a poster's text, a book
+spine), and the `.obj` at `VoxelMeters` 0.02 and 0.01.
+
 ## Presentation demos
 
 Five fullscreen remixes for an exhibition, in [presentation/](presentation/README.md) (yellow in
 the family tree). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
 save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
-14, for people.
+15, for people.
 
 ```mermaid
 flowchart LR
@@ -647,5 +671,6 @@ corner of the doll's house?
 
 ---
 
-**Next (planned):** 12 gets a pose from a printed marker (a fallback for bare walls), and 14 places
-the tracked objects in the scanned room. See the Roadmap in [CLAUDE.md](../../CLAUDE.md).
+**Next (planned):** 12 gets a pose from a printed marker (a fallback for bare walls), 14 paints a
+kept room with its full-resolution pictures (a textured mesh), and 15 places the tracked objects in
+the scanned room. See the Roadmap in [CLAUDE.md](../../CLAUDE.md).
