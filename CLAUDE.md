@@ -48,19 +48,27 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   sections Settings / Setup / Main operation / Output / Experiment ideas. Priorities, in order:
   readability, simplicity, mutability, learnability, capability.
 - Privacy: never save or commit camera frames or images of people. `*.jpg` is gitignored for this
-  reason. One exception (D29, the user's decision): room-scan folders written by 13c/13d's K may
-  hold colour frames of an empty room. They're gitignored (`room_scans/`, and each folder's own
+  reason. One exception (D29, the user's decision): room-scan folders written by 13c/13d's K (or
+  their rescue) and by 13e may hold colour frames of an empty room. They're gitignored (`room_scans/`, and each folder's own
   `.gitignore`), and Claude never opens or views them unless the user explicitly asks; tests use
   synthetic data.
 - Lean towards our own software and open source over vendor SDKs (D5). New code must build on
   Linux as well as Windows (D7).
+- **Multi-scan examples always guard the scans (D30, the user's rule).** Every new example that
+  collects scans over a session (13-style) must have both of these:
+  1. A rescue on a lost Kinect: on the frame timeout, save everything with no questions, before
+     touching the device again.
+  2. Auto-save: the folder is asked at start-up, and each scan is written the moment it is placed,
+     its `pose.txt` last.
+
+  Build new ones from **13e, our most advanced scanner**, not from 13–13d.
 
 ## Status (2026-11-04)
 
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Then D30: 13c/13d save a rescue folder when the Kinect is lost, and 13e (13d + auto-save after every placed scan) is our most advanced scanner, the one to use for real rooms; both synthetic-tested, not yet run on the sensor. Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
 
 ## Roadmap
 
@@ -220,7 +228,7 @@ example, each building on the one before. Numbers are the planned example folder
       (incl. a second-opinion ICP against all but the matched scan), shortlist + cropped/thinned
       ICP on a background thread. Synthetic 30-scan walk: worst 2.9 mm / 0.18°, about 3 s per scan
       at any count (13b: 3–45 s and 12+ cm drift, from ICP's 2% weak cut-off; 13c uses 5%).
-      Live anchors not yet run on the sensor. The user's choice for real scans.
+      Live anchors not yet run on the sensor. Was the user's choice for real scans; now 13e (D30).
       Export fixed 2026-11-03 (D28): up from the biggest level plane, boxes capped at 3 m (13b's
       flat export came out 28° tilted inside one flat-sized box). 13, 13b and 13d have the same fix.
 - [x] **13d Room Scan Far:** built 2026-11-03 (D27). 13c plus features with no depth (the full
@@ -241,7 +249,24 @@ example, each building on the one before. Numbers are the planned example folder
       of `*`. BMP because this OpenCV is built without PNG/JPEG writers. About 11 MB per scan.
       Synthetic test (5 scans of a known box room fed into the real `KeepScans`): written in 0.3 s;
       overwrite, refusal, bad-name and cancel paths work. Not yet run on the sensor.
-- [x] **13z Room Rebuild:** built 2026-11-04 (D29). No Kinect. Lists every saved room under
+- [x] **13c/13d: the rescue:** built 2026-11-04 (D30), after the user asked what an unplugged
+      Kinect does. Before: 10 s without a frame, "giving up", every unkept scan lost. Now the scans
+      go to `room_scans\rescue_<date>_<time>` with no questions (a scan still being placed included)
+      before the Kinect is stopped (which may hang on a device that's gone). Synthetic-tested through
+      the real `KeepScans`; the unplug itself not yet tried.
+- [x] **13e Room Scan Autosave: our most advanced scanner, the one for real rooms.** Built 2026-11-04
+      (D30), the user's ask. 13d plus saving as you go:
+      - the folder is asked at start-up;
+      - every placed scan is written at once (the same files as K, its `pose.txt` last so a scan
+        cut off half-way is skipped by 13z);
+      - X, P and U update the folder;
+      - K, Q and a lost Kinect write `points.ply` and the levelled turn.
+
+      A crash loses at most the scan in progress. Synthetic: 0.027 s per scan, `points.ply`
+      byte-identical to 13d's, 13z's rebuild as D29's, and a "crashed" scan skipped. Not yet run on
+      the sensor.
+- [x] **13z Room Rebuild:** built 2026-11-04 (D29). No Kinect. Reads 13c/13d's K folders, their
+      rescue folders, and 13e's folders alike. Lists every saved room under
       `SearchFolder` (or a given folder, up to 3 deep), you pick rooms and per room which scans to
       load (`1-12,15`), then view (13c's viewer; X excludes and writes it back to `pose.txt`), build
       `.obj` (13c's E code, copied, plus `far_landmarks`), build `.ply`, or both, into the room's own
@@ -251,7 +276,7 @@ example, each building on the one before. Numbers are the planned example folder
       identical. Viewer smoke-tested. Left for later (docs/ideas.md): merging separate sessions,
       P (re-place) in 13z, auto-save after each scan.
 - [ ] **14 Textured room** (planned 2026-11-04, after 13z; the user said not to start it yet).
-      Option C. A K folder in; `.obj` + `.mtl` + a texture atlas out. Each triangle takes its colour
+      Option C. A saved room folder in (K's or 13e's); `.obj` + `.mtl` + a texture atlas out. Each triangle takes its colour
       from the scan that saw it most head-on and nearest (normal vs view direction, distance), from
       `colour_full.bmp` (the colour camera model fitted per scan from `colour_index.bin`, as 13d
       does), checked against that scan's depth so hidden surfaces aren't painted. Then seams blended

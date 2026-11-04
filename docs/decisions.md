@@ -445,4 +445,54 @@ then rebuilt by 13z:
 - The viewer was smoke-tested. Nothing has run on the sensor yet.
 
 **Left for later (docs/ideas.md):** merging separate sessions of one space, P (re-place) in 13z, and
-auto-save after each placed scan.
+auto-save after each placed scan. *(Auto-save: built as 13e, D30, 2026-11-04.)*
+
+### D30 — 2026-11-04 — The scans survive a lost Kinect (13c, 13d) and a crash (13e); every multi-scan example does both from now on
+**What:** the user asked what happens if the Kinect is unplugged during a multi-scan session. Before
+this, the main loop waited 10 s for a frame, printed "giving up" and quit, and every scan not yet
+kept with K was lost. The user chose two of the fixes offered:
+1. **The rescue, in 13c and 13d:** after the 10 s timeout, everything is written to
+   `room_scans\rescue_<date>_<time>` with K's own code and no questions asked (nobody may be at the
+   console), *before* `device->stop()`. A scan still being placed is waited for and kept too.
+2. **Auto-save, in a new 13e (13d plus saving as you go):** the folder is asked once at the start,
+   and every scan is written the moment it is placed.
+
+The user also called 13e our most advanced implementation, and set a rule: **every future
+multi-scan example has both** (Conventions in CLAUDE.md).
+**Why stop the Kinect last:** stopping a device that has gone away might hang in libfreenect2; this
+hasn't been tested. With the save done first, a hang costs nothing but closing the window.
+**Why the folder comes first in 13e:** auto-save needs to know where to write before scan 1. A
+question at the first SPACE would interrupt the scanning. A question at start-up comes before the
+windows open, so nothing waits on it.
+**Why 13e writes the same files as K:** 13z, and 14 later, then read any of the three without
+changes (format 1). Each event updates the folder:
+- a placed scan writes its `scan_NNN` folder;
+- X and P rewrite that scan's `pose.txt`;
+- U deletes the scan's folder;
+- `room.txt` and `landmarks.txt` are rewritten after every change.
+
+`points.ply` and the levelled `first_camera_turn` need the clean model's planes and about 75 MB of
+writing for 30 scans, so only K, Q and a lost Kinect write them. `room.txt` says `finished 0/1`.
+13z never needed either: it works out both again.
+**Crash safety:** a scan's `pose.txt` is written last, and 13z skips a scan without one. Files that
+get rewritten (`room.txt`, `pose.txt`, `landmarks.txt`, `points.ply`) are written beside the old
+copy, then renamed over it, so a crash leaves the old copy, never half of the new one. What a crash
+can still lose: the scan being held still for, or the one being placed. A blue screen might also
+lose the last second or two that Windows hadn't written to disk yet.
+**Writes on the main thread:** a scan's 11 MB took 0.027 s in the synthetic test. A background
+writer would need its own copy of the scan, and rules about which job writes first. That isn't worth
+it for a pause that short, once per scan.
+**Q quits with an empty room:** if nothing was scanned (or all of it was undone), 13e removes only
+the files it wrote, then the folder only if it is empty. Anything else in the folder stays.
+**Tested (synthetic, scratchpad):** the same 5-scan box room as D29.
+- The rescue: 13c's and 13d's real `KeepScans` with `RescueFolder()` asked nothing, wrote
+  `rescue_<time>` folders, and 13z listed and rebuilt them.
+- 13e: its real `StartRoom`, `WriteScan`, `WritePose` (X), U's folder removal and `FinishRoom`, in
+  the order the main loop calls them. 0.027 s per scan, no `.new` files left.
+- 13e's `points.ply` was byte-identical to 13d's rescue copy.
+- 13z's rebuild matched D29's: floor and ceiling −1.2996 / 1.2002 m, 4 walls, the couch one box,
+  mesh 0.4 / 1.8 mm.
+- A room "crashed" during scan 3 (its folder holding a short `cloud.bin` and no `pose.txt`): 13z
+  loaded scans 1–2 and skipped scan 3.
+- Not tested: the timeout path itself (that needs the Kinect unplugged for real), and 13e on the
+  sensor.

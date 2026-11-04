@@ -43,6 +43,7 @@ flowchart TB
         V11["ICP alignment (11)"]
         V12["ArUco marker pose (12)"]
         V13["Room scan: many spots merged (13)<br/>TSDF mesh + clean model"]
+        SAFE["Scans saved as you go (13e)<br/>+ a rescue if the Kinect is lost"]
         KEEP["Kept scans, rebuilt later<br/>K folders + 13z"]
         TEX["Textured room (14)"]
         AV -.->|6 m cut-off| PC
@@ -55,6 +56,7 @@ flowchart TB
         V12 -.->|fallback| V13
         RM -.->|clean model of the merged room| V13
         V13 -->|K| KEEP --> TEX
+        V13 --> SAFE -->|same folders| KEEP
     end
 
     R -->|colour| Y
@@ -206,9 +208,10 @@ Then work through the other examples in this order:
 | 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
 | 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
 | 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere |
-| 13c | `13c_Kinect_Room_Scan_Assist` | 13b with help: live green "anchors" show what the next scan will be placed by, a suggested next shot, suspicious scans flagged red, click a scan to exclude (X) or re-place (P) it, and no slowdown at 30+ scans. **Use this one for a real scan** |
-| 13d | `13d_Kinect_Room_Scan_Far` | 13c plus details too far for depth (a hallway's far doorway): they still give a direction, which helps place scans, and seen from two spots they become "far landmarks" in the model. **Use this one where there are long hallways or big rooms** |
-| 13z | `13z_Kinect_Room_Rebuild` | No Kinect: rebuild rooms later from the folders 13c/13d's **K** key keeps. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
+| 13c | `13c_Kinect_Room_Scan_Assist` | 13b with help: live green "anchors" show what the next scan will be placed by, a suggested next shot, suspicious scans flagged red, click a scan to exclude (X) or re-place (P) it, and no slowdown at 30+ scans. Saves a rescue folder if the Kinect is unplugged |
+| 13d | `13d_Kinect_Room_Scan_Far` | 13c plus details too far for depth (a hallway's far doorway): they still give a direction, which helps place scans, and seen from two spots they become "far landmarks" in the model. Saves a rescue folder if the Kinect is unplugged |
+| 13e | `13e_Kinect_Room_Scan_Autosave` | **Our most advanced scanner: use this one for a real scan.** 13d, plus every scan saved to disk the moment it's placed (the folder is asked at the start), so a crash, a blue screen or an unplugged Kinect costs at most the scan in progress |
+| 13z | `13z_Kinect_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves, or that 13c/13d's **K** key keeps. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
 **Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
@@ -231,7 +234,7 @@ Change a setting and rebuild with `cmake --build --preset default` to see what i
 | Build fails with very long paths | Clone to a short path such as `E:\Spotter` (step 1). |
 | The window opens and closes immediately | Run it from the command prompt instead of double-clicking, so you can read the error. |
 | Program exits silently, code `C0000135` | A DLL is missing next to the `.exe`. Delete the `build` folder and rebuild. |
-| **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. Save scans often (E): they live only in memory. |
+| **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. Scan with 13e, which saves every scan as it's placed (in 13c and 13d, press K often: their scans live only in memory). |
 
 More detail (Linux and Raspberry Pi setup, how the build stays reproducible, known limits) is in
 [exercises/cpp/README.md](exercises/cpp/README.md).
@@ -243,7 +246,17 @@ More detail (Linux and Raspberry Pi setup, how the build stays reproducible, kno
 Scan the room from several spots; each scan is placed automatically, and E saves one 3D model of
 the whole room. It takes about 10 minutes for a first try.
 
-**Use 13c (`13c_Kinect_Room_Scan_Assist`) for a real scan.** It works like 13, keys and all, plus:
+**Use 13e (`13e_Kinect_Room_Scan_Autosave`) for a real scan.** It's our most advanced scanner: what
+13c and 13d add (both below), plus **every scan saved the moment it's placed**.
+- **Before the windows open,** it asks in the console where to save: `Folder` (Enter =
+  `room_scans\`) and `Name` (Enter = `room_<date>_<time>`).
+- **A crash, a blue screen or an unplugged Kinect** then costs at most the scan in progress.
+- **K** writes the folder's `points.ply` now; Q does it on the way out.
+- **U** also deletes the last scan's saved folder.
+- 13z rebuilds 13e's folders just as it does K's ([below](#keep-the-scans-and-rebuild-later-k-and-13z)).
+
+**What 13c (`13c_Kinect_Room_Scan_Assist`) added** (13d and 13e have it too). It works like 13,
+keys and all, plus:
 
 - **Live anchors.** Green dots in the camera window are the details the next scan will be placed
   by: things already scanned. The counter reads `anchors: N (need 20)`. **This replaces the
@@ -263,11 +276,12 @@ the whole room. It takes about 10 minutes for a first try.
 It finds far more details in a dim picture than 13 (as 13b does): on the sensor, in the same
 room and light, 13 found 48–67 (it refuses a scan under 100), 13b and 13c about 1250. It's
 slower and finer everywhere: hold still about **4 s** per scan instead of 2, and E takes longer.
-The steps below say 13; use `13c_Kinect_Room_Scan_Assist` in step 4, and the counter in step 6
-runs to 60. **Press E now and then during a long scan:** scans live only in memory, and the PC
-blue-screened once mid-scan (see the troubleshooting table).
+The steps below say 13; use `13e_Kinect_Room_Scan_Autosave` in step 4, and the counter in step 6
+runs to 60. **In 13c and 13d, press K now and then during a long scan:** their scans live only in
+memory, and the PC blue-screened once mid-scan (see the troubleshooting table). If the Kinect is
+unplugged, they write a `room_scans\rescue_<date>_<time>` folder by themselves after 10 seconds.
 
-**Long hallways or big rooms: use 13d (`13d_Kinect_Room_Scan_Far`).** 13c needs details with a
+**Long hallways or big rooms: what 13d (`13d_Kinect_Room_Scan_Far`) added** (13e has it too). 13c needs details with a
 depth reading, so a plain hallway with its doorway past about 6 m gets refused. 13d also uses
 details the depth camera can't reach: magenta dots in the camera window. They pin which way the
 Kinect faces. They can't say how far down the hallway it is, because a direction has no distance.
@@ -329,8 +343,8 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 
 11. Press **E**. After a few seconds the console prints the file name (`room_scan_<number>.obj`),
     the room's height, its walls and furniture boxes. You can keep scanning and press E again:
-    each export is a new file. **Q** quits; the scans themselves are thrown away, unless you
-    pressed **K** first (below).
+    each export is a new file. **Q** quits. 13e has saved every scan all along. In 13–13d the
+    scans are thrown away, unless you pressed **K** first (below).
 12. **Open it in Blender** (free): File > Import > Wavefront (.obj). In the import options tick
     **Split by Group**. To see the colours: in the viewport's Solid shading menu, set Color to
     **Attribute**. Or in **MeshLab**: File > Import Mesh; colours show by themselves.
@@ -348,7 +362,10 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 ### Keep the scans and rebuild later (K and 13z)
 
 E's `.obj` keeps one colour per 2 cm corner, averaged over every scan, so posters and small details
-blur. And once you quit, the scans are gone. In **13c and 13d, press K** before quitting:
+blur. **13e keeps the scans by itself**, in the folder it asked for at the start (the same layout
+as K's), so for 13e skip to step 3. In 13–13d the scans are gone once you quit. In **13c and 13d,
+press K** before quitting. (If the Kinect is unplugged, they write a `rescue_<date>_<time>` folder in
+`room_scans\` by themselves, with no questions.)
 
 1. **Answer in the console window** (the program's windows wait meanwhile):
    - `Folder`: Enter saves into `room_scans\` in the folder you ran from, or type or paste any

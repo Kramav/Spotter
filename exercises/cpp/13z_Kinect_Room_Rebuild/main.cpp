@@ -1,9 +1,11 @@
 // =====================================================================
 //  13z · Kinect Room Rebuild
 //
-//  Rebuilds rooms from the folders that 13c's and 13d's K key keeps, any
-//  time later, without the Kinect. No scanning and no placing here: each
-//  scan's points, pictures and placement are read back from its folder.
+//  Rebuilds rooms from the folders that 13c's and 13d's K key keeps (or
+//  their rescue, if the Kinect was lost), and that 13e writes as it scans,
+//  any time later, without the Kinect. No scanning and no placing here:
+//  each scan's points, pictures and placement are read back from its
+//  folder. A scan without its pose.txt (cut off by a crash) is skipped.
 //
 //    1. Find     every saved room under SearchFolder (or a folder you
 //                give), listed with its scans, date and size.
@@ -1270,7 +1272,7 @@ int main(int argc, char** argv)
     {
         rooms = FindRooms(searchIn);
         std::printf("\nSaved rooms in %s:\n", searchIn.string().c_str());
-        if (rooms.empty()) std::printf("  none (K in 13c or 13d saves them; give another folder below)\n");
+        if (rooms.empty()) std::printf("  none (13e, or K in 13c or 13d, saves them; give another folder below)\n");
         for (size_t r = 0; r < rooms.size(); r++)
             std::printf("  %2zu  %-28s %s  %-16s  %3d scans (%d excluded)  %5.0f MB\n", r + 1,
                         rooms[r].folder.filename().string().c_str(), rooms[r].program.c_str(), rooms[r].saved.c_str(),
