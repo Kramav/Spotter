@@ -36,7 +36,9 @@ flowchart LR
     E05 -.->|Kalman filter, matching| E06c
 
     E13 --> E13b["13b Room Scan HQ"] --> E13c["13c Room Scan Assist"] --> E13d["13d Room Scan Far"]
-    E13 --> E14["14 Objects in the map"]
+    E13c --> E13z["13z Room Rebuild"] --> E14["14 Textured Room"]
+    E13d -.->|far landmarks| E13z
+    E13 --> E15["15 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
     E07d --> D2["Demo 2 Invisibility Cloak"]
@@ -45,7 +47,7 @@ flowchart LR
     E03 --> D5["Demo 5 How Tall"]
 
     classDef planned stroke-dasharray: 5 5
-    class E14 planned
+    class E13z,E14,E15 planned
     classDef demo fill:#fff3d6,stroke:#c08a00
     class D1,D2,D3,D4,D5 demo
 ```
