@@ -698,7 +698,7 @@ save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new:
 flowchart LR
     OBJ["13's room_scan_&lt;time&gt;.obj<br/>seen_room points + normals,<br/>scan 1's camera turn"] --> DH["Doll's house<br/>ceiling cut off, turning"]
     K["Kinect, empty view"] --> BG["Empty view's depth (03)"]
-    BG --> LOC["Locate: start at scan 1's turn,<br/>13's point-to-plane ICP"]
+    BG --> LOC["Locate: 13's point-to-plane ICP<br/>from up to 63 starts around<br/>scan 1's spot, best match (D33)"]
     OBJ --> LOC
     K2["Kinect, every frame"] --> FG["Nearer than the empty view<br/>= visitors (03's blobs)"]
     BG --> FG
@@ -716,14 +716,15 @@ corner of the doll's house?
 
 ### Demo 6 Room Filled
 
-Demo 4, plus one step at start-up (D31, D32): the room's flat surfaces, their holes filled and
+Demo 4, plus one step at start-up (D31, D32, D33): the room's flat surfaces, their holes filled and
 marked, for a simple layout (walls upright, surfaces level).
 
 ```mermaid
 flowchart LR
-    OBJ["Demo 4's room<br/>points + normals, levelled"] --> WALL["Walls from above:<br/>upright points stacked 1.2 m,<br/>thinned, gaps bridged,<br/>unrolled along their path"]
-    OBJ --> UP["Cabinet fronts:<br/>RANSAC + 2D refit"]
-    OBJ --> LV["Level surfaces:<br/>crowded heights,<br/>height per tile"]
+    OBJ["Demo 4's room<br/>points + normals, levelled"] --> FLOOR["Floor: the lowest level piece<br/>of 0.25 m², near the walls' foot;<br/>stray readings under it hidden"]
+    FLOOR --> WALL["Walls from above:<br/>upright points stacked 1.2 m,<br/>thinned, gaps bridged,<br/>unrolled along their path"]
+    FLOOR --> UP["Cabinet fronts:<br/>RANSAC + 2D refit"]
+    FLOOR --> LV["Level surfaces:<br/>crowded heights,<br/>height per tile"]
     WALL --> SEEN["Seen: a real point 5 cm in front<br/>to 50 cm behind. Farther behind:<br/>an opening"]
     UP --> SEEN
     LV --> SEEN
@@ -736,7 +737,7 @@ flowchart LR
     OBJ --> V
 
     classDef new stroke-width:3px
-    class WALL,UP,LV,SEEN,FILL,LEG,DARK new
+    class FLOOR,WALL,UP,LV,SEEN,FILL,LEG,DARK new
 ```
 
 **What to compare:** press G until it's off (Demo 4's holes), then marked: is every blue patch a

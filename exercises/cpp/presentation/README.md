@@ -73,12 +73,18 @@ the floor, 0 level). The real thing needs the most preparation:
    nobody in view. Press E. It writes `room_scan_<time>.obj` into the folder you ran it from.
    The file has the line `# first camera turn:` at the end; Demo 4 needs it, so use a scan made
    after 2026-11-03.
-2. Put the Kinect back where scan 1 was taken, aimed the same way. In the synthetic test, it found
-   itself from up to 15° and 58 cm off. Mark the tripod's feet with tape before you scan.
+2. Put the Kinect back where scan 1 was taken, aimed the same way. It tries several starts around
+   that spot (D33), so in the synthetic test it found itself from up to 30° and 64 cm off. Mark the
+   tripod's feet with tape before you scan anyway: the nearer, the faster.
 3. Run `Demo4_Room_Twin.exe` from the same folder (it takes the newest `room_scan_*.obj`, or give
-   the path), with nobody in view. After 3 s the console prints `Located: NN% of the view within
-   2 cm of the room`. 80% or more is good. Under 60% it warns: move the Kinect closer to where
-   scan 1 was, clear the view, and press L.
+   the path), with nobody in view.
+   - After 3 s the console prints `Locating: tried N starts in N s`, the best three fits, then
+     `Located: NN% of the view within 2 cm of the room`.
+   - On the spot it takes one try. Further off it takes a few seconds.
+   - 80% or more is good. Under 60% it warns: move the Kinect closer to where scan 1 was, clear
+     the view, and press L.
+   - If it says two fits are almost alike, the room looks the same from both spots: move it nearer
+     scan 1's spot.
 4. Walk around: an orange shell (you) should walk around inside the doll's house. H switches to
    true colour.
 
@@ -87,16 +93,23 @@ again later. Check it on someone who knows their height: expect a few cm short (
 depth reading). "step back" means head or feet are cut off. T resets "tallest today".
 
 **6 Room Filled.** Prepare it exactly as Demo 4: the same room file, and the same Kinect spot.
-It also falls back to the Kinect's own view without a file. On start-up the console prints how
-much it filled (`Filled … m^2 in … s: floor …, N walls …, N other surfaces …, N legs, N dark
-shadows`), then one line per surface (each wall's length, how much it bends and how much of it was
-seen). If something looks wrong on screen, those lines say why.
+It also falls back to the Kinect's own view without a file. On start-up the console prints:
+- **the floor** (`Floor: seen at … m (… m^2 of level readings in one piece)`, or "never seen:
+  guessed at the walls' foot"), and each level surface it passed over, with why;
+- **how much it filled** (`Filled … m^2 in … s: floor …, N walls …, N other surfaces …, N legs, N
+  dark shadows`);
+- **one line per surface** (each wall's length, how much it bends and how much of it was seen).
+
+If something looks wrong on screen, those lines say why.
 
 What it does:
 - **Walls** are found from above, wherever upright readings stack over 1.2 m high, so they can be
   straight, bent or curved (always upright).
 - **The parts no scan saw are painted in:** the wall behind the couch, the floor under the table,
-  the table top under a box. A floor nobody saw is laid at the walls' foot.
+  the table top under a box.
+- **The floor** is the lowest level surface big enough to be one (0.25 m² in one piece), not more
+  than 25 cm above the walls' foot. A floor nobody saw is laid at the walls' foot. Stray readings
+  more than 10 cm under the floor are hidden.
 - **Table legs** are made whole from the floor to the top, where the depth camera read part of them.
 - **Something dark** (a black chair, a TV screen, glass) sends no depth back but leaves a shadow
   on the wall. That becomes a purple cut-out, placed where its few readings (a chair's legs) are.
@@ -121,9 +134,9 @@ The keys are listed along the bottom of the screen.
 | 1 | Builds; it's 08 (runs on the sensor, 14 loops/s) plus the swing | Run on the sensor |
 | 2 | Builds; it's 07d (28 fps) plus the side-by-side view | 07d has never removed a real person (nobody was in view): test with a person first |
 | 3 | Builds; it's 06c (runs on the sensor) in one window | Run on the sensor |
-| 4 | Fallback without a room file (`OneViewRoom.h`): a synthetic wall seen 14° tilted comes out upright to ±1.5 mm. Synthetic test (bare room, the worst case): located within 0.2 mm when put back up to 15° and 58 cm off, in 0.3 s; at 20° and 30° it's lost and warns (38–40% matched). 13's own test: the saved turn lands 94% of scan 1's points within 3 cm of the merged mesh | 13 has never run in a lit room, so there's no real room file yet |
+| 4 | Fallback without a room file (`OneViewRoom.h`): a synthetic wall seen 14° tilted comes out upright to ±1.5 mm. Synthetic test (bare room, the worst case): located within 0.2 mm when put back up to 15° and 58 cm off, in 0.3 s; at 20° and 30° it's lost and warns (38–40% matched). 13's own test: the saved turn lands 94% of scan 1's points within 3 cm of the merged mesh. Several starts (D33), a furnished synthetic room: put back up to 30° and 64 cm off (tilted 3°), all within 1 mm, in 0.4–5.4 s; the old single start was 0.3–0.9 m off from 15° on | Run on the sensor with a 13e room |
 | 5 | Builds; the height now uses each end's own depth | Run on the sensor; check against a known height |
-| 6 | Builds. Round 1 synthetic room (couch shadow, floor patch, box on a table, doorway): all filled as expected, nothing in the doorway, within 1 mm of the true planes. Round 2 (D32), synthetic rooms with only what the first camera could see: no fill within 1.5 cm of a seen point on bent, doubled or curved walls (the curve to 3.1 mm); a 1.5° tilted table top found; 4 legs seen over 13–22 cm each rebuilt full height; no sheet from things in a line; an unseen floor guessed at its true height; a black chair's ghost 11 cm from its legs, a black TV's on the wall, none for a normal chair. 0.14–0.19 s per room | Run on the real room file again (the first run, before D32, painted over a seen wall) |
+| 6 | Builds. Round 1 synthetic room (couch shadow, floor patch, box on a table, doorway): all filled as expected, nothing in the doorway, within 1 mm of the true planes. Round 2 (D32), synthetic rooms with only what the first camera could see: no fill within 1.5 cm of a seen point on bent, doubled or curved walls (the curve to 3.1 mm); a 1.5° tilted table top found; 4 legs seen over 13–22 cm each rebuilt full height; no sheet from things in a line; an unseen floor guessed at its true height; a black chair's ghost 11 cm from its legs, a black TV's on the wall, none for a normal chair. 0.14–0.19 s per room. Ran on the sensor with the 13e room: the floor came out too low and the visitor in the wrong spot. D33 fixes, synthetic: a floor seen only as a far strip, with stray readings that put the old floor 27 cm low, found to the mm; an unseen floor not taken from a table or the ceiling; locating as Demo 4's | Run on the real room again (D33) |
 
 Rehearse on the sensor before the day. For each demo, look at the points under "Each demo" and
 note anything that looks wrong.

@@ -17,8 +17,9 @@
 //                    picture and filled from the floor up to the cut;
 //                 b. cabinet fronts, couch backs: upright planes (RANSAC);
 //                 c. level surfaces (floor, table tops, seats): crowded
-//                    heights of up-facing points. A floor nobody saw is
-//                    guessed at the room's foot, inside the walls;
+//                    heights of up-facing points. The floor is the lowest
+//                    one big enough to be a floor (D33); a floor nobody saw
+//                    is guessed at the walls' foot, inside the walls;
 //                 d. table legs: thin, tall blobs of readings under a top,
 //                    made whole from the floor to the top;
 //                 e. a cell counts as seen if a real point is near it, or
@@ -30,7 +31,8 @@
 //                 nothing seen explains becomes a purple cut-out of
 //                 "something dark", where its few readings (chair legs)
 //                 put it.
-//    2-4.         as Demo 4: learn the empty view, locate, live visitors.
+//    2-4.         as Demo 4: learn the empty view, locate (from several
+//                 starts around scan 1's spot, D33), live visitors.
 //
 //  It only fills FLAT things and legs it has readings of. It never invents
 //  a chair back or a plant, and big holes get smeared colour.
@@ -95,7 +97,13 @@ const float LevelStepMeters = 0.02f;         // the height histogram's step, for
 const float LevelGatherMeters = 0.04f;       // a level surface's points: within this of its height (a slightly tilted top too)
 const float TileMeters = 0.5f;               // a level surface's height is fitted per tile this big
 const float LevelJoinMeters = 0.10f;         // parts of a level surface this close are one (a table top cut by a shadow)
-const float FloorSearchMeters = 0.15f;       // the floor: the biggest level this close to the lowest points
+// The floor (D33): the lowest level surface with this much area in one piece, seen from above (5 cm
+// cells), and no higher than FloorAboveFootMeters over the walls' foot (else it's a table top or
+// the ceiling). Readings more than UnderFloorMeters under it are noise, hidden.
+const float MinFloorAreaMeters2 = 0.25f;
+const float FloorCellMeters = 0.05f;
+const float FloorAboveFootMeters = 0.25f;
+const float UnderFloorMeters = 0.10f;
 const float MinSurfaceArea = 0.05f;          // m²: smaller flat pieces are left alone (a book, a lamp's top)
 const float MinRectangleShare = 0.5f;        // a piece covering this much of its rectangle (a table top) fills to it
 const double InpaintRadiusCells = 5;         // how far cv::inpaint looks for colour
@@ -131,6 +139,13 @@ const int IcpRounds = 30;
 const float IcpStartPairMeters = 0.50f;    // 13 used 0.05 after its features; here the Kinect may be put back 50 cm off
 const float IcpFinalPairMeters = 0.02f;
 const float MinLocatedShare = 0.6f;        // below this share of matched points, warn (lost: 40%, found: 100% in the test)
+// New (D33): ICP from several starts around scan 1's spot, each turned by these about the room's
+// up and shifted by -1, 0, +1 times LocateShiftMeters sideways and ahead; each tried on every
+// LocateSearchEvery-th point of the view, the best refined on all of it.
+const float LocateTurnsDegrees[] = { 0, -10, 10, -20, 20, -30, 30 };
+const float LocateShiftMeters = 0.4f;
+const int LocateSearchEvery = 4;
+const float LocateEnoughShare = 0.95f;     // a start matching this much is taken at once (wrong fits reached 87% in the test)
 
 // --- Viewer ---
 const int ViewWidth = 1280, ViewHeight = 720;
@@ -357,7 +372,6 @@ struct WallMap
 {
     Plan plan;
     std::vector<int> wall, column;
-    float footY = NAN;   // where the kept walls meet the floor (their lowest readings): the floor's height if nobody saw it
 };
 
 // Walks the first camera's line of sight towards plan point "to" in half cells, from plan distance
@@ -834,12 +848,10 @@ WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector<cv::Po
         }
     }
 
-    // Which points are wall, and the walls' foot (their lowest readings).
+    // Which points are wall.
     std::vector<char> onWall(room.size(), 0);
-    std::vector<float> wallHeights;
     for (const Wall& wall : walls)
-        if (wall.kept) for (int i : wall.members) { onWall[i] = 1; wallHeights.push_back(room[i].y); }
-    if (!wallHeights.empty()) map.footY = Percentile(wallHeights, 0.002);
+        if (wall.kept) for (int i : wall.members) onWall[i] = 1;
     // Each point's direction from the first camera, in degrees (for the shadows' readings).
     std::vector<cv::Point2f> directions;
     auto Direction = [](const cv::Point3f& p)
@@ -953,10 +965,102 @@ WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector<cv::Po
     return map;
 }
 
+// The floor (new, D33): the lowest level surface big enough to be a floor. It used to be the lowest
+// 2% of the points, but a Kinect at chest height sees the floor at a grazing angle, so the floor is
+// a small share of a scan. Readings under it (flying pixels, multipath in the corners, a slightly
+// misplaced scan) dragged that mark below the real floor on the first real run. Nothing real and
+// level lies under the floor, and stray readings never make one big connected piece. The walls'
+// foot (the lowest height where upright readings crowd as densely as up a wall) keeps a table top
+// or the ceiling from passing for an unseen floor, and is the floor's guess when none was seen.
+// "report": how it chose, for the console.
+struct Floor
+{
+    float y = 0;
+    bool seen = false;
+    std::vector<std::string> report;
+};
+
+Floor FindFloor(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals)
+{
+    Floor floor;
+    const float levelCos = std::cos(FacingDegrees * (float)CV_PI / 180), uprightSin = std::sin(FacingDegrees * (float)CV_PI / 180);
+    std::vector<float> all, uprightHeights;
+    std::vector<int> level;
+    float lo = 1e9f, hi = -1e9f;
+    for (int i = 0; i < (int)room.size(); i++)
+    {
+        all.push_back(room[i].y);
+        if (std::abs(normals[i].y) > levelCos) { level.push_back(i); lo = std::min(lo, room[i].y); hi = std::max(hi, room[i].y); }
+        else if (std::abs(normals[i].y) < uprightSin) uprightHeights.push_back(room[i].y);
+    }
+    const float lowest = all.empty() ? 0 : Percentile(all, 0.02);   // the old floor, for the console
+
+    // The walls' foot: upright readings per 2 cm of height; the lowest step holding a third of what
+    // a typical step up the walls holds. Stray readings under the floor are far sparser.
+    float foot = 1e9f;
+    if (!uprightHeights.empty())
+    {
+        const float bottom = Percentile(uprightHeights, 0.0), top = Percentile(uprightHeights, 0.98);
+        std::vector<int> steps((size_t)((top - bottom) / LevelStepMeters) + 1, 0);
+        for (float h : uprightHeights) if (h <= top) steps[std::min(steps.size() - 1, (size_t)((h - bottom) / LevelStepMeters))]++;
+        std::vector<float> filled;
+        for (int count : steps) if (count > 0) filled.push_back((float)count);
+        const float typical = Percentile(filled, 0.5);
+        for (size_t k = 0; k < steps.size(); k++)
+            if (steps[k] >= typical / 3) { foot = bottom + (k + 0.5f) * LevelStepMeters; break; }
+    }
+
+    // Level heights, as step c's histogram, tried from the bottom up.
+    const int bins = level.empty() ? 0 : std::min(100000, (int)((hi - lo) / LevelStepMeters) + 1);
+    std::vector<int> histogram(bins, 0);
+    for (int i : level) histogram[std::min(bins - 1, (int)((room[i].y - lo) / LevelStepMeters))]++;
+    float floorArea = 0;
+    for (int bin = 0; bin < bins && !floor.seen; bin++)
+    {
+        int before = bin > 0 ? histogram[bin - 1] : 0, after = bin + 1 < bins ? histogram[bin + 1] : 0;
+        if (histogram[bin] < 10 || histogram[bin] <= before || histogram[bin] < after) continue;
+        const float centre = lo + (bin + 0.5f) * LevelStepMeters;
+        std::vector<float> ys;
+        std::vector<cv::Point2f> spots;
+        float x0 = 1e9f, z0 = 1e9f, x1 = -1e9f, z1 = -1e9f;
+        for (int i : level)
+        {
+            if (std::abs(room[i].y - centre) >= LevelGatherMeters) continue;
+            ys.push_back(room[i].y);
+            spots.emplace_back(room[i].x, room[i].z);
+            x0 = std::min(x0, room[i].x); x1 = std::max(x1, room[i].x);
+            z0 = std::min(z0, room[i].z); z1 = std::max(z1, room[i].z);
+        }
+        // Its footprint: the biggest connected piece of 5 cm cells it covers, seen from above.
+        cv::Mat covered((int)((z1 - z0) / FloorCellMeters) + 1, (int)((x1 - x0) / FloorCellMeters) + 1, CV_8U, cv::Scalar(0));
+        for (const cv::Point2f& s : spots)
+            covered.at<uchar>((int)((s.y - z0) / FloorCellMeters), (int)((s.x - x0) / FloorCellMeters)) = 255;
+        cv::Mat labels, stats, centroids;
+        int pieces = cv::connectedComponentsWithStats(covered, labels, stats, centroids, 8);
+        int biggest = 0;
+        for (int k = 1; k < pieces; k++) biggest = std::max(biggest, stats.at<int>(k, cv::CC_STAT_AREA));
+        const float area = biggest * FloorCellMeters * FloorCellMeters, y = Percentile(ys, 0.5);
+        const bool tooHigh = y > foot + FloorAboveFootMeters;
+        floor.seen = area >= MinFloorAreaMeters2 && !tooHigh;
+        if (floor.seen) { floor.y = y; floorArea = area; }
+        else if (area >= MinSurfaceArea && floor.report.size() < 8)
+            floor.report.push_back(tooHigh ? cv::format("  level readings at %.2f m: %.2f m^2 in one piece, %.2f m above the walls' foot: "
+                                                        "a table top or the ceiling", y, area, y - foot)
+                                           : cv::format("  level readings at %.2f m: %.2f m^2 in one piece, too small for the floor", y, area));
+    }
+    if (!floor.seen) floor.y = foot < 1e9f ? foot : lowest;
+    floor.report.insert(floor.report.begin(), floor.seen
+        ? cv::format("Floor: seen at %.2f m (%.2f m^2 of level readings in one piece); the lowest 2%% of the points is at %.2f m",
+                     floor.y, floorArea, lowest)
+        : cv::format("Floor: never seen (no level piece of %.2f m^2 near the walls' foot): guessed at the walls' foot, %.2f m; "
+                     "the lowest 2%% of the points is at %.2f m", MinFloorAreaMeters2, floor.y, lowest));
+    return floor;
+}
+
 // Steps a-e: every flat surface of the room (levelled: Y up; the first camera at 0,0,0), its holes
-// filled, and step 1c's shadows.
+// filled, and step 1c's shadows. "floorY": FindFloor's.
 Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals,
-                 const std::vector<cv::Vec3b>& colours, float floorY, float cutY, const cv::Matx33f& firstCamera)
+                 const std::vector<cv::Vec3b>& colours, float floorY, bool floorSeen, float cutY, const cv::Matx33f& firstCamera)
 {
     Filled out;
     const float cell = FillCellMeters;
@@ -1078,12 +1182,9 @@ Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<cv::Poi
         for (float h : heights) near = near || std::abs(h - height) < 1.5f * LevelGatherMeters;
         if (!near) heights.push_back(height);
     }
-    int floorLevel = -1;
-    for (int k = 0; k < (int)heights.size() && floorLevel < 0; k++)
-        if (std::abs(heights[k] - floorY) < FloorSearchMeters) floorLevel = k;
-    out.floorSeen = floorLevel >= 0;
-    // The floor's height: as seen, or the walls' foot, or the room's lowest 2%.
-    const float groundY = out.floorSeen ? heights[floorLevel] : std::isnan(walls.footY) ? floorY : walls.footY;
+    // The floor's height comes from FindFloor (D33): as seen, or the walls' foot.
+    out.floorSeen = floorSeen;
+    const float groundY = floorY;
 
     // Inside the walls: the first camera's line of sight to a floor cell meets no kept wall first.
     auto Inside = [&](const cv::Point3f& p)
@@ -1139,7 +1240,7 @@ Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<cv::Poi
     // Table tops, seats, shelf tops: each level's pieces, its height fitted per tile.
     for (int k = 0; k < (int)heights.size(); k++)
     {
-        if (k == floorLevel) continue;
+        if (std::abs(heights[k] - groundY) < 1.5f * LevelGatherMeters) continue;   // the floor itself
         const float y = heights[k];
         std::vector<cv::Point3f> members;
         std::vector<cv::Vec3b> memberColours;
@@ -1370,6 +1471,63 @@ Pose Icp(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& t
     return pose;
 }
 
+// New (D33): Icp from several starts. The Kinect is put back only roughly where scan 1 was, and one
+// ICP reaches about 15 degrees and 50 cm; from further it settles on a wrong fit, and every visitor
+// lands in the wrong spot. So scan 1's spot is tried turned (LocateTurnsDegrees, about the room's
+// up) and shifted (LocateShiftMeters sideways and ahead), each on part of the view, nearest first,
+// until one matches LocateEnoughShare; the best is refined on all of it. Prints the best distinct fits; two alike ones far apart = a room that looks
+// the same from both spots. "share" as in Icp.
+Pose Locate(const std::vector<cv::Point3f>& view, const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals,
+            cv::flann::Index& tree, const cv::Matx33f& firstCamera, float& share)
+{
+    auto start = std::chrono::steady_clock::now();
+    std::vector<cv::Point3f> part;
+    for (size_t i = 0; i < view.size(); i += LocateSearchEvery) part.push_back(view[i]);
+    // Nearest first: scan 1's own spot, then the shifts, then further turns.
+    const cv::Point2i shifts[] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } };
+    std::vector<std::pair<float, Pose>> tried;   // (share, pose)
+    for (float degrees : LocateTurnsDegrees)
+    {
+        for (const cv::Point2i& shift : shifts)
+        {
+            Pose from;
+            from.turn = TurnAbout(cv::Vec3d(0, degrees * CV_PI / 180, 0)) * firstCamera;
+            from.shift = cv::Point3f(shift.x * LocateShiftMeters, 0, shift.y * LocateShiftMeters);
+            float s;
+            Pose found = Icp(part, room, normals, tree, from, s);
+            tried.emplace_back(s, found);
+            if (s >= LocateEnoughShare) break;
+        }
+        if (tried.back().first >= LocateEnoughShare) break;
+    }
+    std::sort(tried.begin(), tried.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    Pose pose = Icp(view, room, normals, tree, tried[0].second, share);
+
+    // How far each fit is from scan 1's spot: the turn about up, and the shift seen from above.
+    auto Turned = [&](const Pose& p)
+    {
+        cv::Matx33f r = p.turn * firstCamera.t();
+        return std::atan2(r(0, 2), r(0, 0)) * 180 / (float)CV_PI;
+    };
+    std::printf("Locating: tried %zu starts in %.1f s. Best fits (share of a quarter of the view):\n", tried.size(),
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    std::vector<Pose> listed;
+    for (const auto& [s, p] : tried)
+    {
+        bool same = false;
+        for (const Pose& q : listed)
+            same = same || (cv::norm(p.shift - q.shift) < 0.1 && std::abs(Turned(p) - Turned(q)) < 3);
+        if (same) continue;
+        if (listed.size() == 1 && s > tried[0].first - 0.05f &&
+            (cv::norm(p.shift - listed[0].shift) > 0.3 || std::abs(Turned(p) - Turned(listed[0])) > 10))
+            std::printf("  (two fits almost alike: the room looks the same from both. Put the Kinect nearer scan 1's spot, press L.)\n");
+        std::printf("  %3.0f%%  turned %+4.0f deg, moved (%+.2f, %+.2f) m from scan 1's spot\n", s * 100, Turned(p), p.shift.x, p.shift.z);
+        listed.push_back(p);
+        if (listed.size() == 3) break;
+    }
+    return pose;
+}
+
 void ToggleFullscreen(const std::string& window)
 {
     bool full = cv::getWindowProperty(window, cv::WND_PROP_FULLSCREEN) == cv::WINDOW_FULLSCREEN;
@@ -1425,16 +1583,20 @@ int main(int argc, char** argv)
         }
     }
 
-    // The doll's house: the floor is the lowest 2% of the room; everything above the cut is hidden.
-    std::vector<float> heights;
-    for (const cv::Point3f& p : room) heights.push_back(p.y);
-    std::nth_element(heights.begin(), heights.begin() + heights.size() / 50, heights.end());
-    float floorY = heights[heights.size() / 50];
-    std::vector<cv::Point3f> house;
-    std::vector<cv::Vec3b> houseColours;
+    // The doll's house: everything above the cut is hidden. New (D33): the floor from its own
+    // readings (FindFloor), and readings more than UnderFloorMeters under it are noise, hidden (and
+    // left out of the filling; locating still uses every point).
+    Floor floor = FindFloor(room, roomNormals);
+    const float floorY = floor.y;
+    std::vector<cv::Point3f> kept, keptNormals, house;
+    std::vector<cv::Vec3b> keptColours, houseColours;
     cv::Point3f middle(0, 0, 0);
     for (size_t i = 0; i < room.size(); i++)
     {
+        if (room[i].y < floorY - UnderFloorMeters) continue;
+        kept.push_back(room[i]);
+        keptNormals.push_back(roomNormals[i]);
+        keptColours.push_back(roomColours[i]);
         if (room[i].y > floorY + CutAboveFloorMeters) continue;
         house.push_back(room[i]);
         houseColours.push_back(roomColours[i]);
@@ -1450,11 +1612,14 @@ int main(int argc, char** argv)
     viewDistance = startDistance;
     std::printf("Loaded %s: %zu points, %zu below the cut, about %.1f m across\n", roomPath.c_str(), room.size(),
                 house.size(), 2 * roomRadius);
+    for (const std::string& line : floor.report) std::printf("%s\n", line.c_str());
+    if (kept.size() < room.size())
+        std::printf("  %zu points more than %.0f cm under the floor: noise, hidden\n", room.size() - kept.size(), UnderFloorMeters * 100);
 
     // Step 1b (new): fill the holes, once. The marked colours: the guess tinted blue, and the
     // shadows' cut-outs purple, both in stripes.
     auto fillStart = std::chrono::steady_clock::now();
-    Filled filled = FillHoles(room, roomNormals, roomColours, floorY, floorY + CutAboveFloorMeters, firstCamera);
+    Filled filled = FillHoles(kept, keptNormals, keptColours, floorY, floor.seen, floorY + CutAboveFloorMeters, firstCamera);
     std::printf("Filled %.1f m^2 in %.1f s: floor %.1f m^2, %d walls %.1f m^2, %d other surfaces %.1f m^2, %d legs, "
                 "%d dark shadows\n", filled.floorArea + filled.wallArea + filled.otherArea,
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - fillStart).count(), filled.floorArea,
@@ -1561,9 +1726,7 @@ int main(int argc, char** argv)
                     if (ToRoom(row, column, p)) view.push_back(p);
                 }
             }
-            Pose start;
-            start.turn = firstCamera;   // where scan 1 was
-            pose = Icp(view, room, roomNormals, tree, start, locatedShare);   // the real points only, not the guesses
+            pose = Locate(view, room, roomNormals, tree, firstCamera, locatedShare);   // the real points only, not the guesses
             located = true;
             cv::Point3f at = pose(cv::Point3f(0, 0, 0));
             std::printf("Located: %.0f%% of the view within %.0f cm of the room. Camera at (%+.2f, %.2f, %+.2f) m, "
