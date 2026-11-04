@@ -325,3 +325,28 @@ than live. Feasible, and it fits the plan: stage C already merges views offline.
 - **08b mesh:** rim edges at "pinch" points (two parts of the outline touching at one pixel) are
   used twice. The model is closed but not strictly manifold. Fine for Blender and MeshLab; for 3D
   printing, split the pinch points, or use MeshLab's "Repair non Manifold Vertices by splitting".
+
+## Room scans: the floor nobody saw
+
+*Added 2026-11-03.* The flat scan (13b, 34 scans) had 3.5 m² of floor out of about 40 m², because
+its scans were level or tilted up. The first fix is hardware: a tripod, with scans 30–45° down
+(README, "A stand for room scans"). Software options, cheapest first:
+- **Already there:** the tidy model's `clean_floor` is a flat rectangle at the floor height. It's
+  drawn grey and labelled "guessed" when no scan saw the floor. Since D28 it is level.
+- **Floor warning in 13c's assist (small):** count the room's up-facing area near the floor height
+  after each placement. While it's low, the next-shot advice prefers tilts of −20° or more and
+  says "no floor yet: tilt down". The candidates already include −20°.
+- **Fill floor holes in `seen_room` (medium, 07e's idea in 3D):** on the floor plane, add a 5 cm
+  grid of triangles where the mesh has none, inside the walls, and only where some camera's
+  free-space ray passed just above (so not under furniture). Put it in its own `floor_fill` group,
+  coloured by the nearest seen floor, so it reads as a guess.
+- **Keep the low-angle floor readings (experiment):** libfreenect2 drops weak infrared returns
+  (its depth processor's amplitude thresholds, and the edge-aware filter). A floor seen at
+  15–30° returns weakly. Lower thresholds keep more far floor, at more noise; measure on the
+  sensor before trusting it.
+
+**Recommended order (the user's call, deferred 2026-11-03 until the tripod arrives):** the floor
+warning first, so scans don't silently skip the floor, then the floor fill for leftover holes.
+
+Not worth it: guessing the floor from furniture feet or wall bottoms. The ceiling and the walls
+already give the height (D28); the problem is coverage, not height.
