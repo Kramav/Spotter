@@ -68,7 +68,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Then D30: 13c/13d save a rescue folder when the Kinect is lost, and 13e (13d + auto-save after every placed scan) is our most advanced scanner, the one to use for real rooms; both synthetic-tested, not yet run on the sensor. Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Then D30: 13c/13d save a rescue folder when the Kinect is lost, and 13e (13d + auto-save after every placed scan) is our most advanced scanner, the one to use for real rooms; both synthetic-tested, not yet run on the sensor. Known problem, fix soon: every picture, 3D view and room scan is mirrored left-right (Housekeeping). Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
 
 ## Roadmap
 
@@ -298,6 +298,19 @@ example, each building on the one before. Numbers are the planned example folder
 
 ### Housekeeping
 
+- [ ] **FIX SOON: everything is mirrored left-right (found 2026-11-04; the user: "very important
+      for room scans", left as is for that day's demos).** The Kinect sends mirror-image colour and
+      depth (like a selfie camera), and libfreenect2's `getPointXYZ` keeps the mirror in 3D
+      (`x = (c + 0.5 - cx) / fx * z` on the mirrored column, registration.cpp:356). No example
+      flips it, so every picture, 3D view, radar, saved scan, `.obj` and `points.ply` is the
+      mirror image of the real room. Sizes and distances are right; only left/right is swapped
+      (13e's next-shot "left/right" advice may be backwards too). Planned fix, per file, right after
+      `registration.apply` (which needs the raw frames): `cv::flip(…, 1)` the colour, `undistorted`,
+      `registered` and `bigdepth` pictures; reverse `colourIndex` per row and remap its column to
+      1919 − column; replace `getPointXYZ` with the pinhole formula using `cx' = 512 − cx` (colour
+      camera: `1920 − cx`). Do the demos, 13e and 13z together, and mark the new folders (room.txt
+      format 2, plus a line in exported `.obj`s) so 13z and Demo 4 can mirror older rooms on load
+      (points x → −x, turns R → S R S with S = diag(−1, 1, 1)). Log it as a D-entry.
 - [ ] **libusbK blue screen (D25, the user chose: document only for now).** If it happens again:
       read `C:\Windows\MEMORY.DMP` with WinDbg (`!analyze -v`), stop or uninstall Microsoft's
       Kinect runtime (it runs beside libusbK), then consider UsbDk (D10's alternative).
