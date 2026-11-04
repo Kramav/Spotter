@@ -114,6 +114,8 @@ How each example works, and what it adds to the one before, is drawn in
 - A **Kinect v2** (the Xbox One Kinect) plus the **Kinect Adapter for Windows**, which provides
   power and the USB connection.
 - A **USB 3.0** port. These are often blue, or marked "SS". USB 2.0 will not work.
+- For room scans (example 13): a **camera tripod with a ball head**. Without one the floor is
+  barely scanned. See [A stand for room scans](#a-stand-for-room-scans).
 
 **Software** (all free)
 - [Git](https://git-scm.com/download/win), to download this repository.
@@ -281,9 +283,10 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 2. **Nobody in view.** The model is a colour capture of the room (privacy), and people moving
    between scans smear it.
 3. **Pick 4–8 spots** around the room. The Kinect stays plugged into the PC, so the cable decides
-   how far you can go. At each spot it must stand **still** on something steady for about
-   2 seconds: a chair, a box, a shelf, or the floor. On the floor, tilt it up a little so the
-   ceiling is in view: the model is levelled by the floor or the ceiling.
+   how far you can go. At each spot it must stand **still** for about 2 seconds, best on a
+   tripod (see [A stand for room scans](#a-stand-for-room-scans)), otherwise on a chair, a box or a shelf.
+   Take some scans **tilted down** for the floor and some **tilted up** for the ceiling. Level
+   scans miss both.
 4. **Build and start it** from the x64 Native Tools Command Prompt:
 
        cd /d E:\Spotter\exercises\cpp
@@ -344,8 +347,52 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 | Every scan is refused as "too dark" | Lights on. The colour camera needs light; check nothing covers the Kinect's lenses |
 | Double walls in the saved model | One scan was placed slightly wrong. Rescan: watch the viewer with C on and press U as soon as a scan shows as a copy |
 | "nothing level found" in the export | No scan saw the floor or ceiling well. Tilt the Kinect so some scans include them |
+| No floor in `seen_room` (holes underfoot) | The scans were level or tilted up. Rescan with the Kinect 30–45° down, ideally on a tripod: see [A stand for room scans](#a-stand-for-room-scans). `clean_floor` is still drawn, as a guess |
 | Export is slow or the file is huge | Set `VoxelMeters` to 0.04 at the top of `13_Kinect_Room_Scan/main.cpp` and rebuild |
 | The room drifts: the last scan doesn't meet the first | Small errors add up over many scans. Scan in a loop with plenty of overlap; see experiment 5 in the file |
+
+### A stand for room scans
+
+**Why the floor goes missing.** The Kinect sees 30° above and 30° below where it points. Where
+it first sees the floor, held 1 m up:
+
+| Kinect pointing | Floor first seen | Light hits the floor at |
+|---|---|---|
+| 14° up (the 2026-11-03 flat scan) | 3.5 m away | 16°, a weak return and few readings |
+| Level | 1.7 m away | 30° |
+| 30° down | 0.6 m away | 60°, a strong return |
+| 45° down | at its feet | 75° |
+
+Straight down isn't needed. From 1–1.5 m high, **30–45° down** is enough, and you keep the
+walls in view for matching. Software can tidy a floor it saw badly, but it can't measure a floor
+it never saw.
+
+**What to buy:** a camera tripod with a **ball head**. The Kinect v2 (Xbox One Kinect) has a
+standard **1/4"-20 tripod socket** under its base; check yours before buying. Look for:
+- a ball head with a **drop notch**: the slot that lets the camera tip 90°, so steep tilts hold
+  firmly;
+- a load rating of **3 kg or more**. The Kinect weighs 1–1.4 kg (sources differ), and tipping it
+  forward strains the head more than its weight suggests;
+- working height up to about **1.5 m**, with a **centre-column hook** to hang a bag on for
+  steadiness.
+
+Examples (prices change, so check before buying):
+- [K&F Concept 64"/163 cm aluminium travel tripod](https://www.amazon.com/Lightweight-Capacity-Cellphone-Smartphone-Streaming/dp/B0B1HYVVTV):
+  36 mm ball head rated 8 kg. Plenty for the Kinect.
+- [K&F Concept 90"/230 cm overhead tripod](https://www.amazon.com/CONCEPT-Horizontal-Overhead-Camera-Tripod/dp/B0C7BX47VW):
+  its centre column swings horizontal, for true straight-down shots. Only needed for floor detail
+  (rugs, tiles). Keep the legs out of view.
+
+**Mounting:**
+- Screw the head's quick-release plate into the Kinect's base.
+- Point a leg forward, under the direction the Kinect faces, so the weight sits over a leg when
+  it's tilted.
+- Route the cable down a leg, so a tug doesn't pull the tripod over.
+
+**Until it arrives:**
+- **Tilt the Kinect down on its own hinge.** Its body tilts on its base by hand.
+- **For more tilt,** set it on a table or shelf edge and wedge a book under the back of the base.
+- **Each scan must stand still for 2 s,** so don't hand-hold it.
 
 The examples that build up to this one, one idea each: 09b (one view as a mesh), 09c (the clean
 model), 10 (two views by hand), 11 (ICP), 11b (features). Their flowcharts are in
