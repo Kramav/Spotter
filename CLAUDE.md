@@ -57,7 +57,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. Planned 2026-11-04 (not started): K in 13c/13d saves a scan folder (raw points `.ply` + every scan's data), 13z rebuilds rooms from those folders, 14 = textured room; the later examples shift up one (15 objects in the map, 16 visual odometry, 17 live mapping).
 
 ## Roadmap
 
@@ -226,18 +226,64 @@ example, each building on the one before. Numbers are the planned example folder
       `far_landmarks`), which pin later scans' position and turn. Synthetic plain hallway with a
       12 m end wall: 13c refuses every scan; 13d places a sideways step 34 mm off and a 2 m walk in
       33 mm off (via 95 landmarks, median 12 cm depth error). Not yet run on the sensor.
+- [ ] **13c/13d: K keeps the scans** (planned 2026-11-04, the user's ask; not started). The `.obj`
+      loses colour and detail: one averaged colour per 2 cm vertex, mixed across every scan that saw
+      the spot, and no texture. And the scans that could rebuild it are gone on quit. K (when idle)
+      asks in the console for a folder (Enter = the `SaveFolder` setting, default `room_scans\`
+      where it runs) and a name (Enter = `room_<date>_<time>`). An existing name asks before
+      overwriting. Then it writes one new folder:
+      - `room.txt`: format version, program (13c/13d), date, scan count, the settings that matter,
+        both cameras' libfreenect2 parameters, the first camera turn (Demo 4).
+      - `points.ply` (**A**): every placed scan's own points and colours, no averaging, in the same
+        levelled coordinates as E's `.obj`. Binary PLY (about 5M points for 34 scans).
+      - `scan_001\` … (**B**): `cloud.bin` (the 60-frame average as float x, y, z per depth pixel),
+        `colour.png` (registered, 512×424), `colour_full.png` (1920×1080, for 14),
+        `features.yml` (keypoints + descriptors; 13d adds its far ones), and `pose.txt` (turn,
+        shift, excluded, suspicious, stats). 13d also writes `landmarks.txt` at the room level.
+      - A `.gitignore` containing `*`, so the folder can never be committed, wherever it is.
+      - About 8 MB per scan (34 scans ≈ 270 MB). The windows freeze while you type in the console.
+      - **Privacy, needs the user's OK before building:** this saves colour frames, which the
+        Conventions rule forbids. Proposed: allowed for empty-room scans only, in self-gitignored
+        folders, never uploaded, never read into Claude's context (scripts print summaries only),
+        deleted when no longer needed. Record as D29 and amend the Conventions line.
+- [ ] **13z Room Rebuild** (planned 2026-11-04; not started). No Kinect needed. It rebuilds rooms
+      from K's folders.
+      1. Finds every folder holding a `room.txt` under `SearchFolder` (or a path given as an
+         argument or at the prompt), and lists them: name, program, date, scans (excluded), size.
+      2. You pick rooms (`2`, `1,3`, `all`), then for each one which scans to load (Enter = all,
+         or `1-12,15`). Only those are read, which keeps memory low.
+      3. For each room, choose what to do: **view** (13c's "room so far" viewer: C colour by scan,
+         click to select, X exclude or include), **build `.obj`** (13c's E: TSDF + surface net +
+         clean model, plus `far_landmarks` for a 13d room), **build `.ply`**, or both builds.
+         Builds run without a window, so several rooms can be done in one go.
+      4. Outputs go into the room's own folder, with the `# first camera turn:` line, so Demo 4
+         works. Settings at the top (`VoxelMeters`, `MaxVoxels`) can be finer than live, since
+         time doesn't matter offline.
+      - A copy of 13c's export and viewer code, minus the Kinect and placing (one file per example).
+        Each room keeps its own coordinates.
+      - Open questions for the user: (a) should 13z also merge folders from separate sessions of
+        the same space (placing one session against another, with 13c's features + ICP)? (b) should
+        13c/13d auto-save after every placed scan (the blue screen, D25), or K only? (c) should 13z
+        offer P (re-place a scan) using the saved features?
+- [ ] **14 Textured room** (planned 2026-11-04, after 13z; the user said not to start it yet).
+      Option C. A 13z folder in; `.obj` + `.mtl` + a texture atlas `.png` out. Each triangle takes
+      its colour from the scan that saw it most head-on and nearest (normal vs view direction,
+      distance), from the full 1920×1080 pictures via 13d's colour camera model, checked against
+      that scan's depth so hidden surfaces aren't painted. Then seams blended and exposure evened
+      between scans. About 4× sharper colour than the registered 512×424 picture.
 
 ### Stage D — the goal
 
-- [ ] **14 Objects in the map:** the tracked objects (05/06) placed in the room model from 13.
+- [ ] **15 Objects in the map:** the tracked objects (05/06) placed in the room model from 13.
       A first cut for people exists: presentation Demo 4 (D22) puts depth blobs into 13's room,
       located from the camera turn 13 saves. Still to do: YOLO names and 05's tracks instead of blobs.
+      (Was 14; renumbered 2026-11-04 when the textured room took 14.)
 
 ### Stage E — moving camera (later, optional; docs/ideas.md, "Motion compensation")
 
-- [ ] **15 Visual odometry:** the camera's own motion, frame to frame (11's ICP on consecutive
-      frames).
-- [ ] **16 Live mapping:** a coarse CPU KinectFusion, or decide to adopt RTAB-Map instead.
+- [ ] **16 Visual odometry:** the camera's own motion, frame to frame (11's ICP on consecutive
+      frames). (Was 15.)
+- [ ] **17 Live mapping:** a coarse CPU KinectFusion, or decide to adopt RTAB-Map instead. (Was 16.)
 
 ### Housekeeping
 

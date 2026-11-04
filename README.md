@@ -61,7 +61,7 @@ flowchart TB
     R -->|depth + colour| PC
     Y -.->|person boxes| BG
 
-    MAP["3D map of the space<br/>with the tracked objects in it (14)"]
+    MAP["3D map of the space<br/>with the tracked objects in it (15)"]
     X --> MAP
     V13 --> MAP
 

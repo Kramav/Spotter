@@ -309,7 +309,8 @@ than live. Feasible, and it fits the plan: stage C already merges views offline.
 2. **Detect offline:** a program reads the capture folder, runs the big model and writes the
    detections to a file.
 3. **Vote in 3D:** detections become 3D points, and labels are merged across views. This feeds
-   14, objects in the map.
+   15, objects in the map (was 14 until 2026-11-04). 13c/13d's K folders (planned) already hold
+   the frames, calibration and poses for steps 1–2, for room scans.
 
 ## Detection misses: fallbacks
 
