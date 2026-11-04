@@ -352,6 +352,71 @@ warning first, so scans don't silently skip the floor, then the floor fill for l
 Not worth it: guessing the floor from furniture feet or wall bottoms. The ceiling and the walls
 already give the height (D28); the problem is coverage, not height.
 
+**Update 2026-11-04:** presentation Demo 6 (D31) fills the floor's holes for the screen only: its
+outline, cut at the walls, marked in blue. It doesn't use free-space rays, so it also fills under
+furniture, where the floor is real but hidden. The `floor_fill` group in the `.obj` is still open.
+
+## Hole filling (Demo 6): what could come next
+
+*Added 2026-11-04, from Demo 6 (D31). Not scheduled.*
+- **Doorways from every scan's line of sight.** Demo 6 tells an opening from a hole by the first
+  camera's line of sight only, since the `.obj` keeps no other camera spots. 13e's folders keep every
+  scan's pose. Read from one, every scan's rays would mark the openings, and free space (a ray
+  passing through a cell means nothing is there) would stop doorways being filled shut. It pays off
+  for rooms with several doors.
+- **Shapes by class, not only planes.** YOLO names an object (chair, couch, table), and a simple
+  shape per class fills its unseen back: a box, a cylinder, a slab with four legs. It pays off with
+  08b's back guesses (Mirror / Flat), and with 15 (objects in the map).
+- **14's texture instead of inpaint.** Once 14 picks each triangle's sharpest scan, the fill's colour
+  could come from the nearest textured surface, not smeared edges.
+- **Write the fill into the `.obj`** (a `filled_holes` group), so Blender shows it too. Then do the
+  same in 13z.
+- **Dark things from several spots (a visual hull).** Demo 6 (D32) turns an unexplained shadow on a
+  wall into a flat purple cut-out, from the first camera only. From a 13e folder every scan's pose
+  is known. Each scan's shadow of the same dark chair is a cone from that camera, and where the
+  cones cross is the chair's real 3D shape (shape from silhouettes). That pays off for black
+  office chairs, TVs and glass, which the Kinect reads as nothing.
+- **A chair under a table:** when the table top hides the chair's seat, its legs pass as table legs
+  (D32). Using several scans' views, or YOLO's "chair" box, would tell them apart.
+
+## Room layouts: simple vs complex architecture (the user's call, 2026-11-04)
+
+*Not scheduled.* Demo 6 assumes a **simple layout** (D32): walls exactly upright, though any shape
+along the floor (straight, bent or curved), and floors and table tops exactly level. 13e's export
+levels the room first.
+- **A complex mode would allow:** planes facing any way (PCA in 3D instead of 2D), sloped ceilings
+  (attics), ramps, leaning walls, split levels and stairs.
+- **When it pays off:** rooms under a roof, stairwells, odd buildings. In a normal room, the simple
+  mode is more robust, because it can't be fooled into a tilted wall by noisy normals.
+- **How to switch:** a `Layout` setting (`Simple` / `Complex`). Complex swaps the stacks-from-above
+  wall finder for 3D plane RANSAC + PCA, and the height histogram for plane RANSAC on up-ish
+  normals. The seen slab, inpaint, legs and shadows stay the same.
+
+## Normalising the points on known planes (the user's ask, 2026-11-04)
+
+*Not scheduled.* Once a surface is known to be one flat wall, its points shouldn't scatter. They
+should lie on the plane, evenly spread, without needing a long averaging time.
+- **Why:** today the noise goes away by averaging frames (07: 15 frames take ±1.2 mm to ±0.3 mm,
+  and 13e averages 30 frames per scan). That's time per scan.
+- **The idea:** a plane fitted to N points of one frame already averages over N. Its error is
+  about the noise / √N, so thousands of points pin it far better than 30 frames pin any one pixel.
+- **How to build it** (each piece already exists):
+  1. Find the planes, or Demo 6's wall paths for bent and curved walls (D32).
+  2. Keep each point's distance from its plane. Inside the noise band (about 3× the Kinect's
+     noise at that distance, which grows with distance squared), project the point onto the plane.
+     Outside it, leave the point alone: a light switch, a skirting board or a picture frame is real
+     detail, not noise.
+  3. Resample onto a uniform grid in the plane (one point per cell, colour averaged per cell, as
+     Demo 6's grids), so the density no longer depends on how near the camera stood or how many
+     scans overlapped.
+- **When it pays off:**
+  - 13e scans with fewer frames each (faster scanning, the same flat walls);
+  - cleaner merged meshes in 13z (a wall seen from 5 spots is one thin sheet, not a 2 cm thick
+    cloud);
+  - Demo 6's walls drawn as even sheets.
+- **Watch out for:** bent or doubled walls from scan drift (snap per strip or path column, not to
+  one plane), and corners (a point belongs to the nearest plane only).
+
 ## Room scans kept by K: what 13z could do next
 
 *Added 2026-11-04, from the K / 13z plan (D29). Not scheduled.*

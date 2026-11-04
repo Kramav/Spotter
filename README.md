@@ -213,8 +213,9 @@ Then work through the other examples in this order:
 | 13e | `13e_Kinect_Room_Scan_Autosave` | **Our most advanced scanner: use this one for a real scan.** 13d, plus every scan saved to disk the moment it's placed (the folder is asked at the start), so a crash, a blue screen or an unplugged Kinect costs at most the scan in progress |
 | 13z | `13z_Kinect_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves, or that 13c/13d's **K** key keeps. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
-**Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
-of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
+**Showing it at an exhibition:** six fullscreen demos (you in 3D, an invisibility cloak, a radar
+of the stand, the scanned room with visitors live inside it, "how tall are you", and the scanned
+room with its holes filled in by software, marked as guesses) are in
 [exercises/cpp/presentation/](exercises/cpp/presentation/README.md), with a set-up checklist.
 They build with the examples.
 
