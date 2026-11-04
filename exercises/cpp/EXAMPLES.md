@@ -33,7 +33,7 @@ flowchart LR
     E09 -.->|RANSAC, turned upright| E06b
     E05 -.->|Kalman filter, matching| E06c
 
-    E13 --> E13b["13b Room Scan HQ"]
+    E13 --> E13b["13b Room Scan HQ"] --> E13c["13c Room Scan Assist"] --> E13d["13d Room Scan Far"]
     E13 --> E14["14 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
@@ -558,6 +558,61 @@ flowchart LR
 ```
 
 **What to compare:** the "N features" in the console, against 13 in the same spot and light.
+
+## 13c Room Scan Assist
+
+Starts from 13b. Help for long scans: what the next scan will be placed by (live), where to go
+next, bad scans flagged and removable, and the same speed at scan 30 as at scan 3.
+
+```mermaid
+flowchart LR
+    S["SPACE: 60 frames,<br/>features (13b)"] --> V["Vote: which 4 earlier scans<br/>share most features"]
+    V --> F["Features + RANSAC<br/>against those 4"]
+    F --> I["ICP: only what this view sees,<br/>1 cm thinned; weak below 5%"]
+    I --> C["Second opinion: ICP against<br/>all but the matched scan"]
+    C -->|"agrees"| ALL["The room so far"]
+    C -->|"disagrees"| RED["Placed, flagged red"]
+    RED --> ALL
+    ALL --> N["Next shot: turns from each spot,<br/>most new, half known"]
+    L["Live frame, twice a second"] --> A["Anchors: features matching<br/>the room (green) + counter"]
+    ALL --> A
+    ALL -->|"click, X / P"| X["Exclude or place again"]
+
+    classDef new stroke-width:3px
+    class V,I,C,RED,N,L,A,X new
+```
+
+**What to compare:** walk away from the scanned part watching the anchor counter; where it turns
+red is how far you can go from there.
+
+## 13d Room Scan Far
+
+Starts from 13c. Details too far for depth still give a direction: they help place scans, and
+seen from two spots they become landmarks in the room.
+
+```mermaid
+flowchart LR
+    C["Full colour picture"] --> M["Where depth reads nothing<br/>(bigdepth)"]
+    M --> O["ORB there: far features,<br/>each a ray"]
+    K["Pixels with depth"] --> F["Colour camera model<br/>fitted per scan"]
+    F --> O
+    O --> V["Far matches vote in RANSAC<br/>(rays must meet far away)"]
+    N["Near features (13c)"] --> V
+    V -->|"under 3 near"| R["Turn from far rays,<br/>ICP with a wide gate"]
+    V -->|"3+ near"| I["Kabsch + ICP (13c)"]
+    L["Landmarks"] -->|"rays to them"| P["Position + turn<br/>from landmark rays"]
+    P --> R
+    R --> T["Triangulate new landmarks<br/>(2+ degrees apart)"]
+    I --> T
+    T --> L
+    L --> OBJ["far_landmarks in the .obj"]
+
+    classDef new stroke-width:3px
+    class M,O,F,V,R,L,P,T,OBJ new
+```
+
+**What to compare:** a hallway scan in 13c (refused) and in 13d; then the far_landmarks group in
+Blender against where the far doorway really is.
 
 ## Presentation demos
 

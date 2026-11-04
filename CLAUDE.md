@@ -54,7 +54,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet.
 
 ## Roadmap
 
@@ -207,7 +207,22 @@ example, each building on the one before. Numbers are the planned example folder
       threshold of 7 (the user prefers quality over time for room scans), plus more frames,
       features, RANSAC tries, ICP points and rounds, and 2 cm cubes. Same dim view on the sensor:
       13 found 48–73 features (refused), 13b 1225–1271, with a second scan placed 0.5 mm off.
-      The user's choice for real scans; not yet tried with real moves.
+      Used for a real 34-scan room: slowed down from scan 28, scan 34 came out misplaced, a
+      hallway was dropped, and the PC blue-screened once (D25). Hence 13c and 13d.
+- [x] **13c Room Scan Assist:** built 2026-11-03 (D26). Live green anchors + counter (replaces the
+      0.5–1 m rule), next-shot advice, click to select, X exclude, P re-place, red suspicious flag
+      (incl. a second-opinion ICP against all but the matched scan), shortlist + cropped/thinned
+      ICP on a background thread. Synthetic 30-scan walk: worst 2.9 mm / 0.18°, about 3 s per scan
+      at any count (13b: 3–45 s and 12+ cm drift, from ICP's 2% weak cut-off; 13c uses 5%).
+      Live anchors not yet run on the sensor. The user's choice for real scans.
+      Export fixed 2026-11-03 (D28): up from the biggest level plane, boxes capped at 3 m (13b's
+      flat export came out 28° tilted inside one flat-sized box). 13, 13b and 13d have the same fix.
+- [x] **13d Room Scan Far:** built 2026-11-03 (D27). 13c plus features with no depth (the full
+      colour picture, masked by bigdepth) as rays: they vote in RANSAC, give the turn when near
+      matches are few (then ICP with a 0.5 m gate), and triangulate into far landmarks (exported as
+      `far_landmarks`), which pin later scans' position and turn. Synthetic plain hallway with a
+      12 m end wall: 13c refuses every scan; 13d places a sideways step 34 mm off and a 2 m walk in
+      33 mm off (via 95 landmarks, median 12 cm depth error). Not yet run on the sensor.
 
 ### Stage D — the goal
 
@@ -223,6 +238,9 @@ example, each building on the one before. Numbers are the planned example folder
 
 ### Housekeeping
 
+- [ ] **libusbK blue screen (D25, the user chose: document only for now).** If it happens again:
+      read `C:\Windows\MEMORY.DMP` with WinDbg (`!analyze -v`), stop or uninstall Microsoft's
+      Kinect runtime (it runs beside libusbK), then consider UsbDk (D10's alternative).
 - [ ] Decide whether to retire `exercises/csharp/`. Then the Microsoft Kinect SDK (KinectService)
       can be uninstalled from the dev PC.
 

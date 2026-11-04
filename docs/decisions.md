@@ -293,3 +293,109 @@ for 80M of them (about 1.9 GB: fine on the PC, not on a Pi). In the synthetic ro
 Demo 4 reads it too.
 **Why a new example, not a change to 13:** the user asked for an iteration, and 13 stays the
 quicker one to learn from.
+
+### D25 — 2026-11-03 — A blue screen while scanning: written up, driver unchanged (the user's call)
+**What happened:** at 16:16 during a long 13b scan (30+ scans), the PC blue-screened with bugcheck
+**0xB8 ATTEMPTED_SWITCH_FROM_DPC**: a kernel driver tried to wait while running at a raised
+interrupt level. Only a driver can do that; no program of ours can. The event log has it as
+Kernel-Power 41 and WER 1001. A full dump is at `C:\Windows\MEMORY.DMP` (4.8 GB). No kernel
+debugger is installed, so the driver isn't confirmed.
+**What's on this PC (read from Windows, 2026-11-03):**
+- `libusbK.sys` **3.0.7.0**, installed by Zadig on 2026-10-25 (D10). That's libusbK's long-standing
+  build.
+- The USB controllers are **AMD USB 3.10 eXtensible Host Controllers**. libfreenect2's README warns
+  that it's picky about controllers.
+- **Microsoft's Kinect runtime is still running** (`KinectService.exe`, `KinectMonitor.exe`), and
+  Windows still lists a Microsoft "WDF KinectSensor Interface 0" under the Kinect, whose parent is
+  on libusbK. So two driver stacks are on one device.
+
+**Options, in the order to try them, if it happens again:**
+1. Install WinDbg and run `!analyze -v` on `MEMORY.DMP`. It names the faulting driver.
+2. Stop, then uninstall, Microsoft's Kinect runtime (already a Housekeeping item; the C# track is
+   frozen).
+3. Switch to **UsbDk**, D10's alternative. libfreenect2 tries it first. Roll libusbK back in
+   Device Manager first: never both.
+4. Turn off USB selective suspend (Power Options), and use a rear USB port (straight to the chipset).
+
+**Decided:** the user chose to document only, for now. D10 stands.
+**Related, but not the blue screen:** heavy CPU work can starve libfreenect2's USB and depth
+threads, which shows up as lost packets and libusb errors, not a blue screen. 13c places scans on a
+background thread with `cv::setNumThreads(cores - 2)`. Scans live only in memory (D21), so a crash
+loses them: export (E) now and then during a long scan.
+
+### D26 — 2026-11-03 — 13c: scan assist, constant speed, and an ICP drift fix that 13 and 13b need too
+**What:** after a real 34-scan room with 13b, the user asked for a recommended next shot, a view of
+which features matter for the next scan, a way to remove bad scans (scan 34 was misplaced), and a
+fix for the slowdown from about scan 28.
+**Why a shortlist vote, a cropped and thinned ICP target, and a background thread:** 13b matched
+every new scan against every earlier one in full, and ran ICP against all their points (about
+35k each), on the main loop. Now a single Hamming match against all descriptors stacked picks 4
+candidates, and ICP gets only what the rough pose can see, one point per 1 cm cube. The work
+follows the room, not the number of scans.
+**The slowdown was mostly an ICP bug, found while timing:** on a synthetic 30-scan walk, scans
+7–11 took 12–18 s and ended 12–21 cm off. Traced round by round: the features' pose was 2 mm off,
+then each ICP round slid it 2.3 mm further along a direction pinned by only 2.4–2.7% of the pairs
+(the bent normals where wall meets floor). That's just above the 2% cut-off from D21, so the tiny,
+constant bias was amplified, and ICP never settled (50 rounds). Raised to 5% (`WeakShare`): worst
+2.9 mm / 0.18° over all 30, about 3 s each. 13 and 13b keep 2% (their files are unchanged), and
+are open to the same drift.
+**Why the live anchors, not a distance rule:** a scan is placed when 20+ features match an earlier
+scan and agree, plus 25% overlap for ICP. Distance doesn't matter; what's shared does. ORB stops
+matching beyond about 30–45° of viewing angle or 3× distance. The green dots and counter show the
+real condition while aiming.
+**Why the second opinion:** a scan that matches a misplaced earlier scan inherits its error, and
+ICP agrees, because that scan's points are right there. A quick ICP against every other scan,
+with a 30 cm gate, catches it (synthetic: "the rest of the room disagrees by 15.0 cm"). It costs
+about 1 s per scan, with no false alarms on 30 good scans.
+**Why exclude, not delete:** it's reversible, and excluding scan 34 doesn't move scan 35 (poses
+are in room coordinates). P places a scan again, against all the others.
+**Why the next shot only turns from existing spots:** a suggested new position could be inside
+furniture. It needs a free-space check first (`ponytail:` note in the code).
+
+### D27 — 2026-11-03 — 13d: far features as rays, and landmarks for distance
+**What:** the user's hallway kept getting dropped. Its walls are plain, and the doorway at the end is
+past the depth range, so 13c had nothing to match. The user asked whether features outside the
+point cloud could still help place scans, "as an out-of-bounds metric".
+**Answer, built:** yes. A detail without depth still gives a direction.
+- **The mask and model:** 13d runs ORB on the full colour picture where `bigdepth` reads nothing,
+  inside the depth camera's field of view. Each feature becomes a ray. The colour camera's model
+  (and its 5 cm offset) is fitted from each scan's own pixels that do have depth, so no hand
+  calibration and no extra library are needed (calib3d is still not built).
+- **Voting:** far matches vote in RANSAC. Two rays agree if they meet far away (over 4 m, within 0.5°).
+- **Landmarks:** seen from two spots at least 2° apart, they're triangulated into landmarks, and
+  later scans' rays to those pin position and turn together.
+**The limit, measured:** rays carry no distance. And a far point isn't at infinity: stepping 0.6 m
+sideways turns a 12 m doorway by 2.9°, which rays alone can't tell from a 2.9° turn. The first
+version trusted the rays' turn and ended 2.9° and 0.6 m off. So, after a far-ray placement:
+- **ICP starts with a 0.5 m gate.** In a hallway the walls, floor and ceiling pin sideways, height
+  and every turn.
+- **Landmarks decide the distance along it.** Synthetic hallway: 34 mm after a sideways step, and
+  33 mm after a 2 m walk in, both of which 13c refuses.
+- **With no landmarks yet, the distance stays unknown,** and the scan is flagged red. The guide
+  says to step 0.5 m sideways at a hallway's start.
+
+**Why landmarks in the .obj:** they place far things (the doorway) in the room model, about ±12 cm
+in depth at 12 m from a 0.6 m step. That's good enough to place, not to model.
+**Why not essential matrices or PnP:** they need `calib3d`, which isn't built. The two 3 × 3 least
+squares (Wahba, and lines meeting at a point) cover this case in about 40 readable lines.
+
+### D28 — 2026-11-03 — Room export: "up" from the biggest level plane, and furniture boxes capped
+**What:** the user's 34-scan flat (13b) exported a model nobody could inspect. Read headlessly, its
+merged mesh was fine (the ceiling flat to ±5 cm over 8 m), but the clean model was wrong:
+- **"Up" was 28° off.** Up came from the *farthest* up-facing plane within 25° of the first
+  camera's up: a slanted piece, 2.55 m away. The 29 m² ceiling was ignored, the room came out 4.4 m
+  high, the walls were split into 21 fragments, and the tilted walls became "furniture".
+- **One box covered the whole flat (8.3 × 9 × 4.4 m)**, because boxes that touch were joined, so
+  they chained through the flat. Every viewer showed only that box.
+
+**Fix (13, 13b, 13c, 13d):**
+- Up comes from the level plane with the most points, floor or ceiling.
+- The pieces are then sorted again against that up, within `LevelDegrees` (10°), so a ramp is
+  neither floor nor wall.
+- A box wider than `MaxBlockMeters` (3 m) is dropped, and touching boxes join only while they stay
+  under that size.
+- Synthetic test: the room plus an 18° ramp. Before the fix, the floor came out at −1.415 m (the
+  ramp) and the room tilted. After it, the floor is at −0.998 m, the walls are exact and the ramp
+  has its own box.
+
+The flat's existing file can't be rebuilt, because scans live only in memory. A levelled copy with only the mesh was made from it instead.
