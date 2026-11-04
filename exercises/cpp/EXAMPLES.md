@@ -36,8 +36,10 @@ flowchart LR
     E05 -.->|Kalman filter, matching| E06c
 
     E13 --> E13b["13b Room Scan HQ"] --> E13c["13c Room Scan Assist"] --> E13d["13d Room Scan Far"]
+    E13d --> E13e["13e Room Scan Autosave<br/>(most advanced)"]
     E13c --> E13z["13z Room Rebuild"] --> E14["14 Textured Room"]
     E13d -.->|far landmarks| E13z
+    E13e -.->|saved folders| E13z
     E13 --> E15["15 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
@@ -618,14 +620,56 @@ flowchart LR
 **What to compare:** a hallway scan in 13c (refused) and in 13d; then the far_landmarks group in
 Blender against where the far doorway really is.
 
-## 13z Room Rebuild
-
-Starts from 13c's export and viewer, with no Kinect. In 13c and 13d, **K** keeps the scans in a
-folder; 13z reads such folders back, so a room can be looked at and rebuilt any time later.
+Added later (in 13c too): **the rescue.** After 10 seconds with no frame (the Kinect unplugged),
+the scans go to a `rescue_<time>` folder with no questions, before the Kinect is stopped.
 
 ```mermaid
 flowchart LR
-    SC["Scans in 13c / 13d"] -->|K| FO["A folder per room:<br/>points, pictures, poses,<br/>points.ply"]
+    W["Wait for a frame"] -->|"none for 10 s"| L["Kinect lost"]
+    L --> P["Wait for a scan<br/>still being placed"]
+    P --> K["K's folder, no questions:<br/>room_scans/rescue_time"]
+    K --> S["Only then stop the Kinect<br/>(may hang: scans are safe)"]
+
+    classDef new stroke-width:3px
+    class L,P,K,S new
+```
+
+## 13e Room Scan Autosave
+
+Starts from 13d. **Our most advanced scanner.** Every scan is saved the moment it's placed, so a
+crash, a blue screen or an unplugged Kinect costs at most the scan in progress. From here on,
+every multi-scan example has this and the rescue (D30).
+
+```mermaid
+flowchart LR
+    ASK["Folder + name,<br/>asked at the start"] --> RT["room.txt<br/>(finished 0)"]
+    SP["SPACE: scan, placed (13d)"] --> WS["scan_NNN folder written<br/>pose.txt last"]
+    WS --> RT
+    X["X / P"] --> PO["That scan's pose.txt<br/>replaced in one go"]
+    U["U"] --> RM["That scan's folder deleted"]
+    PO --> RT
+    RM --> RT
+    KQ["K, Q or Kinect lost"] --> FIN["points.ply + levelled turn<br/>(finished 1)"]
+    RT --> Z["13z reads it as it is"]
+    FIN --> Z
+
+    classDef new stroke-width:3px
+    class ASK,RT,WS,PO,RM,FIN new
+```
+
+**What to compare:** close the console window mid-scan (the hard way), then open the folder in
+13z: every placed scan is there.
+
+## 13z Room Rebuild
+
+Starts from 13c's export and viewer, with no Kinect. In 13c and 13d, **K** keeps the scans in a
+folder (and the rescue does, if the Kinect is lost); 13e writes the same folder as it scans. 13z
+reads such folders back, so a room can be looked at and rebuilt any time later.
+
+```mermaid
+flowchart LR
+    SC["Scans in 13c / 13d"] -->|K or the rescue| FO["A folder per room:<br/>points, pictures, poses,<br/>points.ply"]
+    SE["Scans in 13e"] -->|each as it's placed| FO
     FO --> FIND["Find saved rooms<br/>(room.txt), list them"]
     FIND --> PICK["Pick rooms, then<br/>which scans to load"]
     PICK --> LOAD["Read cloud, picture, pose<br/>(no placing: poses are saved)"]

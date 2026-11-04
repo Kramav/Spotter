@@ -362,7 +362,10 @@ already give the height (D28); the problem is coverage, not height.
 - **P in 13z: place a scan again, offline.** The saved features and points are enough to run 13c's
   `PlaceScan` without the Kinect, so a misplaced scan could be fixed after the fact. Needs 13c's
   feature and ICP code copied into 13z (about 400 lines).
-- **Auto-save after every placed scan.** Write just the new `scan_NNN` folder and rewrite
-  `room.txt` each time, so a blue screen (D25) loses at most one scan. It costs about 11 MB and a
-  fraction of a second per scan. It needs a folder chosen at the first scan, not at K.
+- ~~**Auto-save after every placed scan.**~~ Built 2026-11-04 as 13e (D30), with the folder asked
+  at start-up. Every multi-scan example has it from now on.
+- **Carry on scanning a saved room.** 13e could open an existing folder and keep adding scans to
+  it, placed against the saved ones: after a crash, or on another day (simpler than merging two
+  sessions, since the coordinates are shared). It needs the saved scans loaded back the way 13z
+  does, plus their features (`features.yml`) for placing.
 

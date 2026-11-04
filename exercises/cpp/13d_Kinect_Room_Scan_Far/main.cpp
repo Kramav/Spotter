@@ -36,6 +36,13 @@
 //  scan's own points and colours, what the viewer shows (E's .obj averages
 //  them). 13z rebuilds rooms from such folders later, without the Kinect.
 //
+//  Added later still: the rescue. If no frame comes for 10 seconds (the
+//  Kinect unplugged, its cable knocked out, or its USB stuck), the scans
+//  are kept in room_scans\rescue_<date>_<time> with no questions asked,
+//  before the program touches the Kinect again. Only a scan you were
+//  holding still for is lost. 13e goes further: every scan is saved the
+//  moment it is placed.
+//
 //  Window 1 (viewer): every scan placed in the room. C colours each scan
 //            differently. Circles + 4 arrows = where each camera stood:
 //            yellow = fine, red = suspicious, grey = excluded, white =
@@ -48,11 +55,11 @@
 //            Esc deselect      C colour by scan
 //            mouse drag / W A S D turn    wheel / + - zoom    R reset view    Q quit
 //
-//  Privacy: the scans stay in memory unless you press K. E writes
-//  room_scan_<time>.obj and K a folder of pictures and points: both are
-//  captures of the room in colour. *.obj, *.ply and room_scans/ are
-//  gitignored, and K puts a .gitignore in every folder it writes: never
-//  commit them. Scan with nobody in view.
+//  Privacy: the scans stay in memory unless you press K (or the rescue
+//  runs). E writes room_scan_<time>.obj and K a folder of pictures and
+//  points: both are captures of the room in colour. *.obj, *.ply and
+//  room_scans/ are gitignored, and K puts a .gitignore in every folder it
+//  writes: never commit them. Scan with nobody in view.
 // =====================================================================
 
 #include <algorithm>
@@ -1903,6 +1910,16 @@ std::filesystem::path AskWhere()
     }
 }
 
+// Added: where the rescue keeps the scans when the Kinect is lost. No questions: nobody may be at
+// the console. The seconds make the name new every time.
+std::filesystem::path RescueFolder()
+{
+    char name[40];
+    std::time_t now = std::time(nullptr);
+    std::strftime(name, sizeof name, "rescue_%Y-%m-%d_%H%M%S", std::localtime(&now));
+    return std::filesystem::absolute(std::filesystem::path(SaveFolder) / name);
+}
+
 // The folder K writes. Plain files, so 13z (and you) can read it without this program:
 //   .gitignore      "*": git never takes anything in this folder, wherever it is
 //   room.txt        what this is, both cameras' factory settings, and how scan 1's camera sat in the room
@@ -1915,13 +1932,14 @@ std::filesystem::path AskWhere()
 //                   pose.txt         where it sits in the room, excluded, suspicious, how it was placed
 //   landmarks.txt   13d: the far landmarks, in scan 1's camera coordinates, with their descriptors
 // The pictures are BMP: lossless, and the only format this OpenCV writes (vcpkg.json leaves out
-// its png and jpeg features). About 11 MB per scan.
+// its png and jpeg features). About 11 MB per scan. Given a folder (the rescue), it asks nothing.
 void KeepScans(const std::vector<Scan>& scans, const libfreenect2::Freenect2Device::IrCameraParams& ir,
-               const libfreenect2::Freenect2Device::ColorCameraParams& colour, const std::vector<Landmark>& landmarks)
+               const libfreenect2::Freenect2Device::ColorCameraParams& colour, const std::vector<Landmark>& landmarks,
+               std::filesystem::path where = {})
 {
     namespace fs = std::filesystem;
     if (scans.empty()) { std::printf("Nothing to keep yet: SPACE scans.\n"); return; }
-    fs::path where = AskWhere();
+    if (where.empty()) where = AskWhere();
     if (where.empty()) { std::printf("K cancelled: nothing written.\n"); return; }
     std::error_code error;
     fs::create_directories(where, error);
@@ -2138,6 +2156,7 @@ int main()
 
     libfreenect2::FrameMap frames;
     cv::Mat frame, display;
+    bool kinectLost = false;   // added: for the rescue
     while (true)
     {
         int key = cv::waitKey(1);
@@ -2176,7 +2195,16 @@ int main()
 
         if (!listener.waitForNewFrame(frames, 10 * 1000))
         {
-            std::printf("No frame for 10 seconds - giving up.\n");
+            // Added: unplugged, the cable knocked out, or the USB stuck. The rescue (after the loop) keeps the scans.
+            std::printf("No frame for 10 seconds: the Kinect is unplugged or stuck.\n");
+            if (!display.empty())
+            {
+                cv::putText(display, "KINECT LOST - keeping the scans (see the console)", cv::Point(10, 160),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(0, 0, 255), 2);
+                cv::imshow(camera, display);
+                cv::waitKey(1);
+            }
+            kinectLost = true;
             break;
         }
         libfreenect2::Frame* colorFrame = frames[libfreenect2::Frame::Color];
@@ -2467,6 +2495,25 @@ int main()
 
     if (placing.valid()) placing.wait();
     WaitForReaders();
+    // Added: the rescue. The scans are kept first, and only then is the Kinect stopped: stopping
+    // one that is gone may hang.
+    if (kinectLost)
+    {
+        Placement done = placing.valid() ? placing.get() : Placement();
+        if (done.placed && done.again < 0)   // a scan still being placed is kept too
+        {
+            scans.push_back(std::move(done.scan));
+            AddLandmarks(scans.back(), scans[done.matched], done.farPairs, landmarks);
+        }
+        if (scans.empty()) std::printf("No scans yet: nothing to rescue.\n");
+        else
+        {
+            std::printf("\n=== Rescue: keeping all %zu scans ===\n", scans.size());
+            KeepScans(scans, ir, colourParams, landmarks, RescueFolder());
+            std::printf("Plug the Kinect back in and start again. 13z rebuilds the room from that folder.\n"
+                        "Closing the Kinect now. If this hangs, close the window: the scans are safe.\n");
+        }
+    }
     device->stop();
     device->close();
     cv::destroyAllWindows();
@@ -2520,3 +2567,7 @@ int main()
 //  Added (K, as in 13c):
 // 20. Scan a hallway, press K, and open the folder's points.ply: the far doorway has no points
 //     (no depth), but 13z's .obj of the same folder still has its far_landmarks boxes.
+//
+//  Added (the rescue, as in 13c):
+// 21. After a few scans, pull the Kinect's USB cable. 10 seconds later the console names a
+//     rescue_<time> folder: open it in 13z. Is anything missing?
