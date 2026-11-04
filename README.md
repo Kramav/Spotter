@@ -200,7 +200,9 @@ Then work through the other examples in this order:
 | 11 | `11_Kinect_ICP` | ICP lines the two captures up by itself: pair each point with its nearest neighbour, fit, repeat. Needs a roughly right start |
 | 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
 | 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
-| 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere. **Use this one for a real scan** |
+| 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere |
+| 13c | `13c_Kinect_Room_Scan_Assist` | 13b with help: live green "anchors" show what the next scan will be placed by, a suggested next shot, suspicious scans flagged red, click a scan to exclude (X) or re-place (P) it, and no slowdown at 30+ scans. **Use this one for a real scan** |
+| 13d | `13d_Kinect_Room_Scan_Far` | 13c plus details too far for depth (a hallway's far doorway): they still give a direction, which helps place scans, and seen from two spots they become "far landmarks" in the model. **Use this one where there are long hallways or big rooms** |
 
 **Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
@@ -223,6 +225,7 @@ Change a setting and rebuild with `cmake --build --preset default` to see what i
 | Build fails with very long paths | Clone to a short path such as `E:\Spotter` (step 1). |
 | The window opens and closes immediately | Run it from the command prompt instead of double-clicking, so you can read the error. |
 | Program exits silently, code `C0000135` | A DLL is missing next to the `.exe`. Delete the `build` folder and rebuild. |
+| **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. Save scans often (E): they live only in memory. |
 
 More detail (Linux and Raspberry Pi setup, how the build stays reproducible, known limits) is in
 [exercises/cpp/README.md](exercises/cpp/README.md).
@@ -234,11 +237,41 @@ More detail (Linux and Raspberry Pi setup, how the build stays reproducible, kno
 Scan the room from several spots; each scan is placed automatically, and E saves one 3D model of
 the whole room. It takes about 10 minutes for a first try.
 
-**Use 13b (`13b_Kinect_Room_Scan_HQ`) for a real scan.** It works exactly like 13, keys and all,
-but finds far more details in a dim picture. On the sensor, in the same room and light, 13 found
-48–67 (it refuses a scan under 100), and 13b found about 1250. It's also slower and finer
-everywhere: hold still about **4 s** per scan instead of 2, and E takes longer. The steps below
-say 13; for 13b, use `13b_Kinect_Room_Scan_HQ` in step 4, and the counter in step 6 runs to 60.
+**Use 13c (`13c_Kinect_Room_Scan_Assist`) for a real scan.** It works like 13, keys and all, plus:
+
+- **Live anchors.** Green dots in the camera window are the details the next scan will be placed
+  by: things already scanned. The counter reads `anchors: N (need 20)`. **This replaces the
+  "move 0.5–1 m" rule below.** Distance was never the real limit; sharing enough of what's been
+  seen is. Move as far as you like while the counter stays green. It drops when you face a scanned
+  surface from more than about 30–45° to the side, or from 3× further away, because the details
+  stop looking alike.
+- **Next shot.** A line like `Next: at spot 12, turn 60 deg right (about 45% new)`, and a green
+  field of view in "the room so far".
+- **Bad scans.** A scan that looks misplaced gets a **red** circle. Click any camera circle to
+  select it (Esc deselects): **X** excludes it from placing, the advice and E (X again puts it
+  back), **P** places it again.
+- **Zoom** is now `+` / `-` (and the wheel), because X excludes. Esc no longer quits; Q does.
+- **No slowdown** at 30+ scans: about 3 s per scan at any count, and the windows keep working
+  while it places.
+
+It finds far more details in a dim picture than 13 (as 13b does): on the sensor, in the same
+room and light, 13 found 48–67 (it refuses a scan under 100), 13b and 13c about 1250. It's
+slower and finer everywhere: hold still about **4 s** per scan instead of 2, and E takes longer.
+The steps below say 13; use `13c_Kinect_Room_Scan_Assist` in step 4, and the counter in step 6
+runs to 60. **Press E now and then during a long scan:** scans live only in memory, and the PC
+blue-screened once mid-scan (see the troubleshooting table).
+
+**Long hallways or big rooms: use 13d (`13d_Kinect_Room_Scan_Far`).** 13c needs details with a
+depth reading, so a plain hallway with its doorway past about 6 m gets refused. 13d also uses
+details the depth camera can't reach: magenta dots in the camera window. They pin which way the
+Kinect faces. They can't say how far down the hallway it is, because a direction has no distance.
+For that:
+1. At the hallway's start, scan, then **step about 0.5 m sideways** and scan again. The far details
+   seen from both spots become **far landmarks** (magenta dots in "the room so far").
+2. Then walk down the hallway as usual. Each scan's directions to the landmarks pin its position.
+
+A scan placed by far details with nothing to pin its distance is flagged **red**: its position
+along the hallway was kept from the scan it matched. Step sideways for landmarks, then P it.
 
 ### Before you start
 

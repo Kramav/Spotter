@@ -115,6 +115,8 @@ const float MinWallHeightMeters = 0.8f;
 const float MinCeilingHeightMeters = 1.8f;
 const float CornerSnapMeters = 0.5f;
 const int MinBlockCells = 30;
+const float LevelDegrees = 10;       // New: once "up" is known, floor/ceiling/walls must be this close to level/upright
+const float MaxBlockMeters = 3.0f;   // New: furniture boxes that touch join only up to this size (else one box swallows the flat)
 
 // New: the same plane seen from two spots is merged into one when it's this close in angle and
 // distance. Boxes from different scans that touch or overlap become one box.
@@ -883,43 +885,62 @@ Room BuildRoom(const std::vector<Scan>& scans, const Mesh& seen, std::mt19937& r
     }
     auto averageColour = [](const cv::Vec3d& sum, size_t count) { return cv::Vec3b(sum / (double)std::max<size_t>(1, count)); };
 
-    // --- Sort the planes (09c step 5), by the first camera's up ---
+    // --- Sort the planes (09c step 5): first by the first camera's up, then again by the room's ---
     const cv::Vec3f cameraUp(0, -1, 0);
-    const float levelCos = std::cos(MaxTiltDegrees * (float)CV_PI / 180), uprightSin = std::sin(MaxTiltDegrees * (float)CV_PI / 180);
-    std::vector<float> heights;
-    for (const auto& grid : roomGrid)
-        for (const cv::Vec3f& p : grid) if (!std::isnan(p[2])) heights.push_back(p.dot(cameraUp));
-    if (heights.empty()) return room;
-    float lowest = Percentile(heights, 0.02);
     int floorPiece = -1, ceilingPiece = -1;
     std::vector<int> wallPieces;
-    for (int k = 0; k < (int)pieces.size(); k++)
+    auto Sort = [&](const cv::Vec3f& by, float tiltDegrees)
     {
-        const Plane& plane = pieces[k].plane;
-        float upness = plane.normal.dot(cameraUp);
-        if (upness > levelCos)
+        const float levelCos = std::cos(tiltDegrees * (float)CV_PI / 180), uprightSin = std::sin(tiltDegrees * (float)CV_PI / 180);
+        std::vector<float> heights;
+        for (const auto& grid : roomGrid)
+            for (const cv::Vec3f& p : grid) if (!std::isnan(p[2])) heights.push_back(p.dot(by));
+        float lowest = Percentile(heights, 0.02);
+        floorPiece = ceilingPiece = -1;
+        wallPieces.clear();
+        for (int k = 0; k < (int)pieces.size(); k++)
         {
-            if (floorPiece < 0 || plane.distance > pieces[floorPiece].plane.distance) floorPiece = k;
+            const Plane& plane = pieces[k].plane;
+            float upness = plane.normal.dot(by);
+            if (upness > levelCos)
+            {
+                if (floorPiece < 0 || plane.distance > pieces[floorPiece].plane.distance) floorPiece = k;
+            }
+            else if (-upness > levelCos)
+            {
+                bool highEnough = plane.distance - lowest >= MinCeilingHeightMeters;
+                if (highEnough && (ceilingPiece < 0 || plane.distance > pieces[ceilingPiece].plane.distance)) ceilingPiece = k;
+            }
+            else if (std::abs(upness) < uprightSin)
+            {
+                std::vector<float> wallHeights;
+                for (const cv::Vec3f& p : pieces[k].points) wallHeights.push_back(p.dot(by));
+                if (Percentile(wallHeights, 0.98) - Percentile(wallHeights, 0.02) >= MinWallHeightMeters) wallPieces.push_back(k);
+            }
         }
-        else if (-upness > levelCos)
-        {
-            bool highEnough = plane.distance - lowest >= MinCeilingHeightMeters;
-            if (highEnough && (ceilingPiece < 0 || plane.distance > pieces[ceilingPiece].plane.distance)) ceilingPiece = k;
-        }
-        else if (std::abs(upness) < uprightSin)
-        {
-            std::vector<float> wallHeights;
-            for (const cv::Vec3f& p : pieces[k].points) wallHeights.push_back(p.dot(cameraUp));
-            if (Percentile(wallHeights, 0.98) - Percentile(wallHeights, 0.02) >= MinWallHeightMeters) wallPieces.push_back(k);
-        }
-    }
+    };
+    bool anyPoints = false;
+    for (const auto& grid : roomGrid) for (const cv::Vec3f& p : grid) anyPoints = anyPoints || !std::isnan(p[2]);
+    if (!anyPoints) return room;
 
     // --- Up and ahead (09c step 6) ---
+    // New: up comes from the BIGGEST level plane, floor or ceiling, not the farthest floor-ish one.
+    // The farthest could be a ramp or a couch back (a real 34-scan export took a slanted piece as
+    // the floor and came out tilted 28 degrees, with its ceiling ignored).
     cv::Vec3f up = cameraUp;
     room.upFrom = "the first camera (nothing level found, under 2 walls)";
-    if (floorPiece >= 0) { up = pieces[floorPiece].plane.normal; room.upFrom = "the floor"; }
-    else if (ceilingPiece >= 0) { up = -pieces[ceilingPiece].plane.normal; room.upFrom = "the ceiling"; }
-    else
+    const float tiltCos = std::cos(MaxTiltDegrees * (float)CV_PI / 180);
+    size_t biggest = 0;
+    for (const RoomPiece& piece : pieces)
+    {
+        float upness = piece.plane.normal.dot(cameraUp);
+        if (std::abs(upness) <= tiltCos || piece.points.size() <= biggest) continue;
+        biggest = piece.points.size();
+        up = upness > 0 ? piece.plane.normal : -piece.plane.normal;
+        room.upFrom = upness > 0 ? "the floor" : "the ceiling";
+    }
+    Sort(cameraUp, MaxTiltDegrees);
+    if (biggest == 0)
     {
         float bestAcross = 0.5f;
         for (size_t i = 0; i < wallPieces.size(); i++)
@@ -933,6 +954,7 @@ Room BuildRoom(const std::vector<Scan>& scans, const Mesh& seen, std::mt19937& r
                 room.upFrom = "two walls";
             }
     }
+    Sort(up, LevelDegrees);   // now by the room's own up, tightly: a ramp is neither floor nor wall
     std::sort(wallPieces.begin(), wallPieces.end(), [&](int a, int b) { return pieces[a].points.size() > pieces[b].points.size(); });
     auto Flatten = [&](cv::Vec3f v) { v -= up * up.dot(v); return v / (float)cv::norm(v); };
     cv::Vec3f towards = wallPieces.empty() ? Flatten(cv::Vec3f(0, 0, -1)) : Flatten(pieces[wallPieces[0]].plane.normal);
@@ -1075,7 +1097,8 @@ Room BuildRoom(const std::vector<Scan>& scans, const Mesh& seen, std::mt19937& r
             }
             box.lo = cv::Vec3f(Percentile(xs, 0.02), room.floorY, Percentile(zs, 0.02));
             box.hi = cv::Vec3f(Percentile(xs, 0.98), Percentile(ys, 0.98), Percentile(zs, 0.98));
-            boxes.push_back(box);
+            // New: wider than any furniture is a wall piece no plane was found for, not a block.
+            if (box.hi[0] - box.lo[0] <= MaxBlockMeters && box.hi[2] - box.lo[2] <= MaxBlockMeters) boxes.push_back(box);
         }
     }
     // The same couch seen from two spots gives two overlapping boxes: join any that touch.
@@ -1088,6 +1111,10 @@ Room BuildRoom(const std::vector<Scan>& scans, const Mesh& seen, std::mt19937& r
                 bool touch = true;
                 for (int a = 0; a < 3; a++)
                     touch = touch && boxes[i].lo[a] <= boxes[j].hi[a] + 0.02f && boxes[j].lo[a] <= boxes[i].hi[a] + 0.02f;
+                // New: and only while the result stays furniture-sized; touching boxes chained through a
+                // whole flat into one box that hid everything inside it.
+                for (int a : { 0, 2 })
+                    touch = touch && std::max(boxes[i].hi[a], boxes[j].hi[a]) - std::min(boxes[i].lo[a], boxes[j].lo[a]) <= MaxBlockMeters;
                 if (!touch) continue;
                 for (int a = 0; a < 3; a++)
                 {
