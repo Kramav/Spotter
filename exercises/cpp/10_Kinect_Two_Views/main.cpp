@@ -233,7 +233,7 @@ int main()
                 float x, y, z;
                 registration.getPointXYZ(&undistorted, row, column, x, y, z);
                 if (std::isnan(z)) continue;
-                live.emplace_back(x, y, z);sd d 
+                live.emplace_back(x, y, z);
                 liveDepth[row * Width + column] = z;
             }
         }

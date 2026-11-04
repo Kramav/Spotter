@@ -1,0 +1,1881 @@
+<title>Spotter Visualizer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: the examples listed on the left; the chosen one on the right: its idea, what it uses,
+   a two-panel simulated sensor, then its steps. One column on phones. */
+:root {
+  --bg: #edf0f2;
+  --surface: #f8fafb;
+  --ink: #162027;
+  --muted: #566570;
+  --line: #d2d9de;
+  --accent: #0a6c7c;
+  --accent-ink: #ffffff;
+  --lane-start: #566570;
+  --lane-objects: #9d540f;
+  --lane-room: #2b58a5;
+  --screen: #0a0e11;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1316; --surface: #151c20; --ink: #dde6ea; --muted: #93a2ac; --line: #29343a;
+    --accent: #5ec6d4; --accent-ink: #06191c; --lane-start: #93a2ac; --lane-objects: #efa25a; --lane-room: #88aaf5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1316; --surface: #151c20; --ink: #dde6ea; --muted: #93a2ac; --line: #29343a;
+  --accent: #5ec6d4; --accent-ink: #06191c; --lane-start: #93a2ac; --lane-objects: #efa25a; --lane-room: #88aaf5;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.app {
+  max-width: 1260px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px 32px;
+}
+.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.top h1 { font: 600 26px/1.1 var(--f-display); margin: 0; letter-spacing: 0.01em; }
+.top p { margin: 0; color: var(--muted); max-width: 70ch; }
+nav { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.group h2 { font: 500 11px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 8px; }
+.group.start h2 { color: var(--lane-start); }
+.group.objects h2 { color: var(--lane-objects); }
+.group.room h2 { color: var(--lane-room); }
+.group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.group button {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; width: 100%;
+  padding: 5px 8px; border-radius: 5px; color: var(--ink); font: 400 14px/1.45 var(--f-body);
+}
+.group button .n { font: 500 13px/1.6 var(--f-mono); color: var(--muted); min-width: 3ch; }
+.group button:hover { background: var(--surface); }
+.group button[aria-current="true"] { background: var(--accent); color: var(--accent-ink); }
+.group button[aria-current="true"] .n { color: inherit; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.eyebrow { font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.head h2 { font: 600 34px/1.1 var(--f-display); margin: 4px 0 8px; text-wrap: balance; }
+.head h2 .num { font: 500 30px/1.1 var(--f-mono); color: var(--accent); margin-right: 12px; }
+.head p { margin: 0; max-width: 70ch; }
+.uses { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.uses .label { font: 500 12px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4px; }
+.chip { font: 500 12.5px/1 var(--f-mono); padding: 6px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); }
+.chip.on { border: 1px solid var(--ink); color: var(--ink); background: var(--surface); }
+.chip.on::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 1px; }
+.stage { background: var(--screen); border-radius: 8px; overflow: hidden; }
+.stage canvas { display: block; width: 100%; }
+.steps-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; justify-content: space-between; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.steps button, .ctl button {
+  all: unset; box-sizing: border-box; cursor: pointer; position: relative; overflow: hidden;
+  padding: 7px 12px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  font: 500 13.5px/1.3 var(--f-body); color: var(--ink);
+}
+.steps button .i { font-family: var(--f-mono); color: var(--muted); margin-right: 6px; }
+.steps button[aria-current="true"] { border-color: var(--accent); }
+.steps button .bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
+.ctl { display: flex; gap: 6px; }
+.step-text { margin: 0; max-width: 72ch; min-height: 4.7em; }
+.compare { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.compare h3 { font: 500 12px var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+.compare p { margin: 0; max-width: 72ch; }
+.foot { color: var(--muted); font-size: 13px; max-width: 72ch; margin: 0; }
+code { font-family: var(--f-mono); font-size: 0.92em; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  nav { flex-direction: row; overflow-x: auto; gap: 18px; padding-bottom: 6px; }
+  .group ul { flex-direction: row; }
+  .group button { width: auto; white-space: nowrap; }
+  .head h2 { font-size: 28px; }
+  .head h2 .num { font-size: 25px; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1>Spotter Visualizer</h1>
+    <p>What each Kinect example does, and how. Pick one, then watch its steps run on a simulated sensor.</p>
+  </header>
+  <nav id="nav" aria-label="Examples"></nav>
+  <main>
+    <div class="head">
+      <div class="eyebrow" id="eyebrow"></div>
+      <h2 id="title"></h2>
+      <p id="idea"></p>
+    </div>
+    <div class="uses" id="uses"></div>
+    <div class="stage" id="stageBox"><canvas id="stage" role="img" aria-label="Animated view of the selected example"></canvas></div>
+    <div class="steps-row">
+      <ol class="steps" id="steps"></ol>
+      <div class="ctl">
+        <button id="play" type="button">Pause</button>
+        <button id="restart" type="button">Restart</button>
+      </div>
+    </div>
+    <p class="step-text" id="stepText"></p>
+    <div class="compare">
+      <h3>Try it on the real Kinect</h3>
+      <p id="compare"></p>
+    </div>
+    <p class="foot">The room, the person and the depth noise are simulated at a quarter of the Kinect's
+      resolution, using the examples' own settings and logic. Numbers drawn on the stage come from that
+      simulation; the measured ones are in <code>exercises/cpp/README.md</code>.</p>
+  </main>
+</div>
+
+<script>
+'use strict';
+// =====================================================================
+//  Settings
+// =====================================================================
+const W = 128, H = 106;                           // simulated depth image: the Kinect's 512 x 424, / 4
+const FX = 91.3, FY = 91.3, CX = 63.5, CY = 52.5; // its intrinsics, / 4 too (fx 365.1 on our Kinect)
+const FPS = 30;                                   // the Kinect's frame rate
+const STEP_SECONDS = 7;                           // how long each step plays
+const START_CONF = 0.40, KEEP_CONF = 0.15;        // 05b's two thresholds
+const MIN_OVERLAP = 0.3;                          // 04-05c
+const LEAVE_FRAMES = 10, ABSORB_FRAMES = 300;     // 07c
+const CAM_A = { x: 0, y: 0, z: 0, yaw: 0, pitch: 8 * Math.PI / 180 };  // 1 m above the floor, tilted 8 degrees down
+const CAM_B = { x: 0.30, y: 0, z: 0, yaw: 0, pitch: CAM_A.pitch };     // 10: slid 30 cm to the right
+
+// Colours of the stage. It is a dark camera monitor in both themes; the hues are the examples' own
+// (red = no reading, green = foreground or floor, blue = past 4.5 m, magenta = never seen ...).
+const SCR = {
+  bg: '#0a0e11', panel: '#0f161a', line: '#25313a', text: '#d9e3e8', dim: '#8597a2', faint: '#3a4a54',
+  accent: '#5ec6d4', red: '#ff4b4b', green: '#3fd47a', blue: '#4d8dff', yellow: '#ffd23f',
+  orange: '#ff9a3c', magenta: '#ff3df2', white: '#f4f7f8',
+};
+const SANS = '"IBM Plex Sans", system-ui, sans-serif';
+const MONO = '"IBM Plex Mono", ui-monospace, Consolas, monospace';
+const ID_COLS = ['#ff9a3c', '#3ee6ff', '#ffd23f', '#ff6fb5', '#8cff66', '#b18cff'];
+
+// =====================================================================
+//  Simulated room: a raycast "Kinect"
+// =====================================================================
+// World: x right, y up, z forward, in metres, camera A at the origin. Floor at y = -1.
+const M = { NONE: 0, FLOOR: 1, WALL: 2, CEIL: 3, HALL: 4, GLASS: 5, CHAIR: 6, CABINET: 7, TV: 8, SHIRT: 9, HEAD: 10, CUP: 11, LEGS: 12 };
+const RGB = [[0, 0, 0], [122, 98, 74], [178, 176, 168], [200, 198, 192], [146, 142, 134], [176, 206, 228],
+  [166, 74, 44], [60, 62, 68], [24, 26, 30], [52, 104, 170], [214, 168, 134], [242, 242, 236], [58, 62, 82]];
+const OBJ = { NONE: 0, CHAIR: 1, TV: 2, PERSON: 3, CUP: 4 };
+const OBJ_NAME = ['', 'chair', 'tv', 'person', 'cup'];
+const ROOM = { floor: -1.0, ceil: 1.55, left: -2.3, right: 2.3, back: 4.4 };
+const DOOR = { x0: 0.85, x1: 1.85, top: 1.05, end: 7.6 };      // a doorway onto a long hallway
+const WINDOW = { x0: -1.75, x1: -0.75, y0: 0.15, y1: 0.95 };   // glass: no depth reading
+
+const box = (x0, x1, y0, y1, z0, z1, mat, obj) => ({ x0, x1, y0, y1, z0, z1, mat, obj });
+function personAt(t) {
+  const a = t * 2 * Math.PI / 16;
+  return { x: 1.75 * Math.sin(a), z: 2.75 + 0.85 * Math.cos(a) };
+}
+function sceneBoxes(t, opt) {
+  const b = [
+    box(-1.45, -0.95, -1, -0.55, 2.2, 2.7, M.CHAIR, OBJ.CHAIR),
+    box(-1.45, -0.95, -0.55, -0.02, 2.62, 2.7, M.CHAIR, OBJ.CHAIR),
+    box(-0.45, 0.65, -1, -0.55, 3.95, 4.4, M.CABINET, OBJ.NONE),
+    box(-0.32, 0.52, -0.55, -0.03, 4.2, 4.3, M.TV, OBJ.TV),
+  ];
+  if (opt.person) {
+    const p = personAt(t);
+    b.push(box(p.x - 0.2, p.x + 0.2, -1, -0.12, p.z - 0.13, p.z + 0.13, M.LEGS, OBJ.PERSON));
+    b.push(box(p.x - 0.23, p.x + 0.23, -0.12, 0.46, p.z - 0.15, p.z + 0.15, M.SHIRT, OBJ.PERSON));
+    b.push(box(p.x - 0.11, p.x + 0.11, 0.49, 0.74, p.z - 0.11, p.z + 0.11, M.HEAD, OBJ.PERSON));
+    if (opt.cup) b.push(box(p.x + 0.1, p.x + 0.24, -0.06, 0.09, p.z - 0.31, p.z - 0.17, M.CUP, OBJ.CUP));
+  }
+  return b;
+}
+
+let HIT_AXIS = 0;
+function hitBox(ox, oy, oz, dx, dy, dz, b) {
+  let tn = -1e9, tf = 1e9, ax = 0, t1, t2, s;
+  if (Math.abs(dx) < 1e-9) { if (ox < b.x0 || ox > b.x1) return -1; }
+  else { t1 = (b.x0 - ox) / dx; t2 = (b.x1 - ox) / dx; if (t1 > t2) { s = t1; t1 = t2; t2 = s; } if (t1 > tn) { tn = t1; ax = 0; } if (t2 < tf) tf = t2; }
+  if (Math.abs(dy) < 1e-9) { if (oy < b.y0 || oy > b.y1) return -1; }
+  else { t1 = (b.y0 - oy) / dy; t2 = (b.y1 - oy) / dy; if (t1 > t2) { s = t1; t1 = t2; t2 = s; } if (t1 > tn) { tn = t1; ax = 1; } if (t2 < tf) tf = t2; }
+  t1 = (b.z0 - oz) / dz; t2 = (b.z1 - oz) / dz; if (t1 > t2) { s = t1; t1 = t2; t2 = s; } if (t1 > tn) { tn = t1; ax = 2; } if (t2 < tf) tf = t2;
+  if (tn > tf || tn < 0.05) return -1;
+  HIT_AXIS = ax;
+  return tn;
+}
+const HIT = { t: 0, mat: 0, axis: 0 };
+function hitRoom(ox, oy, oz, dx, dy, dz) {
+  let t = 1e9, mat = 0, axis = 0, s;
+  if (dy < 0) { s = (ROOM.floor - oy) / dy; if (s < t) { t = s; mat = M.FLOOR; axis = 1; } }
+  if (dy > 0) { s = (ROOM.ceil - oy) / dy; if (s < t) { t = s; mat = M.CEIL; axis = 1; } }
+  if (dx < 0) { s = (ROOM.left - ox) / dx; if (s < t) { t = s; mat = M.WALL; axis = 0; } }
+  if (dx > 0) { s = (ROOM.right - ox) / dx; if (s < t) { t = s; mat = M.WALL; axis = 0; } }
+  if (dz > 0) {
+    s = (ROOM.back - oz) / dz;
+    if (s < t) {
+      t = s; mat = M.WALL; axis = 2;
+      const hx = ox + dx * s, hy = oy + dy * s;
+      if (hx > WINDOW.x0 && hx < WINDOW.x1 && hy > WINDOW.y0 && hy < WINDOW.y1) mat = M.GLASS;
+      else if (hx > DOOR.x0 && hx < DOOR.x1 && hy < DOOR.top) {
+        mat = M.HALL; t = (DOOR.end - oz) / dz;
+        if (dx > 0) { s = (DOOR.x1 - ox) / dx; if (s < t) { t = s; axis = 0; } }
+        if (dx < 0) { s = (DOOR.x0 - ox) / dx; if (s < t) { t = s; axis = 0; } }
+        if (dy > 0) { s = (DOOR.top - oy) / dy; if (s < t) { t = s; axis = 1; } }
+        if (dy < 0) { s = (ROOM.floor - oy) / dy; if (s < t) { t = s; axis = 1; mat = M.FLOOR; } }
+      }
+    }
+  }
+  HIT.t = t; HIT.mat = mat; HIT.axis = axis;
+}
+
+// One frame of the scene: true depth (the camera's Z, in metres), material, and which object.
+function renderFrame(cam, t, opt) {
+  const boxes = sceneBoxes(t, opt), n = W * H;
+  const f = { depth: new Float32Array(n), mat: new Uint8Array(n), axis: new Uint8Array(n), obj: new Uint8Array(n), t };
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
+    const a = (u - CX) / FX, b = -(v - CY) / FY;       // ray in camera coordinates, its z = 1
+    const y1 = b * cp - sp, z1 = b * sp + cp;          // tilt down
+    const dx = a * cy - z1 * sy, dy = y1, dz = a * sy + z1 * cy;   // turn left
+    hitRoom(cam.x, cam.y, cam.z, dx, dy, dz);
+    let best = HIT.t, mat = HIT.mat, axis = HIT.axis, obj = 0;
+    for (const bx of boxes) {
+      const th = hitBox(cam.x, cam.y, cam.z, dx, dy, dz, bx);
+      if (th > 0 && th < best) { best = th; mat = bx.mat; axis = HIT_AXIS; obj = bx.obj; }
+    }
+    const i = v * W + u;
+    f.depth[i] = best; f.mat[i] = mat; f.axis[i] = axis; f.obj[i] = obj;
+  }
+  return f;
+}
+
+let seed = 12345;
+function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+function gauss() { return (rnd() + rnd() + rnd() + rnd() - 2) * 1.732; }
+const noiseM = z => (0.8 + 0.2 * z * z) / 1000;    // one-frame noise in metres, growing with distance
+
+// What the sensor reports: noise, no reading on glass, the black TV, flaky edges, and past maxDepth.
+function measure(f, maxDepth) {
+  const r = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const z = f.depth[i], m = f.mat[i];
+    if (m === M.GLASS || z < 0.5 || z > maxDepth) continue;
+    const u = i % W;
+    const edge = (u < W - 1 && Math.abs(f.depth[i + 1] - z) > 0.25) || (i + W < W * H && Math.abs(f.depth[i + W] - z) > 0.25);
+    let drop = edge ? 0.35 : 0;
+    if (m === M.TV) drop = 0.55;
+    if (z > 6) drop = 0.92; else if (z > 4.5) drop = Math.max(drop, 0.12);
+    if (rnd() < drop) continue;
+    r[i] = z + gauss() * noiseM(z) * (edge ? 3 : 1);
+  }
+  return r;
+}
+
+const SHADE = [0.78, 1.0, 0.9];
+function colourAt(f, i, out) {
+  const m = f.mat[i], c = RGB[m];
+  let k = SHADE[f.axis[i]] * (1.05 / (1 + 0.06 * f.depth[i]));
+  if (m === M.CEIL) k *= 0.85;
+  if (m === M.GLASS) k = 1;
+  out[0] = c[0] * k; out[1] = c[1] * k; out[2] = c[2] * k;
+}
+
+// =====================================================================
+//  Simulated YOLO, tracking and other shared pieces
+// =====================================================================
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+function median(a) { if (!a.length) return 0; const s = Float32Array.from(a).sort(); return s[s.length >> 1]; }
+const fmtM = z => z ? z.toFixed(2) + ' m' : 'no reading';
+const fmtSpeed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + ' m/s';
+
+function objBoxes(f) {
+  const b = [];
+  for (let i = 0; i < W * H; i++) {
+    const o = f.obj[i]; if (!o) continue;
+    const u = i % W, v = (i / W) | 0;
+    let q = b[o]; if (!q) q = b[o] = { u0: u, u1: u, v0: v, v1: v, n: 0 };
+    if (u < q.u0) q.u0 = u; if (u > q.u1) q.u1 = u; if (v < q.v0) q.v0 = v; if (v > q.v1) q.v1 = v; q.n++;
+  }
+  return b;
+}
+
+// A stand-in for yolo26n.onnx: boxes around what is really there, a little jitter, and a confidence.
+// The person's confidence wobbles around 0.40 and drops when they're cut off at the image edge,
+// which is the behaviour 05's logs showed.
+const FULL_N = [];   // the most pixels each object has shown: anything well under that is hidden behind someone
+function detect(f, t, opt = {}) {
+  const ob = objBoxes(f), out = [];
+  for (let id = 1; id <= 4; id++) {
+    const b = ob[id]; if (!b || b.n < 12) continue;
+    FULL_N[id] = Math.max(FULL_N[id] || 0, b.n);
+    if (id !== OBJ.PERSON && id !== OBJ.CUP && b.n < 0.8 * FULL_N[id]) continue;
+    let conf = [0, 0.71, 0.82, 0, 0.5][id] + 0.03 * Math.sin(t * 2 + id);
+    const atEdge = b.u0 <= 0 || b.u1 >= W - 1;
+    if (id === OBJ.PERSON) conf = 0.47 + 0.16 * Math.sin(t * 1.3) + 0.08 * Math.sin(t * 3.7 + 1) - (atEdge ? 0.18 : 0);
+    if (opt.small && atEdge) continue;                  // the 320 model misses things cut off at the edge
+    const j = () => Math.round(gauss() * 0.6);
+    out.push({ obj: id, cls: OBJ_NAME[id], conf, u0: clamp(b.u0 + j(), 0, W - 1), v0: clamp(b.v0 + j(), 0, H - 1), u1: clamp(b.u1 + j(), 0, W - 1), v1: clamp(b.v1 + j(), 0, H - 1) });
+  }
+  if (opt.blips && Math.sin(t * 0.9) > 0.55) out.push({ obj: 0, cls: 'person', conf: 0.22 + 0.04 * Math.sin(t * 5), u0: 96, v0: 20, u1: 104, v1: 38 });
+  return out.filter(d => d.conf >= (opt.minConf ?? START_CONF));
+}
+
+// 02's step 3: the median depth of the centre half of a box (BoxShrink = 0.5).
+function centreDepth(read, b) {
+  const w = b.u1 - b.u0 + 1, h = b.v1 - b.v0 + 1;
+  const r = { u0: Math.round(b.u0 + w * 0.25), u1: Math.round(b.u1 - w * 0.25), v0: Math.round(b.v0 + h * 0.25), v1: Math.round(b.v1 - h * 0.25) };
+  const vals = [];
+  for (let v = Math.max(0, r.v0); v <= Math.min(H - 1, r.v1); v++)
+    for (let u = Math.max(0, r.u0); u <= Math.min(W - 1, r.u1); u++) { const z = read[v * W + u]; if (z) vals.push(z); }
+  return { z: vals.length >= 5 ? median(vals) : 0, vals, r };
+}
+function runYolo(frame, read, opt) {
+  const ds = detect(frame, frame.t, opt);
+  for (const d of ds) { d.sample = centreDepth(read, d); d.z = d.sample.z; }
+  return ds;
+}
+
+// A constant-velocity Kalman filter for one number (05): position p, speed v, covariance P.
+function kf(p, p0, pv) { return { p, v: 0, P00: p0, P01: 0, P11: pv }; }
+function kfPredict(k, dt, acc) {
+  const a2 = acc * acc;
+  k.p += k.v * dt;
+  k.P00 += dt * (2 * k.P01 + dt * k.P11) + a2 * dt ** 4 / 4;
+  k.P01 += dt * k.P11 + a2 * dt ** 3 / 2;
+  k.P11 += a2 * dt * dt;
+}
+function kfCorrect(k, z, r) {
+  const s = k.P00 + r, k0 = k.P00 / s, k1 = k.P01 / s, y = z - k.p;
+  k.p += k0 * y; k.v += k1 * y;
+  const P00 = k.P00 - k0 * k.P00, P01 = k.P01 - k0 * k.P01, P11 = k.P11 - k1 * k.P01;
+  k.P00 = P00; k.P01 = P01; k.P11 = P11;
+}
+const R_PX = (15 / 4) ** 2, R_M = 0.03 ** 2, ACC_PX = 500 / 4, ACC_M = 1.0;   // 05's settings, at 1/4 scale
+
+function iou(a, b) {
+  const x0 = Math.max(a.u0, b.u0), x1 = Math.min(a.u1, b.u1), y0 = Math.max(a.v0, b.v0), y1 = Math.min(a.v1, b.v1);
+  const i = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  const un = (a.u1 - a.u0) * (a.v1 - a.v0) + (b.u1 - b.u0) * (b.v1 - b.v0) - i;
+  return un > 0 ? i / un : 0;
+}
+
+// mode 'overlap' = 04, 'kalman' = 05/06, 'two' = 05b/05c
+function newTracker(mode, maxMissed, fade) { return { mode, maxMissed, fade, tracks: [], nextId: 1, started: 0 }; }
+function boxOf(tr) {
+  if (!tr.ku) return tr.box;
+  return { u0: tr.ku.p - tr.w / 2, u1: tr.ku.p + tr.w / 2, v0: tr.kv.p - tr.h / 2, v1: tr.kv.p + tr.h / 2 };
+}
+const zOf = tr => tr.ku ? tr.kz.p : tr.zAvg;
+function predictTracks(T, dt) {
+  for (const tr of T.tracks) {
+    tr.last = boxOf(tr);
+    if (!tr.ku) continue;
+    if (T.fade && tr.missed > 0) { const k = Math.exp(-dt / 0.5); tr.ku.v *= k; tr.kv.v *= k; tr.kz.v *= k; }  // CoastSlowdownSeconds
+    kfPredict(tr.ku, dt, ACC_PX); kfPredict(tr.kv, dt, ACC_PX); kfPredict(tr.kz, dt, ACC_M);
+    tr.pred = boxOf(tr);
+  }
+}
+function matchTracks(T, dets) {
+  const kal = T.mode !== 'overlap';
+  for (const tr of T.tracks) { tr.det = null; tr.weak = false; }
+  for (const d of dets) { d.used = false; d.result = ''; }
+  const passes = T.mode === 'two' ? [d => d.conf >= START_CONF, d => d.conf < START_CONF] : [() => true];
+  passes.forEach((ok, pass) => {
+    const pairs = [];
+    for (const tr of T.tracks) {
+      if (tr.det) continue;
+      const tb = kal ? boxOf(tr) : tr.box;
+      for (const d of dets) if (!d.used && ok(d) && d.cls === tr.cls) { const o = iou(tb, d); if (o >= MIN_OVERLAP) pairs.push([o, tr, d]); }
+    }
+    pairs.sort((a, b) => b[0] - a[0]);
+    for (const [, tr, d] of pairs) if (!tr.det && !d.used) {
+      tr.det = d; d.used = true; tr.weak = pass === 1;
+      d.result = (tr.weak ? 'continues #' : 'matches #') + tr.id;
+      tr.iouLast = iou(tr.last || tr.box, d); tr.iouPred = tr.pred ? iou(tr.pred, d) : tr.iouLast;
+    }
+  });
+  for (const tr of T.tracks) {
+    const d = tr.det;
+    if (d) {
+      tr.missed = 0;
+      if (kal) {
+        tr.zPrior = { p: tr.kz.p, P: tr.kz.P00 };
+        kfCorrect(tr.ku, (d.u0 + d.u1) / 2, R_PX); kfCorrect(tr.kv, (d.v0 + d.v1) / 2, R_PX);
+        if (d.z) kfCorrect(tr.kz, d.z, R_M);
+        tr.zPost = { p: tr.kz.p, P: tr.kz.P00 };
+        tr.w += ((d.u1 - d.u0) - tr.w) * 0.5; tr.h += ((d.v1 - d.v0) - tr.h) * 0.5;
+      } else {
+        tr.prevBox = tr.box; tr.box = d;
+        if (d.z) tr.zAvg = tr.zAvg ? 0.8 * tr.zAvg + 0.2 * d.z : d.z;   // DistanceSmoothing = 0.8
+      }
+      if (d.z) tr.zRaw = d.z;
+    } else tr.missed++;
+    tr.hist.push({ raw: d ? d.z : 0, est: zOf(tr), seen: !!d, speed: tr.kz ? tr.kz.v : 0, P: tr.kz ? tr.kz.P00 : 0 });
+    if (tr.ku) tr.trail.push({ x: (tr.ku.p - CX) * tr.kz.p / FX, z: tr.kz.p, seen: !!d });
+    if (tr.hist.length > 90) tr.hist.shift();
+    if (tr.trail.length > 90) tr.trail.shift();
+  }
+  T.tracks = T.tracks.filter(tr => tr.missed <= T.maxMissed);
+  for (const d of dets) {
+    if (d.used) continue;
+    if (d.conf < START_CONF || !d.obj) { d.result = 'ignored'; continue; }
+    const tr = { id: T.nextId++, cls: d.cls, obj: d.obj, missed: 0, det: d, hist: [], trail: [], zRaw: d.z };
+    if (kal) { tr.ku = kf((d.u0 + d.u1) / 2, R_PX, 400); tr.kv = kf((d.v0 + d.v1) / 2, R_PX, 400); tr.kz = kf(d.z || 2, R_M, 1); tr.w = d.u1 - d.u0; tr.h = d.v1 - d.v0; }
+    else { tr.box = d; tr.zAvg = d.z; }
+    T.tracks.push(tr); T.started++;
+    d.result = 'new #' + tr.id;
+  }
+}
+const personTrack = T => T.tracks.find(tr => tr.cls === 'person') || null;
+
+// 03 / 07c: touching foreground pixels grouped into blobs.
+function blobs(mask, read, minPx) {
+  const lab = new Int32Array(W * H), out = [], stack = [];
+  let id = 0;
+  for (let i = 0; i < W * H; i++) {
+    if (!mask[i] || lab[i]) continue;
+    id++;
+    const b = { id, u0: W, v0: H, u1: 0, v1: 0, n: 0, zs: [] };
+    stack.push(i); lab[i] = id;
+    while (stack.length) {
+      const j = stack.pop(), u = j % W, v = (j / W) | 0;
+      b.n++; if (u < b.u0) b.u0 = u; if (u > b.u1) b.u1 = u; if (v < b.v0) b.v0 = v; if (v > b.v1) b.v1 = v;
+      if (read[j]) b.zs.push(read[j]);
+      if (u > 0 && mask[j - 1] && !lab[j - 1]) { lab[j - 1] = id; stack.push(j - 1); }
+      if (u < W - 1 && mask[j + 1] && !lab[j + 1]) { lab[j + 1] = id; stack.push(j + 1); }
+      if (v > 0 && mask[j - W] && !lab[j - W]) { lab[j - W] = id; stack.push(j - W); }
+      if (v < H - 1 && mask[j + W] && !lab[j + W]) { lab[j + W] = id; stack.push(j + W); }
+    }
+    if (b.n >= minPx) { b.z = median(b.zs); out.push(b); }
+  }
+  return { list: out, lab };
+}
+
+// 07c: the self-updating depth memory, one value per pixel.
+function newMemory() { return { mem: new Float32Array(W * H), far: new Uint8Array(W * H), near: new Uint16Array(W * H), fg: new Uint8Array(W * H) }; }
+function updateMemory(Mm, read, noAbsorb) {
+  for (let i = 0; i < W * H; i++) {
+    const r = read[i], m = Mm.mem[i];
+    Mm.fg[i] = 0;
+    if (!r) continue;
+    if (!m) { Mm.mem[i] = r; continue; }
+    const tol = 0.04 + 0.01 * m;
+    if (r < m - tol) {                                  // nearer: something new
+      Mm.fg[i] = 1; Mm.far[i] = 0;
+      if (!(noAbsorb && noAbsorb[i]) && ++Mm.near[i] >= ABSORB_FRAMES) { Mm.mem[i] = r; Mm.near[i] = 0; Mm.fg[i] = 0; }
+    } else if (r > m + tol) {                           // farther: something left?
+      Mm.near[i] = 0;
+      if (++Mm.far[i] >= LEAVE_FRAMES) { Mm.mem[i] = r; Mm.far[i] = 0; }
+    } else { Mm.near[i] = 0; Mm.far[i] = 0; Mm.mem[i] += (r - m) * 0.05; }
+  }
+}
+
+// 08: depth pixels to coloured 3D points, camera coordinates (Y up).
+function cloudFrom(f, read) {
+  const n = W * H, P = { x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n), c: new Array(n), v: new Uint8Array(n), n: 0 };
+  const px = [0, 0, 0];
+  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
+    const i = v * W + u, z = read[i]; if (!z) continue;
+    const k = P.n++;
+    P.x[k] = (u - CX) * z / FX; P.y[k] = -(v - CY) * z / FY; P.z[k] = z; P.v[k] = v;
+    colourAt(f, i, px); P.c[k] = `rgb(${px[0] | 0},${px[1] | 0},${px[2] | 0})`;
+  }
+  return P;
+}
+
+// =====================================================================
+//  Drawing helpers
+// =====================================================================
+const SLOTS = [0, 1, 2].map(() => {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); return { c, x, im: x.createImageData(W, H) };
+});
+function paint(slot, fn) {
+  const S = SLOTS[slot], d = S.im.data, px = [0, 0, 0];
+  for (let i = 0; i < W * H; i++) { fn(i, px); const j = i * 4; d[j] = px[0]; d[j + 1] = px[1]; d[j + 2] = px[2]; d[j + 3] = 255; }
+  S.x.putImageData(S.im, 0, 0);
+  return S.c;
+}
+function fit(R) { const s = Math.min(R.w / W, R.h / H), w = W * s, h = H * s; return { x: R.x + (R.w - w) / 2, y: R.y + (R.h - h) / 2, w, h, s }; }
+function show(ctx, R, src, sub) {
+  const I = fit(R);
+  ctx.imageSmoothingEnabled = false;
+  if (sub) ctx.drawImage(src, sub.u0, 0, sub.u1 - sub.u0, H, I.x + sub.u0 * I.s, I.y, (sub.u1 - sub.u0) * I.s, I.h);
+  else ctx.drawImage(src, I.x, I.y, I.w, I.h);
+  return I;
+}
+const U = (I, u) => I.x + u * I.s, V = (I, v) => I.y + v * I.s;
+function depthPx(z, out, far) {
+  if (!z) { out[0] = 225; out[1] = 40; out[2] = 40; return; }
+  if (far && z > 4.5) { const k = clamp(1 - (z - 4.5) / 4, 0.25, 1); out[0] = 40 * k; out[1] = 110 * k; out[2] = 255 * k; return; }
+  const g = 255 * clamp(1 - (z - 0.5) / 4.3, 0.1, 1); out[0] = out[1] = out[2] = g;
+}
+const depthFn = (read, far) => (i, px) => depthPx(read[i], px, far);
+const colourFn = f => (i, px) => colourAt(f, i, px);
+function tint(px, rgb, k) { px[0] = px[0] * (1 - k) + rgb[0] * k; px[1] = px[1] * (1 - k) + rgb[1] * k; px[2] = px[2] * (1 - k) + rgb[2] * k; }
+const G_RGB = [63, 212, 122], R_RGB = [255, 75, 75], Y_RGB = [255, 210, 63], M_RGB = [255, 61, 242];
+function depthHue(z) { return `hsl(${clamp((z - 0.5) / 4, 0, 1) * 230},90%,62%)`; }
+
+function txt(ctx, x, y, s, o = {}) {
+  ctx.font = `${o.w || 400} ${o.size || 12}px ${o.mono ? MONO : SANS}`;
+  ctx.fillStyle = o.c || SCR.text; ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.base || 'alphabetic';
+  ctx.fillText(s, x, y);
+}
+function tag(ctx, x, yTop, s, c, I) {
+  ctx.font = `500 11px ${MONO}`;
+  const w = ctx.measureText(s).width + 8;
+  if (I) { yTop = clamp(yTop, I.y, I.y + I.h - 17); x = clamp(x, I.x, I.x + I.w - w); }
+  ctx.fillStyle = 'rgba(6,9,11,0.82)'; ctx.fillRect(x, yTop, w, 17);
+  ctx.fillStyle = c; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(s, x + 4, yTop + 12.5);
+}
+function bx(ctx, I, b, c, lw = 2, dash) {
+  ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = lw; if (dash) ctx.setLineDash(dash);
+  ctx.strokeRect(U(I, b.u0), V(I, b.v0), (b.u1 - b.u0 + 1) * I.s, (b.v1 - b.v0 + 1) * I.s);
+  ctx.restore();
+}
+function line(ctx, x0, y0, x1, y1, c, lw = 1, dash) {
+  ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = lw; if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+}
+function dot(ctx, x, y, r, c, hollow) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  if (hollow) { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.stroke(); } else { ctx.fillStyle = c; ctx.fill(); }
+}
+function arrow(ctx, x0, y0, x1, y1, c, lw = 1.5) {
+  line(ctx, x0, y0, x1, y1, c, lw);
+  const a = Math.atan2(y1 - y0, x1 - x0), h = 6;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a - 0.45), y1 - h * Math.sin(a - 0.45));
+  ctx.lineTo(x1 - h * Math.cos(a + 0.45), y1 - h * Math.sin(a + 0.45)); ctx.closePath(); ctx.fillStyle = c; ctx.fill();
+}
+function fpsTag(ctx, I, st) {
+  tag(ctx, I.x + 4, I.y + I.h - 21, st.ex.blocking ? 'display ≈6 fps: waits for YOLO' : 'display 30 fps', SCR.dim);
+}
+function drawTracks(ctx, I, T, o = {}) {
+  for (const tr of T.tracks) {
+    const b = boxOf(tr), c = ID_COLS[(tr.id - 1) % ID_COLS.length], seen = !!tr.det;
+    bx(ctx, I, b, c, !seen ? 1 : tr.weak ? 2 : 3, seen ? null : [4, 3]);
+    let s = `#${tr.id} ${tr.cls} ${fmtM(zOf(tr))}`;
+    if (o.raw) s += ` (${tr.zRaw ? tr.zRaw.toFixed(2) : '–'})`;
+    if (o.speed && tr.kz) s += ` ${fmtSpeed(tr.kz.v)}`;
+    if (tr.weak && tr.det) s += ` weak ${tr.det.conf.toFixed(2)}`;
+    if (!seen) s += ' predicted';
+    tag(ctx, U(I, b.u0), V(I, b.v0) - 18, s, c, I);
+  }
+}
+function drawDets(ctx, I, dets, o = {}) {
+  for (const d of dets) {
+    bx(ctx, I, d, SCR.white, 3);
+    if (o.centre) bx(ctx, I, d.sample.r, SCR.accent, 1);
+    const s = o.dist ? `${d.cls} ${fmtM(d.z)}` + (o.xy && d.z ? ` x${sgn(xOf(d))} y${sgn(yOf(d))}` : '') : `${d.cls} ${d.conf.toFixed(2)}`;
+    tag(ctx, U(I, d.u0), V(I, d.v0) - 18, s, SCR.white, I);
+  }
+}
+const xOf = d => ((d.u0 + d.u1) / 2 - CX) * d.z / FX;
+const yOf = d => -((d.v0 + d.v1) / 2 - CY) * d.z / FY;
+const sgn = x => (x < 0 ? '−' : '+') + Math.abs(x).toFixed(2);
+
+// A simple line chart, in the panel's own coordinates.
+function chart(ctx, R, o) {
+  const L = R.x + 52, Rr = R.x + R.w - 14, Tp = R.y + 34, Bt = R.y + R.h - 26;
+  const n = o.n, X = i => L + (Rr - L) * i / Math.max(1, n - 1), Y = v => Bt - (Bt - Tp) * clamp((v - o.ymin) / (o.ymax - o.ymin), -0.05, 1.05);
+  if (o.title) txt(ctx, R.x + 14, R.y + 20, o.title, { size: 12, w: 500 });
+  for (const s of o.spans || []) { ctx.fillStyle = s.c; ctx.fillRect(X(s.i0), Tp, X(s.i1) - X(s.i0), Bt - Tp); }
+  for (let k = 0; k <= 4; k++) {
+    const v = o.ymin + (o.ymax - o.ymin) * k / 4, y = Y(v);
+    line(ctx, L, y, Rr, y, SCR.line);
+    txt(ctx, L - 6, y + 4, o.yfmt ? o.yfmt(v) : v.toFixed(1), { size: 10, mono: true, c: SCR.dim, align: 'right' });
+  }
+  if (o.xlabel) txt(ctx, Rr, Bt + 17, o.xlabel, { size: 10, mono: true, c: SCR.dim, align: 'right' });
+  for (const h of o.lines || []) {
+    line(ctx, L, Y(h.y), Rr, Y(h.y), h.c, 1, [5, 4]);
+    txt(ctx, L + 4, Y(h.y) - 4, h.label, { size: 10, mono: true, c: h.c });
+  }
+  if (o.band) {
+    ctx.fillStyle = o.band.c; ctx.beginPath();
+    o.band.hi.forEach((v, i) => { if (v != null) (i ? ctx.lineTo : ctx.moveTo).call(ctx, X(i), Y(v)); });
+    for (let i = o.band.lo.length - 1; i >= 0; i--) if (o.band.lo[i] != null) ctx.lineTo(X(i), Y(o.band.lo[i]));
+    ctx.closePath(); ctx.fill();
+  }
+  for (const s of o.series) {
+    if (s.dots) { s.vals.forEach((v, i) => { if (v != null) dot(ctx, X(i), Y(v), s.r || 2.2, s.cs ? s.cs[i] : s.c); }); continue; }
+    ctx.save(); ctx.strokeStyle = s.c; ctx.lineWidth = s.w || 1.6; if (s.dash) ctx.setLineDash(s.dash);
+    ctx.beginPath(); let pen = false;
+    s.vals.forEach((v, i) => { if (v == null) { pen = false; return; } if (pen) ctx.lineTo(X(i), Y(v)); else { ctx.moveTo(X(i), Y(v)); pen = true; } });
+    ctx.stroke(); ctx.restore();
+  }
+  let lx = R.x + R.w - 14;
+  for (const s of [...o.series].reverse()) {
+    if (!s.label) continue;
+    ctx.font = `400 11px ${SANS}`; const w = ctx.measureText(s.label).width;
+    txt(ctx, lx, R.y + 20, s.label, { size: 11, c: s.c, align: 'right' }); lx -= w + 18;
+  }
+}
+function bars(ctx, R, rows, o = {}) {
+  const top = R.y + (o.title ? 40 : 20), rowH = Math.min(46, (R.h - (top - R.y) - 10) / rows.length);
+  if (o.title) txt(ctx, R.x + 14, R.y + 22, o.title, { size: 12, w: 500 });
+  const L = R.x + 14, maxW = R.w - 28;
+  rows.forEach((r, k) => {
+    const y = top + k * rowH;
+    txt(ctx, L, y + 12, r.label, { size: 12, c: SCR.text });
+    ctx.fillStyle = SCR.line; ctx.fillRect(L, y + 18, maxW, 9);
+    ctx.fillStyle = r.c || SCR.accent; ctx.fillRect(L, y + 18, maxW * clamp(r.frac, 0, 1), 9);
+    txt(ctx, L + maxW, y + 12, r.value, { size: 12, mono: true, c: r.c || SCR.accent, align: 'right' });
+  });
+}
+function para(ctx, R, lines, o = {}) {
+  let y = R.y + (o.top || 24);
+  for (const l of lines) {
+    if (l === '') { y += 10; continue; }
+    const s = typeof l === 'string' ? { t: l } : l;
+    txt(ctx, R.x + 14, y, s.t, { size: s.size || 13, mono: s.mono, c: s.c || SCR.text, w: s.w });
+    y += (s.size || 13) + 9;
+  }
+}
+
+// The neural network, drawn: the colour frame goes in, boxes come out.
+function drawModel(ctx, R, st, prog, o = {}) {
+  const size = o.size || 640, dets = o.dets || [];
+  txt(ctx, R.x + 14, R.y + 22, 'yolo26n.onnx, run by OpenCV DNN', { size: 12, w: 500 });
+  const th = Math.min(R.h * 0.42, R.w * 0.24), ix = R.x + 14, iy = R.y + R.h / 2 - th / 2;
+  ctx.fillStyle = '#000'; ctx.fillRect(ix, iy, th, th);
+  const src = paint(1, colourFn(o.frame || st.frame)), ih = th * H / W;
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(src, ix, iy + (th - ih) / 2, th, ih);
+  ctx.strokeStyle = SCR.line; ctx.strokeRect(ix + 0.5, iy + 0.5, th - 1, th - 1);
+  txt(ctx, ix, iy + th + 16, `${size} × ${size} input`, { size: 11, mono: true, c: SCR.dim });
+  const cols = [6, 8, 8, 6, 4], lx0 = ix + th + 30, lx1 = R.x + R.w * 0.64;
+  const cx = c => lx0 + (lx1 - lx0) * c / (cols.length - 1);
+  const gap = Math.min(16, (R.h - 90) / 8);
+  const ny = (c, j) => R.y + R.h / 2 + (j - (cols[c] - 1) / 2) * gap;
+  ctx.strokeStyle = 'rgba(94,198,212,0.13)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let c = 0; c < cols.length - 1; c++) for (let a = 0; a < cols[c]; a++) for (let b = 0; b < cols[c + 1]; b++) { ctx.moveTo(cx(c), ny(c, a)); ctx.lineTo(cx(c + 1), ny(c + 1, b)); }
+  ctx.stroke();
+  arrow(ctx, ix + th + 4, R.y + R.h / 2, lx0 - 8, R.y + R.h / 2, SCR.dim);
+  const active = prog * (cols.length + 1) - 1;
+  for (let c = 0; c < cols.length; c++) for (let j = 0; j < cols[c]; j++) {
+    const lit = Math.abs(c - active) < 0.6;
+    dot(ctx, cx(c), ny(c, j), lit ? 4.5 : 3.5, lit ? SCR.accent : '#2b3d46');
+  }
+  const ox = R.x + R.w * 0.68;
+  arrow(ctx, lx1 + 8, R.y + R.h / 2, ox - 6, R.y + R.h / 2, SCR.dim);
+  txt(ctx, ox, R.y + 48, '1 × 300 × 6', { size: 11, mono: true, c: SCR.dim });
+  txt(ctx, ox, R.y + 63, 'box, class, conf.', { size: 11, c: SCR.dim });
+  if (prog > 0.8) dets.slice(0, 6).forEach((d, k) => {
+    txt(ctx, ox, R.y + 92 + k * 18, `${d.cls.padEnd(6)} ${d.conf.toFixed(2)}`, { size: 12, mono: true, c: d.conf >= START_CONF ? SCR.white : SCR.yellow });
+  });
+  if (o.ms) txt(ctx, R.x + 14, R.y + R.h - 12, o.ms, { size: 11, mono: true, c: SCR.dim });
+}
+
+// The point-cloud viewer (08): turn each point around a pivot, project it, far points first.
+function drawCloud(ctx, R, P, view, o = {}) {
+  const cyw = Math.cos(view.yaw), syw = Math.sin(view.yaw), cpt = Math.cos(view.pitch), spt = Math.sin(view.pitch);
+  const pz = view.pivot, dist = view.dist, f = R.w * FX / W;
+  const n = P.n, sx = new Float32Array(n), sy = new Float32Array(n), dz = new Float32Array(n), order = [];
+  const proj = (x, y, z) => {
+    const x0 = x, z0 = z - pz;
+    const x1 = x0 * cyw + z0 * syw, z1 = -x0 * syw + z0 * cyw;
+    const y2 = y * cpt - z1 * spt, z2 = y * spt + z1 * cpt + dist;
+    return [R.x + R.w / 2 + f * x1 / z2, R.y + R.h / 2 - f * y2 / z2, z2];
+  };
+  for (let k = 0; k < n; k++) {
+    if (o.maxRow != null && P.v[k] > o.maxRow) continue;
+    const p = proj(P.x[k], P.y[k], P.z[k]);
+    if (p[2] < 0.2) continue;
+    sx[k] = p[0]; sy[k] = p[1]; dz[k] = p[2]; order.push(k);
+  }
+  order.sort((a, b) => dz[b] - dz[a]);
+  for (const k of order) {
+    const s = clamp(1.25 * f * (P.z[k] / FX) / dz[k], 1, 6);
+    ctx.fillStyle = o.colour || P.c[k];
+    ctx.fillRect(sx[k] - s / 2, sy[k] - s / 2, s, s);
+  }
+  const c = proj(0, 0, 0);
+  if (c[2] > 0.2) { dot(ctx, c[0], c[1], 6, SCR.yellow, true); txt(ctx, c[0] + 9, c[1] + 4, 'Kinect', { size: 11, c: SCR.yellow }); }
+}
+
+// Top-down view of points (10): x across, z up the panel, only a slice at mid-height.
+function drawTop(ctx, R, layers, cams) {
+  const zMax = 6.2, xMax = 2.8, sc = Math.min((R.h - 34) / zMax, (R.w - 24) / (2 * xMax));
+  const ox = R.x + R.w / 2, oy = R.y + R.h - 16;
+  for (let z = 1; z <= 6; z++) { line(ctx, ox - xMax * sc, oy - z * sc, ox + xMax * sc, oy - z * sc, '#18232a'); txt(ctx, ox - xMax * sc, oy - z * sc - 3, z + ' m', { size: 10, mono: true, c: SCR.faint }); }
+  for (const L of layers) {
+    ctx.fillStyle = L.c;
+    for (let k = 0; k < L.x.length; k++) ctx.fillRect(ox + L.x[k] * sc - 0.9, oy - L.z[k] * sc - 0.9, 1.8, 1.8);
+  }
+  for (const c of cams) {
+    const x = ox + c.x * sc, y = oy;
+    dot(ctx, x, y, 6, c.c, true);
+    line(ctx, x, y, x - Math.sin(c.yaw) * 22, y - Math.cos(c.yaw) * 22, c.c, 1.5);
+    txt(ctx, x + 9, y - 2, c.label, { size: 11, c: c.c });
+  }
+}
+// Camera-coordinate points to a top-down slice (world height -0.7 to 0.45 m around the camera).
+function topSlice(P, pose) {
+  const cp = Math.cos(CAM_A.pitch), sp = Math.sin(CAM_A.pitch), X = [], Z = [];
+  const ct = pose ? Math.cos(pose.turn) : 1, stt = pose ? Math.sin(pose.turn) : 0;
+  for (let k = 0; k < P.n; k++) {
+    let x = P.x[k], y = P.y[k], z = P.z[k];
+    if (pose) { const x1 = x * ct - z * stt, z1 = x * stt + z * ct; x = x1 + pose.right; z = z1; }
+    const yw = y * cp - z * sp, zw = y * sp + z * cp;
+    if (yw < -0.7 || yw > 0.45) continue;
+    X.push(x); Z.push(zw);
+  }
+  return { x: X, z: Z };
+}
+
+// =====================================================================
+//  The examples
+// =====================================================================
+const USES = [
+  ['depth', 'Depth camera'], ['colour', 'Colour camera'], ['reg', 'Registration'], ['onnx', 'yolo26n.onnx'],
+  ['thread', 'Detector thread'], ['ids', 'Tracker IDs'], ['kalman', 'Kalman filter'], ['memory', 'Room memory'],
+  ['xyz', 'XYZ points'], ['ransac', 'RANSAC'], ['pose', 'Camera pose'],
+];
+const GROUPS = { start: 'First look', objects: 'Objects lane', room: 'Room lane' };
+const EX = [];
+const PATCH = { u: 24, v: 50 };
+const cross = t => ({ u: Math.round(64 + 44 * Math.sin(0.45 * t)), v: Math.round(53 + 28 * Math.sin(0.31 * t + 1)) });
+
+EX.push({
+  id: '01', name: 'Depth Peek', group: 'start', from: '',
+  idea: 'The starting point: read the depth camera and see what it actually measures, and where it fails.',
+  uses: ['depth'], sim: () => ({ person: true }),
+  compare: 'About 30 fps on the sensor. Point it at a window, a mirror or something black and watch the red appear.',
+  setup(st) { st.crossHist = []; },
+  tick(st) { const c = cross(st.t); st.crossHist.push(st.read[c.v * W + c.u]); if (st.crossHist.length > 150) st.crossHist.shift(); },
+  steps: [
+    {
+      name: 'Read the depth', a: 'Depth camera: near = bright, far = dark', b: 'Under the green square, in millimetres',
+      text: 'Every pixel of the depth image holds a distance in millimetres instead of a colour. The window draws near pixels bright and far ones dark. The panel on the right shows the raw numbers under the green square: the edge of the chair against the wall behind it.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, depthFn(st.read))); ctx.strokeStyle = SCR.green; ctx.lineWidth = 2; ctx.strokeRect(U(I, PATCH.u - 4), V(I, PATCH.v - 3), 9 * I.s, 6 * I.s); },
+      B(ctx, R, st) {
+        const cw = (R.w - 28) / 9, ch = Math.min(40, (R.h - 60) / 6), y0 = R.y + 40;
+        txt(ctx, R.x + 14, R.y + 22, '9 × 6 depth pixels', { size: 12, w: 500 });
+        for (let j = 0; j < 6; j++) for (let k = 0; k < 9; k++) {
+          const z = st.read[(PATCH.v - 3 + j) * W + PATCH.u - 4 + k], px = [0, 0, 0];
+          depthPx(z, px); ctx.fillStyle = `rgb(${px[0] * 0.55},${px[1] * 0.55},${px[2] * 0.55})`;
+          ctx.fillRect(R.x + 14 + k * cw, y0 + j * ch, cw - 2, ch - 2);
+          txt(ctx, R.x + 14 + k * cw + cw / 2, y0 + j * ch + ch / 2 + 4, z ? String(Math.round(z * 1000)) : '—', { size: cw > 44 ? 12 : 10, mono: true, c: z ? SCR.white : SCR.red, align: 'center' });
+        }
+      },
+    },
+    {
+      name: 'Where it fails', a: 'Depth camera: red = no reading', b: 'Why pixels get no reading',
+      text: 'Red pixels got no reading. Glass lets the infrared light through, a black shiny screen swallows it, the 4.5 m cut-off drops the far end of the hallway, and the edges of objects flicker between near and far.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.read))); },
+      B(ctx, R, st) {
+        const c = [0, 0, 0, 0];
+        for (let i = 0; i < W * H; i++) {
+          if (st.read[i]) continue;
+          const m = st.frame.mat[i];
+          if (m === M.GLASS) c[0]++; else if (st.frame.depth[i] > 4.5) c[1]++; else if (m === M.TV) c[2]++; else c[3]++;
+        }
+        const n = W * H, tot = c.reduce((a, b) => a + b, 0);
+        bars(ctx, R, [
+          { label: 'Glass window: light passes through', frac: c[0] / n * 4, value: (c[0] / n * 100).toFixed(1) + '%', c: SCR.red },
+          { label: 'Past the 4.5 m cut-off', frac: c[1] / n * 4, value: (c[1] / n * 100).toFixed(1) + '%', c: SCR.red },
+          { label: 'Black, shiny TV screen', frac: c[2] / n * 4, value: (c[2] / n * 100).toFixed(1) + '%', c: SCR.red },
+          { label: 'Object edges (flaky)', frac: c[3] / n * 4, value: (c[3] / n * 100).toFixed(1) + '%', c: SCR.red },
+        ], { title: `No reading: ${(tot / n * 100).toFixed(1)}% of this frame` });
+      },
+    },
+    {
+      name: 'Crosshair', a: 'Depth camera with crosshair (W A S D)', b: 'Distance under the crosshair',
+      text: 'W A S D move a crosshair, and the window prints the distance under it. Hold it still and the number still wobbles by a few millimetres: that is the sensor\'s noise, and it grows with distance.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, depthFn(st.read))), c = cross(st.t), x = U(I, c.u + 0.5), y = V(I, c.v + 0.5);
+        line(ctx, x - 12, y, x + 12, y, SCR.green, 2); line(ctx, x, y - 12, x, y + 12, SCR.green, 2);
+        const z = st.read[c.v * W + c.u];
+        tag(ctx, x + 10, y + 8, z ? Math.round(z * 1000) + ' mm' : 'no reading', z ? SCR.green : SCR.red, I);
+      },
+      B(ctx, R, st) {
+        const h = st.crossHist, z = h[h.length - 1];
+        txt(ctx, R.x + 14, R.y + 58, z ? Math.round(z * 1000) + ' mm' : 'no reading', { size: 36, mono: true, w: 500, c: z ? SCR.white : SCR.red });
+        if (z) txt(ctx, R.x + 14, R.y + 82, `noise at this distance: about ±${(noiseM(z) * 1000).toFixed(1)} mm`, { size: 12, c: SCR.dim });
+        const vals = h.map(v => v || null), ok = vals.filter(v => v);
+        chart(ctx, { x: R.x, y: R.y + 90, w: R.w, h: R.h - 90 }, {
+          n: 150, ymin: 0, ymax: Math.max(5, ...ok) + 0.2, yfmt: v => v.toFixed(1) + ' m', xlabel: 'last 5 s',
+          series: [{ vals, c: SCR.green }],
+        });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '02', name: 'Detect + Distance', group: 'start', from: '01', blocking: true,
+  idea: 'YOLO finds objects in the colour image; depth then says how far away each one is. The detector never sees depth: the guide calls this late fusion.',
+  uses: ['depth', 'colour', 'reg', 'onnx'], sim: () => ({ person: true }),
+  compare: 'The frame rate drops from 30 to about 6 fps: YOLO takes 130–180 ms per frame, and everything waits for it.',
+  setup(st) { st.dets = []; },
+  tick(st) { st.dets = runYolo(st.frame, st.read); },
+  steps: [
+    {
+      name: 'Detect', a: 'Colour camera', b: 'Inside the detector',
+      text: 'The colour frame is squeezed into a 640 × 640 square and run through yolo26n.onnx by OpenCV\'s DNN module. Out come up to 300 boxes, each with a class and a confidence; anything under 0.40 is dropped. On the CPU this takes 130–180 ms, slowed down here so you can watch it.',
+      A(ctx, R, st, s) { const I = show(ctx, R, paint(0, colourFn(st.frame))); if ((s % 2.4) / 2.4 > 0.8) drawDets(ctx, I, st.dets); fpsTag(ctx, I, st); },
+      B(ctx, R, st, s) { drawModel(ctx, R, st, (s % 2.4) / 2.4, { dets: st.dets, ms: '≈150 ms per frame on the CPU (slowed down here)' }); },
+    },
+    {
+      name: 'Register', a: 'Depth pixels sliding onto the colour image', b: 'Two cameras, side by side',
+      text: 'The colour and depth cameras sit side by side, so their pictures don\'t line up. libfreenect2\'s Registration says where each depth pixel lands in the colour image. Watch the depth dots slide into place.',
+      A(ctx, R, st, s) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame))), off = Math.max(0, 1 - s / 3) * 7;
+        for (let v = 1; v < H; v += 3) for (let u = 1; u < W; u += 3) {
+          const z = st.read[v * W + u]; if (!z) continue;
+          ctx.fillStyle = depthHue(z); ctx.fillRect(U(I, u + off) - 1.2, V(I, v - off * 0.3) - 1.2, 2.4, 2.4);
+        }
+      },
+      B(ctx, R) {
+        const cx = R.x + R.w / 2, by = R.y + R.h - 34, gap = Math.min(70, R.w * 0.18), top = R.y + 50;
+        ctx.fillStyle = '#1d282f'; ctx.fillRect(cx - gap - 40, by - 10, 2 * gap + 80, 20);
+        const cams = [[cx - gap / 2, 'colour camera', SCR.orange], [cx + gap / 2, 'depth camera', SCR.accent]];
+        const tx = cx - gap * 0.2;
+        for (const [x, label, c] of cams) {
+          dot(ctx, x, by, 7, c);
+          line(ctx, x, by, x - R.w * 0.32, top, c, 1, [3, 4]); line(ctx, x, by, x + R.w * 0.32, top, c, 1, [3, 4]);
+          line(ctx, x, by, tx, top + 30, c, 1.5);
+          txt(ctx, x, by + 26, label, { size: 11, c, align: 'center' });
+        }
+        dot(ctx, tx, top + 30, 5, SCR.white);
+        txt(ctx, tx + 10, top + 26, 'the same spot in the room', { size: 11, c: SCR.white });
+        txt(ctx, R.x + 14, R.y + 22, 'Each camera sees it at a different pixel', { size: 12, w: 500 });
+      },
+    },
+    {
+      name: 'Sample', a: 'Box (thick) and its sampled centre (thin)', b: 'Depth pixels in the centre of the person box',
+      text: 'Inside each box only the centre half is sampled (the thin box), so the box edges and the wall behind count less. The median of those depth pixels is the distance: one stray reading can\'t move a median.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawDets(ctx, I, st.dets, { centre: true }); },
+      B(ctx, R, st) {
+        const d = st.dets.find(x => x.cls === 'person') || st.dets[0];
+        if (!d || !d.sample.vals.length) { para(ctx, R, ['No box this frame.']); return; }
+        const vals = d.sample.vals, lo = Math.min(...vals), hi = Math.max(...vals), nb = 24, bins = new Array(nb).fill(0);
+        for (const v of vals) bins[Math.min(nb - 1, Math.floor((v - lo) / (hi - lo + 1e-6) * nb))]++;
+        const mx = Math.max(...bins), L = R.x + 20, bw = (R.w - 40) / nb, base = R.y + R.h - 40, top = R.y + 50;
+        txt(ctx, R.x + 14, R.y + 22, `${d.cls}: ${vals.length} depth pixels`, { size: 12, w: 500 });
+        bins.forEach((b, k) => { const h = (base - top) * b / mx; ctx.fillStyle = '#3a5560'; ctx.fillRect(L + k * bw + 1, base - h, bw - 2, h); });
+        const mxp = L + (d.z - lo) / (hi - lo + 1e-6) * (R.w - 40);
+        line(ctx, mxp, top - 6, mxp, base, SCR.accent, 2);
+        txt(ctx, mxp + 6, top + 4, 'median ' + fmtM(d.z), { size: 12, mono: true, c: SCR.accent });
+        txt(ctx, L, base + 18, lo.toFixed(2) + ' m', { size: 10, mono: true, c: SCR.dim });
+        txt(ctx, L + R.w - 40, base + 18, hi.toFixed(2) + ' m', { size: 10, mono: true, c: SCR.dim, align: 'right' });
+      },
+    },
+    {
+      name: 'Deproject', a: 'Each box with its distance and position', b: 'Pixel + depth = a point in metres (top view)',
+      text: 'The pixel position plus its depth gives a point in metres, using the depth camera\'s factory intrinsics: X = (u − cx) · Z ÷ fx, and the same for Y. The console checks this hand-done maths against libfreenect2\'s own getPointXYZ.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawDets(ctx, I, st.dets, { dist: true, xy: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const d = st.dets.find(x => x.cls === 'person' && x.z) || st.dets.find(x => x.z);
+        if (!d) { para(ctx, R, ['No box with a depth reading this frame.']); return; }
+        const u4 = ((d.u0 + d.u1) / 2) * 4, X = xOf(d);
+        const camX = R.x + R.w * 0.3, camY = R.y + R.h - 28, sc = (R.h - 80) / 5, planeY = camY - 30;
+        line(ctx, camX, camY, camX, camY - 5 * sc, SCR.faint, 1, [3, 4]);
+        line(ctx, camX - 60, planeY, camX + 60, planeY, SCR.dim, 1.5);
+        txt(ctx, camX + 64, planeY + 4, 'image', { size: 10, c: SCR.dim });
+        const px = camX + (u4 - 254) / 365.1 * 30, tx = camX + X * sc, ty = camY - d.z * sc;
+        line(ctx, camX, camY, tx, ty, SCR.accent, 1.5);
+        dot(ctx, camX, camY, 6, SCR.yellow); dot(ctx, px, planeY, 3.5, SCR.white); dot(ctx, tx, ty, 6, SCR.accent);
+        line(ctx, tx, ty, camX, ty, SCR.dim, 1, [2, 3]);
+        txt(ctx, (tx + camX) / 2, ty - 6, 'X', { size: 12, mono: true, c: SCR.dim, align: 'center' });
+        txt(ctx, camX - 8, (camY + ty) / 2, 'Z', { size: 12, mono: true, c: SCR.dim, align: 'right' });
+        const fx = R.x + R.w * 0.52;
+        para(ctx, { x: fx, y: R.y + 30, w: R.w * 0.48 }, [
+          { t: 'X = (u − cx) · Z ÷ fx', mono: true, size: 12 },
+          { t: `u  = ${u4.toFixed(0)} px`, mono: true, size: 12, c: SCR.dim },
+          { t: 'cx = 254, fx = 365.1', mono: true, size: 12, c: SCR.dim },
+          { t: `Z  = ${d.z.toFixed(2)} m`, mono: true, size: 12, c: SCR.dim },
+          { t: `X  = ${sgn(X)} m`, mono: true, size: 13, c: SCR.accent, w: 500 },
+        ], { top: 0 });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '03', name: 'Depth Blobs', group: 'start', from: '01',
+  idea: 'No AI. Remember the empty room\'s depth; anything noticeably nearer is something new. It doesn\'t know what anything is, but it works in the dark.',
+  uses: ['depth', 'memory'], sim: st => ({ person: st.step !== 0 }),
+  compare: 'Turn the lights off: 03 keeps working while 02 finds nothing. Press B with someone in view and see what goes wrong.',
+  setup(st) { st.bg = new Float32Array(W * H); st.bgRow = 0; st.mask = new Uint8Array(W * H); st.blobs = []; },
+  tick(st) {
+    if (st.step === 0 && st.bgRow < H) { for (let r = st.bgRow; r < Math.min(H, st.bgRow + 3); r++) for (let u = 0; u < W; u++) st.bg[r * W + u] = st.read[r * W + u]; st.bgRow += 3; }
+    for (let i = 0; i < W * H; i++) st.mask[i] = st.read[i] && st.bg[i] && st.read[i] < st.bg[i] - 0.05 ? 1 : 0;
+    st.blobs = blobs(st.mask, st.read, 40).list;
+  },
+  steps: [
+    {
+      name: 'Remember the room', a: 'Depth camera (step out of view, press B)', b: 'The memory: one depth per pixel',
+      text: 'Step out of view and press B: the depth of the empty room is stored, one value per pixel.',
+      enter(st) { st.bg.fill(0); st.bgRow = 0; },
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.read))); },
+      B(ctx, R, st) { const I = show(ctx, R, paint(1, (i, px) => { if ((i / W | 0) >= st.bgRow) { px[0] = px[1] = px[2] = 12; } else depthPx(st.bg[i], px); })); if (st.bgRow < H) line(ctx, I.x, V(I, st.bgRow), I.x + I.w, V(I, st.bgRow), SCR.accent, 2); },
+    },
+    {
+      name: 'Nearer = new', a: 'Depth camera: green = nearer than the memory', b: 'One pixel, compared with the memory',
+      text: 'Each frame, every pixel is compared with the memory. Clearly nearer than the remembered room means something is standing there: foreground, painted green.',
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (st.mask[i]) tint(px, G_RGB, 0.6); })); },
+      B(ctx, R, st) {
+        const b = st.blobs[0];
+        const i = b ? ((b.v0 + b.v1) >> 1) * W + ((b.u0 + b.u1) >> 1) : 40 * W + 64;
+        const now = st.read[i], mem = st.bg[i], fg = st.mask[i];
+        bars(ctx, R, [
+          { label: 'Remembered room', frac: mem / 5, value: fmtM(mem), c: SCR.dim },
+          { label: 'Now', frac: now / 5, value: fmtM(now), c: fg ? SCR.green : SCR.text },
+        ], { title: b ? 'The pixel in the middle of the blob' : 'A pixel in the middle of the view' });
+        para(ctx, { x: R.x, y: R.y + R.h - 40, w: R.w }, [{ t: fg ? `${(mem - now).toFixed(2)} m nearer: foreground` : 'About the same: background', c: fg ? SCR.green : SCR.dim, w: 500 }], { top: 0 });
+      },
+    },
+    {
+      name: 'Blobs and size', a: 'Depth camera: each blob boxed', b: 'Real size from pixels',
+      text: 'Touching foreground pixels are grouped into blobs; tiny ones are dropped as speckle. A blob\'s median depth is its distance, and its size in pixels times the depth over the focal length gives its real size in metres.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (st.mask[i]) tint(px, G_RGB, 0.6); }));
+        for (const b of st.blobs) { bx(ctx, I, b, SCR.green, 2); tag(ctx, U(I, b.u0), V(I, b.v0) - 18, `${((b.v1 - b.v0 + 1) * b.z / FY).toFixed(2)} m tall, ${fmtM(b.z)}`, SCR.green, I); }
+      },
+      B(ctx, R, st) {
+        const b = st.blobs[0];
+        if (!b) { para(ctx, R, ['Nobody in view this frame.']); return; }
+        const hp = (b.v1 - b.v0 + 1) * 4, wp = (b.u1 - b.u0 + 1) * 4;
+        para(ctx, R, [
+          { t: 'size = pixels × Z ÷ focal length', mono: true, size: 12 }, '',
+          { t: `height = ${hp} px × ${b.z.toFixed(2)} m ÷ 365.1`, mono: true, size: 12, c: SCR.dim },
+          { t: `       = ${(hp * b.z / 365.1).toFixed(2)} m`, mono: true, size: 13, c: SCR.green, w: 500 }, '',
+          { t: `width  = ${wp} px × ${b.z.toFixed(2)} m ÷ 365.1`, mono: true, size: 12, c: SCR.dim },
+          { t: `       = ${(wp * b.z / 365.1).toFixed(2)} m`, mono: true, size: 13, c: SCR.green, w: 500 },
+        ]);
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '04', name: 'Track + Smooth', group: 'objects', from: '02', blocking: true,
+  idea: '02 measures every box from scratch, so distances jitter and nothing links an object in one frame to the next. 04 follows each object over time.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids'], sim: () => ({ person: true }),
+  compare: 'Two still chairs: jitter fell from 2–4 mm to 0.4 mm per frame. The console prints a new ID line whenever an ID changes.',
+  setup(st) { st.T = newTracker('overlap', 12); st.dets = []; },
+  tick(st) { st.dets = runYolo(st.frame, st.read); predictTracks(st.T, 1 / 6); matchTracks(st.T, st.dets); },
+  steps: [
+    {
+      name: 'Detect and measure', a: 'Colour camera, boxes from scratch', b: 'Inside the detector (as in 02)',
+      text: 'Exactly as in 02: YOLO boxes from the colour frame, then the median depth in each box\'s centre. Every frame starts from nothing.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawDets(ctx, I, st.dets, { dist: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st, s) { drawModel(ctx, R, st, (s % 2.4) / 2.4, { dets: st.dets, ms: '≈150 ms per frame' }); },
+    },
+    {
+      name: 'Track by overlap', a: 'Last box (dashed) and this frame\'s box', b: 'Overlap ÷ union',
+      text: 'Each new box is matched to the last frame\'s box it overlaps most: overlap ÷ union, 0.3 or more (MinOverlap). Matched means the same object, so it keeps its ID number. No match means a new ID.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame)));
+        for (const tr of st.T.tracks) if (tr.prevBox) bx(ctx, I, tr.prevBox, SCR.dim, 1, [4, 3]);
+        drawTracks(ctx, I, st.T); tag(ctx, I.x + 4, I.y + 4, `IDs started so far: ${st.T.started}`, SCR.dim);
+      },
+      B(ctx, R, st) {
+        const tr = st.T.tracks.find(t => t.cls === 'person' && t.prevBox && t.det) || st.T.tracks.find(t => t.prevBox && t.det);
+        if (!tr) { para(ctx, R, ['Waiting for an object seen in two frames in a row.']); return; }
+        const a = tr.prevBox, b = tr.box;
+        const u0 = Math.min(a.u0, b.u0), u1 = Math.max(a.u1, b.u1), v0 = Math.min(a.v0, b.v0), v1 = Math.max(a.v1, b.v1);
+        const s = Math.min((R.w * 0.5) / (u1 - u0 + 1), (R.h - 90) / (v1 - v0 + 1)), ox = R.x + 30 - u0 * s, oy = R.y + 50 - v0 * s;
+        const rect = (q, c, dash, fill) => { if (fill) { ctx.fillStyle = fill; ctx.fillRect(ox + q.u0 * s, oy + q.v0 * s, (q.u1 - q.u0) * s, (q.v1 - q.v0) * s); } ctx.save(); ctx.setLineDash(dash || []); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.strokeRect(ox + q.u0 * s, oy + q.v0 * s, (q.u1 - q.u0) * s, (q.v1 - q.v0) * s); ctx.restore(); };
+        const ix = { u0: Math.max(a.u0, b.u0), u1: Math.min(a.u1, b.u1), v0: Math.max(a.v0, b.v0), v1: Math.min(a.v1, b.v1) };
+        if (ix.u1 > ix.u0 && ix.v1 > ix.v0) rect(ix, 'transparent', null, 'rgba(94,198,212,0.35)');
+        rect(a, SCR.dim, [4, 3]); rect(b, ID_COLS[(tr.id - 1) % ID_COLS.length]);
+        const o = iou(a, b), ok = o >= MIN_OVERLAP;
+        txt(ctx, R.x + 14, R.y + 22, `#${tr.id} ${tr.cls}: last frame (dashed) and now`, { size: 12, w: 500 });
+        para(ctx, { x: R.x + R.w * 0.58, y: R.y + 50, w: R.w * 0.4 }, [
+          { t: 'overlap ÷ union', mono: true, size: 12, c: SCR.dim },
+          { t: o.toFixed(2), mono: true, size: 28, c: ok ? SCR.accent : SCR.red, w: 500 }, '', '',
+          { t: ok ? `≥ 0.3: still #${tr.id}` : '< 0.3: new ID', size: 12, c: ok ? SCR.accent : SCR.red },
+        ], { top: 0 });
+      },
+    },
+    {
+      name: 'Smooth', a: 'Smoothed distance (raw in brackets)', b: 'The chair\'s distance, frame by frame',
+      text: 'Each object keeps a running average of its own distance (DistanceSmoothing = 0.8: keep 80% of the old value). Because it follows the object, not a pixel, it still works when the object or the camera moves (decision D12).',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T, { raw: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const tr = st.T.tracks.find(t => t.cls === 'chair');
+        if (!tr || tr.hist.length < 4) { para(ctx, R, ['Waiting for the chair to be tracked.']); return; }
+        const h = tr.hist.slice(-40), raw = h.map(x => x.raw || null), est = h.map(x => x.est);
+        const mean = est.reduce((a, b) => a + b, 0) / est.length;
+        const jit = arr => { let s = 0, n = 0; for (let i = 1; i < arr.length; i++) if (arr[i] && arr[i - 1]) { s += Math.abs(arr[i] - arr[i - 1]); n++; } return n ? s / n * 1000 : 0; };
+        chart(ctx, R, {
+          n: 40, ymin: -8, ymax: 8, yfmt: v => (v > 0 ? '+' : '') + v.toFixed(0) + ' mm', xlabel: `last ${h.length} frames`,
+          title: `jitter: raw ${jit(raw).toFixed(1)} mm, smoothed ${jit(est).toFixed(1)} mm`,
+          series: [{ vals: raw.map(v => v ? (v - mean) * 1000 : null), c: SCR.dim, label: 'raw' }, { vals: est.map(v => (v - mean) * 1000), c: SCR.accent, w: 2.2, label: 'smoothed' }],
+        });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '05', name: 'Kalman', group: 'objects', from: '04', blocking: true,
+  idea: 'At 6 fps a walking person barely overlaps their last box, and an average lags behind anything that moves. A Kalman filter per object fixes both: predict, then correct.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids', 'kalman'], sim: () => ({ person: true }),
+  compare: 'Walk across the room with 04 and then 05: does 05 keep your ID? Walking should read about 1–1.5 m/s. Both print a new ID line explaining each ID change.',
+  setup(st) { st.T = newTracker('kalman', 12); st.dets = []; },
+  tick(st) { st.dets = runYolo(st.frame, st.read); predictTracks(st.T, 1 / 6); matchTracks(st.T, st.dets); },
+  steps: [
+    {
+      name: 'Predict', a: 'Each object moved on by its speed (arrow)', b: 'The person\'s distance: measured dots, filter line',
+      text: 'Each object has a position, a speed, and how sure the filter is about both. Before looking at the new frame, the filter moves every object on by its speed. The further ahead it guesses, the less sure it is: the band on the right widens.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T);
+        for (const tr of st.T.tracks) {
+          const b = boxOf(tr), cx = (b.u0 + b.u1) / 2, cy = (b.v0 + b.v1) / 2;
+          if (Math.hypot(tr.ku.v, tr.kv.v) > 2) arrow(ctx, U(I, cx), V(I, cy), U(I, cx + tr.ku.v * 0.5), V(I, cy + tr.kv.v * 0.5), SCR.white, 2);
+        }
+        fpsTag(ctx, I, st);
+      },
+      B(ctx, R, st) {
+        const tr = personTrack(st.T);
+        if (!tr || tr.hist.length < 3) { para(ctx, R, ['Waiting for the person to be tracked.']); return; }
+        const h = tr.hist.slice(-30), n = h.length + 6, raw = h.map(x => x.raw || null), est = h.map(x => x.est);
+        const pred = new Array(h.length - 1).fill(null), hi = new Array(h.length - 1).fill(null), lo = new Array(h.length - 1).fill(null);
+        const last = h[h.length - 1];
+        for (let k = 0; k <= 6; k++) { const z = last.est + last.speed * k / 6, sd = Math.sqrt(last.P + (k / 6) ** 2 * 0.25) * 2; pred.push(z); hi.push(z + sd); lo.push(z - sd); }
+        const all = [...raw.filter(v => v), ...est, ...hi, ...lo].filter(v => v != null);
+        chart(ctx, R, {
+          n, ymin: Math.min(...all) - 0.1, ymax: Math.max(...all) + 0.1, yfmt: v => v.toFixed(1) + ' m', xlabel: 'last 5 s, then 1 s ahead',
+          band: { hi, lo, c: 'rgba(94,198,212,0.18)' },
+          series: [{ vals: raw, dots: true, c: SCR.white, label: 'measured' }, { vals: est, c: SCR.accent, w: 2, label: 'filter' }, { vals: pred, c: SCR.accent, dash: [4, 4] }],
+        });
+      },
+    },
+    {
+      name: 'Match to the prediction', a: 'Last box (grey), predicted (thin), new detection (white)', b: 'How much the new box overlaps',
+      text: 'New boxes are matched against the predicted boxes, not last frame\'s. A walker overlaps where they were expected to be much better than where they were, so they keep their ID.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame)));
+        for (const tr of st.T.tracks) { if (tr.last) bx(ctx, I, tr.last, SCR.dim, 1, [4, 3]); if (tr.pred) bx(ctx, I, tr.pred, ID_COLS[(tr.id - 1) % ID_COLS.length], 1); }
+        for (const d of st.dets) bx(ctx, I, d, SCR.white, 2);
+      },
+      B(ctx, R, st) {
+        const tr = st.T.tracks.find(t => t.cls === 'person' && t.det) || st.T.tracks.find(t => t.det);
+        if (!tr) { para(ctx, R, ['No match this frame.']); return; }
+        bars(ctx, R, [
+          { label: 'with last frame\'s box (04)', frac: tr.iouLast, value: tr.iouLast.toFixed(2), c: tr.iouLast >= MIN_OVERLAP ? SCR.dim : SCR.red },
+          { label: 'with the predicted box (05)', frac: tr.iouPred, value: tr.iouPred.toFixed(2), c: SCR.accent },
+        ], { title: `#${tr.id} ${tr.cls}: overlap ÷ union, 0.3 needed` });
+      },
+    },
+    {
+      name: 'Correct', a: 'Boxes after the correction', b: 'Blending prediction and measurement (distance)',
+      text: 'The measurement and the prediction are blended. Whichever is more certain gets more weight, and the result is surer than either one alone.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const tr = st.T.tracks.find(t => t.cls === 'person' && t.det && t.zPrior && t.det.z) || st.T.tracks.find(t => t.det && t.zPrior && t.det.z);
+        if (!tr) { para(ctx, R, ['No measurement this frame: the filter coasts.']); return; }
+        const g = [
+          { m: tr.zPrior.p, s: Math.sqrt(tr.zPrior.P), c: SCR.accent, label: 'prediction' },
+          { m: tr.det.z, s: Math.sqrt(R_M), c: SCR.white, label: 'measurement' },
+          { m: tr.zPost.p, s: Math.sqrt(tr.zPost.P), c: SCR.green, label: 'result' },
+        ];
+        const lo = Math.min(...g.map(q => q.m - 3.5 * q.s)), hi = Math.max(...g.map(q => q.m + 3.5 * q.s));
+        const L = R.x + 20, Rr = R.x + R.w - 20, base = R.y + R.h - 34, top = R.y + 60, X = z => L + (Rr - L) * (z - lo) / (hi - lo);
+        const peak = Math.max(...g.map(q => 1 / q.s));
+        txt(ctx, R.x + 14, R.y + 22, `#${tr.id} ${tr.cls}: distance`, { size: 12, w: 500 });
+        g.forEach((q, k) => {
+          ctx.beginPath(); ctx.strokeStyle = q.c; ctx.lineWidth = 2;
+          for (let i = 0; i <= 80; i++) { const z = lo + (hi - lo) * i / 80, y = base - (base - top) * Math.exp(-0.5 * ((z - q.m) / q.s) ** 2) / q.s / peak; if (i) ctx.lineTo(X(z), y); else ctx.moveTo(X(z), y); }
+          ctx.stroke();
+          txt(ctx, R.x + 14 + k * (R.w - 28) / 3, R.y + 42, `${q.label} ${q.m.toFixed(2)}`, { size: 11, mono: true, c: q.c });
+        });
+        line(ctx, L, base, Rr, base, SCR.line);
+        txt(ctx, L, base + 16, lo.toFixed(2) + ' m', { size: 10, mono: true, c: SCR.dim });
+        txt(ctx, Rr, base + 16, hi.toFixed(2) + ' m', { size: 10, mono: true, c: SCR.dim, align: 'right' });
+      },
+    },
+    {
+      name: 'Coast, and speed', a: 'Thin dashed = predicted only (YOLO missed it)', b: 'Seen or missed, frame by frame',
+      text: 'When YOLO misses an object, the prediction keeps it moving (a thin dashed box). After 12 missed frames, 2 s, it is dropped. Speed comes for free: negative means coming towards the camera.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T, { speed: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const tr = personTrack(st.T);
+        if (!tr) { para(ctx, R, ['Nobody tracked right now: the next detection starts a new ID.']); return; }
+        txt(ctx, R.x + 14, R.y + 22, `#${tr.id} person`, { size: 12, w: 500 });
+        txt(ctx, R.x + 14, R.y + 64, fmtSpeed(tr.kz.v), { size: 32, mono: true, w: 500, c: SCR.white });
+        txt(ctx, R.x + 14, R.y + 84, tr.kz.v < -0.05 ? 'coming towards the camera' : tr.kz.v > 0.05 ? 'moving away' : 'about still', { size: 12, c: SCR.dim });
+        const h = tr.hist.slice(-36), cw = (R.w - 28) / 36, y = R.y + 112;
+        h.forEach((x, k) => { ctx.fillStyle = x.seen ? SCR.accent : SCR.faint; ctx.fillRect(R.x + 14 + k * cw, y, cw - 2, 22); });
+        txt(ctx, R.x + 14, y + 40, 'filled = YOLO saw it, dark = coasting', { size: 11, c: SCR.dim });
+        txt(ctx, R.x + 14, y + 58, `missed in a row: ${tr.missed} of 12 allowed`, { size: 11, mono: true, c: tr.missed ? SCR.yellow : SCR.dim });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '05b', name: 'Two Thresholds', group: 'objects', from: '05', blocking: true,
+  idea: 'IDs reset because YOLO\'s confidence wobbles around the 0.40 cut-off. Two levels fix it, the core of ByteTrack: strong boxes may start an ID, weak ones may only continue one.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids', 'kalman'], sim: () => ({ person: true }),
+  compare: 'The same flickering TV for 60 s: 7 IDs with 05, 1 with 05b. Run both and compare their new ID lines.',
+  setup(st) { st.T = newTracker('two', 30, true); st.dets = []; st.confHist = []; },
+  tick(st) {
+    const all = runYolo(st.frame, st.read, { minConf: 0, blips: true });
+    const p = all.find(d => d.cls === 'person' && d.obj);
+    st.confHist.push(p ? p.conf : null); if (st.confHist.length > 60) st.confHist.shift();
+    st.dets = all.filter(d => d.conf >= KEEP_CONF);
+    predictTracks(st.T, 1 / 6); matchTracks(st.T, st.dets);
+  },
+  steps: [
+    {
+      name: 'Confidence wobbles', a: 'Thick = strong, medium = weak', b: 'The person\'s confidence, frame by frame',
+      text: 'A half-visible, turned-away or very close person scores anywhere from 0.2 to 0.7. With one cut-off at 0.40, every dip below it is a missed frame, and 2 s of dips cost the ID.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); tag(ctx, I.x + 4, I.y + 4, `IDs started so far: ${st.T.started}`, SCR.dim); },
+      B(ctx, R, st) {
+        const h = st.confHist;
+        chart(ctx, R, {
+          n: 60, ymin: 0, ymax: 0.8, yfmt: v => v.toFixed(1), xlabel: 'last 10 s',
+          lines: [{ y: START_CONF, c: SCR.white, label: 'start an ID: 0.40' }, { y: KEEP_CONF, c: SCR.yellow, label: 'keep an ID: 0.15' }],
+          series: [{ vals: h, c: SCR.faint }, { vals: h, dots: true, r: 3, c: SCR.white, cs: h.map(v => v == null ? null : v >= START_CONF ? SCR.white : v >= KEEP_CONF ? SCR.yellow : SCR.red) }],
+        });
+      },
+    },
+    {
+      name: 'Two passes', a: 'Strong, weak, and an ignored blip (red)', b: 'This frame\'s detections, pass by pass',
+      text: 'Pass 1 matches the strong boxes (0.40 and up) and may start new IDs. Pass 2 offers the weak ones (0.15 to 0.40) to whatever is still unmatched, but never starts anything. A weak blip on the wall goes nowhere.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T);
+        for (const d of st.dets) if (d.result === 'ignored') { bx(ctx, I, d, SCR.red, 1, [3, 3]); tag(ctx, U(I, d.u0), V(I, d.v1) + 2, `${d.conf.toFixed(2)} ignored`, SCR.red, I); }
+      },
+      B(ctx, R, st) {
+        const strong = st.dets.filter(d => d.conf >= START_CONF), weak = st.dets.filter(d => d.conf < START_CONF);
+        const col = (x, title, list, c) => {
+          txt(ctx, x, R.y + 24, title, { size: 12, w: 500, c });
+          if (!list.length) txt(ctx, x, R.y + 48, 'none', { size: 12, c: SCR.dim });
+          list.forEach((d, k) => {
+            txt(ctx, x, R.y + 48 + k * 34, `${d.cls} ${d.conf.toFixed(2)}`, { size: 12, mono: true });
+            txt(ctx, x, R.y + 64 + k * 34, '→ ' + (d.result || '–'), { size: 12, mono: true, c: d.result === 'ignored' ? SCR.red : d.result.startsWith('new') ? SCR.orange : SCR.accent });
+          });
+        };
+        col(R.x + 14, 'Pass 1 · strong, 0.40+', strong, SCR.white);
+        col(R.x + R.w / 2 + 4, 'Pass 2 · weak, 0.15–0.40', weak, SCR.yellow);
+      },
+    },
+    {
+      name: 'Speed fades', a: 'Boxes coast to a stop while unseen', b: 'The person\'s speed; shaded = unseen',
+      text: 'An unseen object is now kept for 30 frames, 5 s, instead of 2 s. So its box doesn\'t drift away in that time, its predicted speed fades out (CoastSlowdownSeconds = 0.5) and it slows to a stop where it was last seen.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T, { speed: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const tr = personTrack(st.T);
+        if (!tr || tr.hist.length < 3) { para(ctx, R, ['Waiting for the person to be tracked.']); return; }
+        const h = tr.hist.slice(-48), spans = [];
+        h.forEach((x, i) => { if (!x.seen) spans.push({ i0: Math.max(0, i - 0.5), i1: Math.min(h.length - 1, i + 0.5), c: 'rgba(255,210,63,0.12)' }); });
+        chart(ctx, R, {
+          n: 48, ymin: 0, ymax: 1.2, yfmt: v => v.toFixed(1) + ' m/s', xlabel: 'last 8 s', spans, title: `#${tr.id} person`,
+          series: [{ vals: h.map(x => Math.abs(x.speed)), c: SCR.accent, w: 2, label: 'speed' }],
+        });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '05c', name: 'Background Detect', group: 'objects', from: '05b',
+  idea: 'Everything so far waits about 150 ms for YOLO every frame. 05c stops waiting: YOLO runs on its own thread, and the main loop keeps the camera\'s 30 fps.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'thread', 'ids', 'kalman'], sim: () => ({ person: true }),
+  compare: 'Set DetectInBackground = false to get 05b\'s behaviour: about 4 fps while waiting, 24–27 fps with the thread. ModelInputSize = 320 needs the second model file, yolo26n_320.onnx.',
+  setup(st) { st.T = newTracker('two', 30, true); st.pend = null; st.series = []; st.batchZ = 0; st.batchK = 0; },
+  tick(st, k) {
+    predictTracks(st.T, 1 / FPS);
+    for (const tr of st.T.tracks) { const c = centreDepth(st.read, boxOf(tr)); if (c.z) kfCorrect(tr.kz, c.z, R_M); }
+    if (k % 5 === 0) {
+      if (st.pend) { const ds = runYolo(st.pend.frame, st.pend.read, { minConf: KEEP_CONF, small: st.step === 2 }); matchTracks(st.T, ds); st.batchK = k; const p = personTrack(st.T); st.batchZ = p && p.det ? p.det.z : st.batchZ; }
+      st.pend = { frame: st.frame, read: st.read };
+    }
+    const p = personTrack(st.T);
+    st.series.push({ fresh: p ? p.kz.p : null, batch: p ? st.batchZ || null : null }); if (st.series.length > 120) st.series.shift();
+  },
+  steps: [
+    {
+      name: 'Two loops', a: 'Colour camera at 30 fps', b: 'Main loop and detector thread, last 1.5 s',
+      text: 'The detector thread takes the newest colour frame, runs YOLO and hands back boxes, a few times a second. Meanwhile the main loop runs on every camera frame: it predicts each box forward (05) and folds in YOLO\'s boxes whenever a batch arrives (05b\'s two passes).',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const n = 45, L = R.x + 14, Rr = R.x + R.w - 14, cw = (Rr - L) / n, y1 = R.y + 64, y2 = R.y + 150;
+        txt(ctx, L, y1 - 14, 'main loop: predict, re-measure, draw', { size: 12, c: SCR.text });
+        txt(ctx, L, y2 - 14, 'detector thread: YOLO on a frame', { size: 12, c: SCR.text });
+        for (let i = 0; i < n; i++) {
+          const k = st.k - (n - 1) + i, x = L + i * cw;
+          ctx.fillStyle = i === n - 1 ? SCR.white : '#3a5560'; ctx.fillRect(x + 1, y1, cw - 2, 18);
+          if (k % 5 === 0) {
+            ctx.fillStyle = 'rgba(255,154,60,0.75)'; ctx.fillRect(x + 1, y2, cw * 5 - 2, 18);
+            if (i > 4) arrow(ctx, x, y2, x, y1 + 24, SCR.orange, 1.2);
+          }
+        }
+        txt(ctx, L, y2 + 40, 'each orange bar works on a frame that is already 5 frames old;', { size: 11, c: SCR.dim });
+        txt(ctx, L, y2 + 56, 'its boxes are matched to the predictions when it finishes (arrow)', { size: 11, c: SCR.dim });
+      },
+    },
+    {
+      name: 'Fresh depth every frame', a: 'Distances update every frame', b: 'The person\'s distance, last 4 s',
+      text: 'Between batches, each predicted box is measured again in the new depth frame. The distance updates 30 times a second instead of in steps.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T, { speed: true }); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const s = st.series, fresh = s.map(x => x.fresh), batch = s.map(x => x.batch), ok = [...fresh, ...batch].filter(v => v);
+        if (!ok.length) { para(ctx, R, ['Waiting for the person to be tracked.']); return; }
+        chart(ctx, R, {
+          n: 120, ymin: Math.min(...ok) - 0.1, ymax: Math.max(...ok) + 0.1, yfmt: v => v.toFixed(1) + ' m', xlabel: 'last 4 s',
+          series: [{ vals: batch, c: SCR.orange, label: 'only when YOLO answers' }, { vals: fresh, c: SCR.accent, w: 2, label: 'every frame' }],
+        });
+      },
+    },
+    {
+      name: 'Smaller model', a: 'With the 320 model: the edge goes unseen', b: 'Time per YOLO run on the Ryzen',
+      text: 'ModelInputSize = 320 runs a 320 × 320 version of the network: from 175 ms down to 55–80 ms per run. The cost: objects cut off at the image edge get missed, like the person when they walk out of the side of the picture.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T);
+        const b = objBoxes(st.frame)[OBJ.PERSON];
+        if (b && (b.u0 <= 0 || b.u1 >= W - 1)) tag(ctx, I.x + 4, I.y + 4, 'person cut off at the edge: missed', SCR.red);
+        fpsTag(ctx, I, st);
+      },
+      B(ctx, R) {
+        bars(ctx, R, [
+          { label: '640 × 640 (yolo26n.onnx)', frac: 175 / 200, value: '175 ms', c: SCR.dim },
+          { label: '320 × 320 (yolo26n_320.onnx)', frac: 68 / 200, value: '55–80 ms', c: SCR.accent },
+        ], { title: 'Measured per YOLO run' });
+        para(ctx, { x: R.x, y: R.y + R.h - 70, w: R.w }, [{ t: 'A model file with a flexible input size does not', c: SCR.dim, size: 12 }, { t: 'load in OpenCV 4.14, hence two files.', c: SCR.dim, size: 12 }], { top: 0 });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '06', name: 'Radar', group: 'objects', from: '05', blocking: true,
+  idea: '02–05 say how far away each object is. 06 adds where: a position on the floor in metres, drawn from above. The project\'s first map.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids', 'kalman'], sim: () => ({ person: true }),
+  compare: 'Still objects stay steady to about 1 cm. Walk to your left: does your dot move left on the radar? That check is still open.',
+  setup(st) { st.T = newTracker('kalman', 12); },
+  tick(st) { const ds = runYolo(st.frame, st.read); predictTracks(st.T, 1 / 6); matchTracks(st.T, ds); },
+  steps: [
+    {
+      name: 'Deproject', a: 'Box centres (cross) and filtered distance', b: 'From pixel to floor position',
+      text: 'The filtered box centre and the filtered distance become a floor position, with the colour camera\'s factory intrinsics: X = (u − cx) · Z ÷ fx is left or right of the camera, Z is straight ahead.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T);
+        for (const tr of st.T.tracks) { const x = U(I, tr.ku.p), y = V(I, tr.kv.p); line(ctx, x - 6, y, x + 6, y, SCR.white, 2); line(ctx, x, y - 6, x, y + 6, SCR.white, 2); }
+      },
+      B(ctx, R, st) {
+        para(ctx, R, [{ t: 'X = (u − cx) · Z ÷ fx', mono: true, size: 13, w: 500 }, '']);
+        st.T.tracks.slice(0, 5).forEach((tr, k) => {
+          const X = (tr.ku.p - CX) * tr.kz.p / FX;
+          txt(ctx, R.x + 14, R.y + 70 + k * 24, `#${tr.id} ${tr.cls.padEnd(6)} u ${(tr.ku.p * 4).toFixed(0).padStart(3)}  Z ${tr.kz.p.toFixed(2)}  →  X ${sgn(X)} m`, { size: 12, mono: true, c: ID_COLS[(tr.id - 1) % ID_COLS.length] });
+        });
+      },
+    },
+    {
+      name: 'Radar', a: 'Camera view (as in 05)', b: 'Radar: camera at the bottom, a ring every metre',
+      text: 'Each object is drawn from above: the camera at the bottom, a ring every metre, the edges of the camera\'s view, and a trail of where it has been. Hollow dots are predicted only.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const maxZ = 5, cx = R.x + R.w / 2, by = R.y + R.h - 14, sc = Math.min((R.h - 30) / maxZ, (R.w / 2 - 12) / 3.2);
+        const half = Math.atan(W / 2 / FX);
+        ctx.fillStyle = 'rgba(94,198,212,0.06)'; ctx.beginPath(); ctx.moveTo(cx, by);
+        ctx.arc(cx, by, maxZ * sc, -Math.PI / 2 - half, -Math.PI / 2 + half); ctx.closePath(); ctx.fill();
+        for (let r = 1; r <= maxZ; r++) {
+          ctx.beginPath(); ctx.strokeStyle = SCR.line; ctx.lineWidth = 1; ctx.arc(cx, by, r * sc, Math.PI, 2 * Math.PI); ctx.stroke();
+          txt(ctx, cx + 3, by - r * sc - 3, r + ' m', { size: 10, mono: true, c: SCR.dim });
+        }
+        line(ctx, cx, by, cx - Math.sin(half) * maxZ * sc, by - Math.cos(half) * maxZ * sc, SCR.faint);
+        line(ctx, cx, by, cx + Math.sin(half) * maxZ * sc, by - Math.cos(half) * maxZ * sc, SCR.faint);
+        for (const tr of st.T.tracks) {
+          const c = ID_COLS[(tr.id - 1) % ID_COLS.length];
+          ctx.beginPath(); ctx.strokeStyle = c; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+          tr.trail.forEach((p, i) => { const x = cx + p.x * sc, y = by - p.z * sc; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+          ctx.stroke(); ctx.globalAlpha = 1;
+          const X = (tr.ku.p - CX) * tr.kz.p / FX, x = cx + X * sc, y = by - tr.kz.p * sc;
+          dot(ctx, x, y, 5, c, !tr.det);
+          txt(ctx, x + 8, y + 4, `#${tr.id} ${tr.cls}`, { size: 11, c });
+        }
+        dot(ctx, cx, by, 5, SCR.yellow);
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '07', name: 'Capture + Average', group: 'room', from: '01',
+  idea: 'The first room-lane example. A map is built from still captures, so noise matters more than speed. With the camera still, average each pixel over many frames.',
+  uses: ['depth'], sim: () => ({ person: false }),
+  compare: 'One frame ±1.2 mm at 0.5–1 m; the average ±0.3 mm, where theory says ±0.2. Keep the camera completely still while capturing.',
+  setup(st) { st.buf = []; st.capN = 30; st.avg = new Float32Array(W * H); st.cnt = new Uint8Array(W * H); },
+  tick(st) {
+    st.buf.push(st.read); if (st.buf.length > 30) st.buf.shift();
+    if (st.capN < 30) st.capN++;
+    st.avg.fill(0); st.cnt.fill(0);
+    for (const r of st.buf) for (let i = 0; i < W * H; i++) if (r[i]) { st.avg[i] += r[i]; st.cnt[i]++; }
+    for (let i = 0; i < W * H; i++) if (st.cnt[i]) st.avg[i] /= st.cnt[i];
+  },
+  steps: [
+    {
+      name: 'Capture 30 frames', a: 'Depth camera: SPACE captures', b: 'One pixel\'s readings (green cross), against the truth',
+      text: 'Press SPACE with the camera still and nobody in view: 30 depth frames are kept. One pixel\'s 30 readings scatter around its true distance.',
+      enter(st) { st.capN = 0; },
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, depthFn(st.read))), x = U(I, 44.5), y = V(I, 40.5);
+        line(ctx, x - 10, y, x + 10, y, SCR.green, 2); line(ctx, x, y - 10, x, y + 10, SCR.green, 2);
+        tag(ctx, I.x + 4, I.y + 4, `captured ${st.capN} / 30`, st.capN < 30 ? SCR.yellow : SCR.green);
+      },
+      B(ctx, R, st) {
+        const i = 40 * W + 44, truth = st.frame.depth[i], sd = noiseM(truth) * 1000;
+        const vals = st.buf.slice(-Math.max(1, st.capN)).map(r => r[i] ? (r[i] - truth) * 1000 : null);
+        chart(ctx, R, {
+          n: 30, ymin: -4 * sd, ymax: 4 * sd, yfmt: v => (v > 0 ? '+' : '') + v.toFixed(0) + ' mm', xlabel: 'frame 1 → 30',
+          title: `true distance ${truth.toFixed(3)} m`, lines: [{ y: 0, c: SCR.dim, label: 'truth' }],
+          series: [{ vals, dots: true, r: 3, c: SCR.green }],
+        });
+      },
+    },
+    {
+      name: 'Average', a: 'How far each pixel is off: one frame | average of 30', b: 'The running average closing in',
+      text: 'Each pixel\'s readings are averaged. Random noise shrinks with the square root of the count, so 30 frames cut it to about 1/5.5. The real example then compares two captures to measure that, instead of only claiming it.',
+      A(ctx, R, st) {
+        const t = st.frame.depth, last = st.buf[st.buf.length - 1];
+        const fn = (i, px) => { const u = i % W, r = u < W / 2 ? last[i] : (st.cnt[i] ? st.avg[i] : 0); if (!r) { px[0] = 70; px[1] = 20; px[2] = 20; return; } const e = clamp(Math.abs(r - t[i]) * 1000 / 8, 0, 1); px[0] = 255 * e; px[1] = 210 * e; px[2] = 63 * e; };
+        const I = show(ctx, R, paint(0, fn));
+        line(ctx, U(I, W / 2), I.y, U(I, W / 2), I.y + I.h, SCR.white, 2);
+        tag(ctx, I.x + 4, I.y + 4, 'one frame', SCR.text); tag(ctx, U(I, W / 2) + 4, I.y + 4, 'average', SCR.text);
+        tag(ctx, I.x + 4, I.y + I.h - 21, 'black = spot on, yellow = 8 mm or more off', SCR.dim);
+      },
+      B(ctx, R, st) {
+        const i = 40 * W + 44, truth = st.frame.depth[i], sd = noiseM(truth) * 1000;
+        const run = [], hi = [], lo = []; let s = 0, n = 0;
+        st.buf.forEach((r, k) => { if (r[i]) { s += r[i]; n++; } run.push(n ? (s / n - truth) * 1000 : null); hi.push(sd / Math.sqrt(k + 1)); lo.push(-sd / Math.sqrt(k + 1)); });
+        let e1 = 0, e2 = 0, m = 0; const last = st.buf[st.buf.length - 1];
+        for (let j = 0; j < W * H; j++) if (last[j] && st.cnt[j] >= 20 && st.frame.depth[j] < 4.5) { e1 += (last[j] - st.frame.depth[j]) ** 2; e2 += (st.avg[j] - st.frame.depth[j]) ** 2; m++; }
+        chart(ctx, R, {
+          n: 30, ymin: -1.5 * sd, ymax: 1.5 * sd, yfmt: v => (v > 0 ? '+' : '') + v.toFixed(1) + ' mm', xlabel: 'frames averaged 1 → 30',
+          title: m ? `whole image: one frame ±${(Math.sqrt(e1 / m) * 1000).toFixed(1)} mm, average ±${(Math.sqrt(e2 / m) * 1000).toFixed(1)} mm` : '',
+          band: { hi, lo, c: 'rgba(63,212,122,0.15)' }, lines: [{ y: 0, c: SCR.dim, label: '' }],
+          series: [{ vals: run, c: SCR.green, w: 2, label: 'running average' }],
+        });
+      },
+    },
+    {
+      name: 'Fill flaky pixels', a: 'No reading: one frame | average of 30', b: 'Pixels with no reading',
+      text: 'A pixel that reads in only some frames gets its value from the frames where it did. Only pixels that never read stay red.',
+      A(ctx, R, st) {
+        const last = st.buf[st.buf.length - 1];
+        const I = show(ctx, R, paint(0, (i, px) => depthPx(i % W < W / 2 ? last[i] : (st.cnt[i] ? st.avg[i] : 0), px)));
+        line(ctx, U(I, W / 2), I.y, U(I, W / 2), I.y + I.h, SCR.white, 2);
+        tag(ctx, I.x + 4, I.y + 4, 'one frame', SCR.text); tag(ctx, U(I, W / 2) + 4, I.y + 4, 'average', SCR.text);
+      },
+      B(ctx, R, st) {
+        const last = st.buf[st.buf.length - 1]; let a = 0, b = 0;
+        for (let i = 0; i < W * H; i++) { if (!last[i]) a++; if (!st.cnt[i]) b++; }
+        bars(ctx, R, [
+          { label: 'No reading in one frame', frac: a / (W * H) * 3, value: (a / (W * H) * 100).toFixed(1) + '%', c: SCR.red },
+          { label: 'No reading in any of the 30', frac: b / (W * H) * 3, value: (b / (W * H) * 100).toFixed(1) + '%', c: SCR.green },
+        ], { title: 'Share of the image' });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '07b', name: 'Far Range', group: 'room', from: '07',
+  idea: 'Everything so far stops at 4.5 m, but that\'s libfreenect2\'s default cut-off, not the sensor. Raise it and measure how much worse the far readings are.',
+  uses: ['depth'], sim: () => ({ person: false }),
+  maxDepth: st => st.step === 0 ? 4.5 + 3.5 * clamp((st.stepT - 1) / 3, 0, 1) : 8,
+  compare: 'Never-read pixels fell from 33.8% to 2.3% in the same scene. 4–6 m read ±5 mm, no worse than 3–4 m; past 6 m almost nothing reads, so later examples cut off at 6 m.',
+  setup(st) { st.at45 = null; },
+  tick(st) {
+    if (st.at45 == null) { const r = measure(st.frame, 4.5); let z = 0; for (let i = 0; i < W * H; i++) if (!r[i]) z++; st.at45 = z / (W * H); }
+  },
+  steps: [
+    {
+      name: 'Raise the cut-off', a: 'Depth camera: blue = past 4.5 m', b: 'The cut-off (Config::MaxDepth)',
+      text: 'Config::MaxDepth goes from 4.5 m to 8 m. The far end of the hallway comes back, drawn blue; grey is what we had before.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.read, true))); },
+      B(ctx, R, st) {
+        const md = st.ex.maxDepth(st), L = R.x + 20, Rr = R.x + R.w - 20, y = R.y + 76, X = z => L + (Rr - L) * z / 8;
+        txt(ctx, R.x + 14, R.y + 22, `cut-off ${md.toFixed(1)} m`, { size: 12, w: 500 });
+        ctx.fillStyle = '#2a2f33'; ctx.fillRect(L, y, Rr - L, 10);
+        ctx.fillStyle = '#9aa4aa'; ctx.fillRect(L, y, X(Math.min(md, 4.5)) - L, 10);
+        if (md > 4.5) { ctx.fillStyle = SCR.blue; ctx.fillRect(X(4.5), y, X(md) - X(4.5), 10); }
+        for (let z = 0; z <= 8; z++) txt(ctx, X(z), y + 26, z + '', { size: 10, mono: true, c: SCR.dim, align: 'center' });
+        line(ctx, X(4.5), y - 8, X(4.5), y + 16, SCR.white, 1.5);
+        txt(ctx, X(4.5), y - 12, 'default 4.5 m', { size: 10, mono: true, c: SCR.white, align: 'center' });
+        let z0 = 0; for (let i = 0; i < W * H; i++) if (!st.read[i]) z0++;
+        bars(ctx, { x: R.x, y: R.y + 112, w: R.w, h: R.h - 112 }, [
+          { label: 'No reading at 4.5 m', frac: (st.at45 || 0) * 3, value: ((st.at45 || 0) * 100).toFixed(1) + '%', c: SCR.red },
+          { label: `No reading at ${md.toFixed(1)} m`, frac: z0 / (W * H) * 3, value: (z0 / (W * H) * 100).toFixed(1) + '%', c: SCR.blue },
+        ]);
+      },
+    },
+    {
+      name: 'Noise per metre', a: 'Depth camera at 8 m', b: 'Per 1 m band: share of view, one-frame noise',
+      text: 'Two frames are compared pixel by pixel, sorted into 1 m bands by distance. Each band shows how much of the view it covers and how noisy one frame is there.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.read, true))); },
+      B(ctx, R, st) {
+        const a = st.read, b = st.prevRead || st.read, share = new Array(8).fill(0), se = new Array(8).fill(0), sn = new Array(8).fill(0);
+        for (let i = 0; i < W * H; i++) {
+          if (!a[i]) continue; const k = Math.min(7, Math.floor(a[i])); share[k]++;
+          if (b[i] && Math.abs(a[i] - b[i]) < 0.1) { se[k] += (a[i] - b[i]) ** 2 / 2; sn[k]++; }
+        }
+        const L = R.x + 40, Rr = R.x + R.w - 14, base = R.y + R.h - 30, top = R.y + 56, bw = (Rr - L) / 8, mx = Math.max(...share);
+        txt(ctx, R.x + 14, R.y + 22, 'bars: share of the view · labels: one-frame noise', { size: 12, w: 500 });
+        for (let k = 0; k < 8; k++) {
+          const h = (base - top) * share[k] / mx, x = L + k * bw;
+          ctx.fillStyle = k >= 4 ? 'rgba(77,141,255,0.7)' : '#55636b'; ctx.fillRect(x + 3, base - h, bw - 6, h);
+          txt(ctx, x + bw / 2, base + 16, `${k}–${k + 1}`, { size: 10, mono: true, c: SCR.dim, align: 'center' });
+          txt(ctx, x + bw / 2, base - h - 6, sn[k] > 20 ? '±' + (Math.sqrt(se[k] / sn[k]) * 1000).toFixed(1) : '–', { size: 10, mono: true, c: SCR.text, align: 'center' });
+        }
+        txt(ctx, L - 6, base + 16, 'm', { size: 10, mono: true, c: SCR.dim, align: 'right' });
+        txt(ctx, R.x + 14, top - 8, 'noise in mm', { size: 10, mono: true, c: SCR.dim });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '07c', name: 'Depth Background', group: 'room', from: '03',
+  idea: '03 needed an empty room at the start. 07c\'s memory keeps itself up to date, pixel by pixel, so it needs no empty-room start and heals when something moves away.',
+  uses: ['depth', 'memory'], sim: () => ({ person: true }),
+  compare: 'A spinning ceiling fan made 2–6 blobs when a farther reading was taken at once; waiting 10 frames (LeaveFrames) makes it 0.',
+  setup(st) { st.Mm = newMemory(); st.blobs = []; st.px = []; },
+  tick(st) {
+    updateMemory(st.Mm, st.read); st.blobs = blobs(st.Mm.fg, st.read, 40).list;
+    const i = 40 * W + 64; st.px.push({ live: st.read[i] || null, mem: st.Mm.mem[i] || null, fg: st.Mm.fg[i] });
+    if (st.px.length > 360) st.px.shift();
+  },
+  steps: [
+    {
+      name: 'Start from any frame', a: 'Depth camera: green = foreground', b: 'The memory: starts as a copy of the first frame',
+      text: 'The memory starts as a copy of the first frame, person included: the ghost on the right. When they move away, those pixels read farther than remembered; after 10 frames (LeaveFrames) the memory takes the new value, and the ghost heals in a third of a second.',
+      enter(st) { st.Mm = newMemory(); },
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (st.Mm.fg[i]) tint(px, G_RGB, 0.6); })); },
+      B(ctx, R, st) { show(ctx, R, paint(1, (i, px) => depthPx(st.Mm.mem[i], px))); },
+    },
+    {
+      name: 'Nearer = foreground', a: 'Foreground blobs, boxed (as in 03)', b: 'The memory now: the room without the person',
+      text: 'Pixels clearly nearer than the memory are foreground, grouped into blobs as in 03. A pixel at about the remembered distance is blended in slowly, like 07\'s average.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (st.Mm.fg[i]) tint(px, G_RGB, 0.6); }));
+        for (const b of st.blobs) { bx(ctx, I, b, SCR.green, 2); tag(ctx, U(I, b.u0), V(I, b.v0) - 18, fmtM(b.z), SCR.green, I); }
+        tag(ctx, I.x + 4, I.y + 4, `blobs: ${st.blobs.length}`, SCR.dim);
+      },
+      B(ctx, R, st) { show(ctx, R, paint(1, (i, px) => depthPx(st.Mm.mem[i], px))); },
+    },
+    {
+      name: 'One pixel\'s memory', a: 'Depth camera (pixel under the cross)', b: 'That pixel: live reading and memory',
+      text: 'One pixel over time: the live reading dips when someone walks through, and the memory holds the room. Something nearer for 300 frames (AbsorbFrames, 10 s) joins the room, like a cup put down.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (st.Mm.fg[i]) tint(px, G_RGB, 0.6); })), x = U(I, 64.5), y = V(I, 40.5);
+        line(ctx, x - 10, y, x + 10, y, SCR.yellow, 2); line(ctx, x, y - 10, x, y + 10, SCR.yellow, 2);
+      },
+      B(ctx, R, st) {
+        const p = st.px.filter((_, k) => k % 2 === 0), spans = [];
+        p.forEach((x, i) => { if (x.fg) spans.push({ i0: i - 0.5, i1: i + 0.5, c: 'rgba(63,212,122,0.2)' }); });
+        chart(ctx, R, {
+          n: 180, ymin: 0, ymax: 5, yfmt: v => v.toFixed(0) + ' m', xlabel: 'last 12 s', spans,
+          series: [{ vals: p.map(x => x.live), c: SCR.white, label: 'live' }, { vals: p.map(x => x.mem), c: SCR.accent, w: 2, label: 'memory' }],
+        });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '07d', name: 'Remove Person', group: 'room', from: '07c, with 05c\'s thread',
+  idea: 'Decides which foreground is a person and paints them out with the room behind them. Anything they carry stays visible.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'thread', 'memory'], sim: () => ({ person: true, cup: true }),
+  compare: 'Walk in carrying a cup: you should vanish and the cup should float. On the sensor this is still untested: nobody was in view.',
+  setup(st) {
+    st.Mm = newMemory(); st.cmem = new Float32Array(W * H * 3); st.chas = new Uint8Array(W * H);
+    st.pend = null; st.pboxes = []; st.oboxes = []; st.inP = new Uint8Array(W * H); st.inO = new Uint8Array(W * H);
+    st.removed = new Uint8Array(W * H); st.bl = []; st.lab = null;
+  },
+  tick(st, k) {
+    if (k % 5 === 0) {
+      if (st.pend) { const ds = detect(st.pend, st.pend.t, { minConf: 0.25 }); st.pboxes = ds.filter(d => d.cls === 'person' && d.conf >= START_CONF); st.oboxes = ds.filter(d => d.cls !== 'person'); }
+      st.pend = st.frame;
+    }
+    const fill = (mask, list, grow) => { mask.fill(0); for (const b of list) for (let v = Math.max(0, b.v0 - grow); v <= Math.min(H - 1, b.v1 + grow); v++) for (let u = Math.max(0, b.u0 - grow); u <= Math.min(W - 1, b.u1 + grow); u++) mask[v * W + u] = 1; };
+    fill(st.inP, st.pboxes, 2); fill(st.inO, st.oboxes, 1);
+    updateMemory(st.Mm, st.read, st.inP);
+    const found = blobs(st.Mm.fg, st.read, 20); st.lab = found.lab; st.bl = found.list;
+    for (const b of st.bl) { let n = 0; for (let v = b.v0; v <= b.v1; v++) for (let u = b.u0; u <= b.u1; u++) { const i = v * W + u; if (found.lab[i] === b.id && st.inP[i]) n++; } b.share = n / b.n; b.person = b.share >= 0.3; }
+    const isP = new Set(st.bl.filter(b => b.person).map(b => b.id));
+    const px = [0, 0, 0];
+    for (let i = 0; i < W * H; i++) {
+      st.removed[i] = found.lab[i] && isP.has(found.lab[i]) && !st.inO[i] ? 1 : 0;
+      if (!st.Mm.fg[i] && !st.inP[i]) {
+        colourAt(st.frame, i, px); const j = i * 3;
+        if (st.chas[i]) { st.cmem[j] += (px[0] - st.cmem[j]) * 0.2; st.cmem[j + 1] += (px[1] - st.cmem[j + 1]) * 0.2; st.cmem[j + 2] += (px[2] - st.cmem[j + 2]) * 0.2; }
+        else { st.cmem[j] = px[0]; st.cmem[j + 1] = px[1]; st.cmem[j + 2] = px[2]; st.chas[i] = 1; }
+      }
+    }
+  },
+  steps: [
+    {
+      name: 'Foreground (07c)', a: 'Colour camera: green = foreground', b: 'The colour memory (magenta = never seen)',
+      text: '07c\'s depth memory finds everything in front of the room. A second memory learns the room\'s colour, but only where there is no foreground and no person box, so it keeps what was behind them.',
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { colourAt(st.frame, i, px); if (st.Mm.fg[i]) tint(px, G_RGB, 0.5); })); },
+      B(ctx, R, st) { show(ctx, R, paint(1, (i, px) => { if (!st.chas[i]) { px[0] = M_RGB[0]; px[1] = M_RGB[1]; px[2] = M_RGB[2]; return; } const j = i * 3; px[0] = st.cmem[j]; px[1] = st.cmem[j + 1]; px[2] = st.cmem[j + 2]; })); },
+    },
+    {
+      name: 'Which blob is a person', a: 'Person box (lagging), cup box, blobs', b: 'Each blob: how much lies in person boxes',
+      text: 'YOLO, on its own thread as in 05c, gives person boxes a few times a second. A blob that lies mostly inside person boxes (PersonShare 0.3) is a person. Whole blobs, not boxes: the boxes lag behind, the blob is fresh every frame.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { colourAt(st.frame, i, px); if (st.removed[i]) tint(px, R_RGB, 0.45); else if (st.Mm.fg[i]) tint(px, G_RGB, 0.45); }));
+        for (const d of st.pboxes) { bx(ctx, I, d, SCR.white, 2); tag(ctx, U(I, d.u0), V(I, d.v0) - 18, `person ${d.conf.toFixed(2)}`, SCR.white, I); }
+        for (const d of st.oboxes) { bx(ctx, I, d, SCR.yellow, 2); tag(ctx, U(I, d.u0), V(I, d.v1) + 2, d.cls, SCR.yellow, I); }
+      },
+      B(ctx, R, st) {
+        const list = st.bl.slice().sort((a, b) => b.n - a.n).slice(0, 4);
+        if (!list.length) { para(ctx, R, ['No foreground this frame.']); return; }
+        bars(ctx, R, list.map(b => ({ label: `blob of ${b.n} px: ${b.person ? 'a person' : 'not a person'}`, frac: b.share, value: Math.round(b.share * 100) + '%', c: b.person ? SCR.red : SCR.green })), { title: 'Share inside person boxes (0.3 needed)' });
+      },
+    },
+    {
+      name: 'Paint them out', a: 'The output: the room, person removed', b: 'Explain view (V): red removed, yellow kept, green other',
+      text: 'The person\'s pixels get the remembered colour, except inside another object\'s box: the cup stays. Pixels nobody has seen yet show magenta; guessing those is a later step (07e). Press V for the explain view on the right.',
+      A(ctx, R, st) {
+        show(ctx, R, paint(0, (i, px) => {
+          if (!st.removed[i]) { colourAt(st.frame, i, px); return; }
+          if (!st.chas[i]) { px[0] = M_RGB[0]; px[1] = M_RGB[1]; px[2] = M_RGB[2]; return; }
+          const j = i * 3; px[0] = st.cmem[j]; px[1] = st.cmem[j + 1]; px[2] = st.cmem[j + 2];
+        }));
+      },
+      B(ctx, R, st) {
+        show(ctx, R, paint(1, (i, px) => {
+          colourAt(st.frame, i, px); px[0] *= 0.5; px[1] *= 0.5; px[2] *= 0.5;
+          if (st.removed[i]) tint(px, R_RGB, 0.8); else if (st.Mm.fg[i] && st.inO[i]) tint(px, Y_RGB, 0.8); else if (st.Mm.fg[i]) tint(px, G_RGB, 0.7);
+        }));
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '08', name: 'Point Cloud', group: 'room', from: '03\'s maths',
+  idea: 'Every depth pixel is a point in 3D. 03 did the maths for one pixel; 08 does it for all 217,088 and draws them in a small viewer we wrote ourselves.',
+  uses: ['depth', 'colour', 'reg', 'xyz'], sim: () => ({ person: true }), maxDepth: () => 6,
+  compare: 'About 193,000 points at 14 loops a second. P saves a .ply file: it is a 3D capture of the room, so never commit it.',
+  tick(st) { st.P = cloudFrom(st.frame, st.read); },
+  steps: [
+    {
+      name: 'Pixels to points', a: 'Depth camera, scanned row by row', b: 'The points so far',
+      text: 'Each pixel\'s depth Z and position (u, v) give X = (u − cx) · Z ÷ fx and Y = (v − cy) · Z ÷ fy. Row by row, the depth image becomes a cloud of 3D points.',
+      A(ctx, R, st, s) {
+        const row = Math.min(H, (s / 4) * H), I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if ((i / W | 0) > row) { px[0] *= 0.3; px[1] *= 0.3; px[2] *= 0.3; } }));
+        if (row < H) line(ctx, I.x, V(I, row), I.x + I.w, V(I, row), SCR.accent, 2);
+      },
+      B(ctx, R, st, s) { drawCloud(ctx, R, st.P, { yaw: 0.45, pitch: 0.3, pivot: 2.6, dist: 3.4 }, { maxRow: Math.min(H, (s / 4) * H), colour: SCR.accent }); },
+    },
+    {
+      name: 'Colour each point', a: 'Colour camera', b: 'Coloured points: the viewer turns them',
+      text: 'Registration gives each depth pixel the colour seen at that spot. The viewer turns every point around a pivot and projects it onto a virtual camera, nearest point winning: the pinhole maths in reverse.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.frame))); },
+      B(ctx, R, st, s) { drawCloud(ctx, R, st.P, { yaw: 0.6 * Math.sin(s * 0.7), pitch: 0.12, pivot: 2.6, dist: 2.6 }); },
+    },
+    {
+      name: 'A thin shell', a: 'Depth camera', b: 'Seen from the side: only the front of things',
+      text: 'Turn the view sideways and the room is only a shell: the camera sees the front of everything and nothing behind it. The yellow ring is the Kinect. Filling in the rest needs more views (10).',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.read))); },
+      B(ctx, R, st, s) { drawCloud(ctx, R, st.P, { yaw: Math.min(1.35, 0.3 + s * 0.3), pitch: 0.2, pivot: 2.6, dist: 4.2 }); },
+    },
+  ],
+});
+
+EX.push({
+  id: '09', name: 'Find the Floor', group: 'room', from: '08',
+  idea: '08\'s points are in the camera\'s coordinates, so tilting the Kinect tilts the whole room. RANSAC finds the floor plane, which tells us which way is down.',
+  uses: ['depth', 'xyz', 'ransac'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'Tilt the Kinect down so some floor shows, then check its height with a tape measure. With no floor in view it picked a different level surface every second.',
+  setup(st) { st.tries = []; st.best = null; st.nTry = 0; },
+  tick(st, k) {
+    const pt = (u, v) => { const z = st.read[v * W + u]; return z ? [(u - CX) * z / FX, -(v - CY) * z / FY, z] : null; };
+    st.pt = pt;
+    if (k % 8 !== 0) return;
+    if (st.nTry >= 60) { st.nTry = 0; st.best = null; st.tries = []; }
+    st.nTry++;
+    const u = 3 + Math.floor(rnd() * (W - 10)), v = 3 + Math.floor(rnd() * (H - 10));
+    const a = pt(u, v), b = pt(u + 4, v), c = pt(u, v + 4);
+    const tr = { u, v, n: st.nTry, ok: false, count: 0 };
+    if (a && b && c) {
+      const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      let nn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const L = Math.hypot(...nn); if (L > 0) {
+        nn = nn.map(x => x / L); if (nn[1] < 0) nn = nn.map(x => -x);
+        tr.nrm = nn; tr.d = -(nn[0] * a[0] + nn[1] * a[1] + nn[2] * a[2]);
+        tr.ok = nn[1] > Math.cos(30 * Math.PI / 180);
+        if (tr.ok) {
+          for (let vv = 0; vv < H; vv += 2) for (let uu = 0; uu < W; uu += 2) { const p = pt(uu, vv); if (p && Math.abs(nn[0] * p[0] + nn[1] * p[1] + nn[2] * p[2] + tr.d) < 0.03) tr.count++; }
+          if (!st.best || tr.count > st.best.count) st.best = refit(st, tr);
+        }
+      }
+    }
+    st.tries.push(tr); if (st.tries.length > 12) st.tries.shift();
+  },
+  steps: [
+    {
+      name: 'Pick 3 neighbours', a: 'Depth camera: each try\'s 3 points', b: 'Tries: points within 3 cm of each plane',
+      text: 'Pick three points next to each other in the image: they define a plane. Three points from anywhere would almost never all be on the floor; neighbours usually share a surface. Planes that aren\'t roughly level, like walls, are skipped (red).',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, depthFn(st.read))); drawTries(ctx, I, st); },
+      B(ctx, R, st) { drawTryBars(ctx, R, st); },
+    },
+    {
+      name: 'Count the points near it', a: 'Green = within 3 cm of the newest level try', b: 'Tries: the one with the most points wins',
+      text: 'Count how many points lie within 3 cm of the plane. Repeat a few hundred times (here slowed to a few a second) and keep the plane with the most.',
+      A(ctx, R, st) {
+        const t = [...st.tries].reverse().find(x => x.ok);
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (t && onPlane(st, t, i)) tint(px, G_RGB, 0.6); }));
+        drawTries(ctx, I, st);
+      },
+      B(ctx, R, st) { drawTryBars(ctx, R, st); },
+    },
+    {
+      name: 'Height, tilt, roll', a: 'The floor (green); crosshair: height above it', b: 'The camera above the floor plane',
+      text: 'Refit the winning plane to all its points (more exact than any 3). Its distance from the camera is the camera\'s height; its slant gives the tilt and roll; and any point\'s height above the floor follows.',
+      A(ctx, R, st) {
+        const b = st.best;
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.read[i], px); if (b && onPlane(st, b, i)) tint(px, G_RGB, 0.6); }));
+        const c = cross(st.t), x = U(I, c.u + 0.5), y = V(I, c.v + 0.5);
+        line(ctx, x - 10, y, x + 10, y, SCR.yellow, 2); line(ctx, x, y - 10, x, y + 10, SCR.yellow, 2);
+        const p = st.pt && st.pt(c.u, c.v);
+        if (b && p) tag(ctx, x + 10, y + 8, `${(b.nrm[0] * p[0] + b.nrm[1] * p[1] + b.nrm[2] * p[2] + b.d).toFixed(2)} m above the floor`, SCR.yellow, I);
+      },
+      B(ctx, R, st) {
+        const b = st.best;
+        if (!b) { para(ctx, R, ['No level plane found yet.']); return; }
+        const h = Math.abs(b.d), tilt = Math.atan2(-b.nrm[2], b.nrm[1]) * 180 / Math.PI, roll = Math.atan2(b.nrm[0], b.nrm[1]) * 180 / Math.PI;
+        const fy = R.y + R.h - 30, cx = R.x + R.w * 0.3, sc = Math.min(70, (R.h - 80) / 1.4), cy = fy - h * sc;
+        line(ctx, R.x + 14, fy, R.x + R.w - 14, fy, SCR.green, 3);
+        txt(ctx, R.x + R.w - 14, fy + 18, 'floor', { size: 11, c: SCR.green, align: 'right' });
+        line(ctx, cx, cy, cx, fy, SCR.dim, 1, [3, 3]);
+        txt(ctx, cx + 8, (cy + fy) / 2, `${h.toFixed(2)} m`, { size: 12, mono: true, c: SCR.white });
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(tilt * Math.PI / 180);
+        ctx.fillStyle = SCR.yellow; ctx.fillRect(-14, -6, 28, 12); line(ctx, 14, 0, 70, 0, SCR.yellow, 1.5, [4, 3]); ctx.restore();
+        para(ctx, { x: R.x + R.w * 0.55, y: R.y + 20, w: R.w * 0.45 }, [
+          { t: `height ${h.toFixed(2)} m`, mono: true, size: 13, c: SCR.white, w: 500 },
+          { t: `tilt   ${Math.abs(tilt).toFixed(1)}° ${tilt >= 0 ? 'down' : 'up'}`, mono: true, size: 13 },
+          { t: `roll   ${Math.abs(roll).toFixed(1)}°`, mono: true, size: 13 },
+          { t: `${b.count} points on it`, mono: true, size: 11, c: SCR.dim },
+        ], { top: 0 });
+      },
+    },
+  ],
+});
+// 09's helpers: the inliers of a plane, the tries drawn, and the least-squares refit.
+function onPlane(st, t, i) {
+  const z = st.read[i]; if (!z) return false;
+  const u = i % W, v = (i / W) | 0, x = (u - CX) * z / FX, y = -(v - CY) * z / FY;
+  return Math.abs(t.nrm[0] * x + t.nrm[1] * y + t.nrm[2] * z + t.d) < 0.03;
+}
+function drawTries(ctx, I, st) {
+  st.tries.forEach((t, k) => {
+    const last = k === st.tries.length - 1, c = t.ok ? SCR.green : SCR.red;
+    ctx.globalAlpha = last ? 1 : 0.35;
+    const p = [[t.u, t.v], [t.u + 4, t.v], [t.u, t.v + 4]].map(([u, v]) => [U(I, u + 0.5), V(I, v + 0.5)]);
+    ctx.beginPath(); ctx.moveTo(...p[0]); ctx.lineTo(...p[1]); ctx.lineTo(...p[2]); ctx.closePath(); ctx.strokeStyle = c; ctx.lineWidth = last ? 2 : 1; ctx.stroke();
+    for (const q of p) dot(ctx, q[0], q[1], last ? 3 : 2, c);
+    ctx.globalAlpha = 1;
+  });
+}
+function drawTryBars(ctx, R, st) {
+  const list = st.tries.slice(-8), mx = Math.max(1, ...st.tries.map(t => t.count), st.best ? st.best.count : 0);
+  bars(ctx, R, list.map(t => ({
+    label: `try ${t.n}: ${t.ok ? 'level' : 'not level, skipped'}` + (st.best && t.count && t.count >= st.best.count ? ' · best so far' : ''),
+    frac: t.count / mx, value: t.ok ? t.count + ' pts' : '–', c: t.ok ? SCR.green : SCR.red,
+  })), { title: 'Newest tries' });
+}
+function refit(st, t) {
+  let S = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n = 0;   // sums for y = a x + b z + c
+  for (let i = 0; i < W * H; i++) {
+    if (!onPlane(st, t, i)) continue;
+    const z = st.read[i], u = i % W, v = (i / W) | 0, x = (u - CX) * z / FX, y = -(v - CY) * z / FY;
+    S[0] += x * x; S[1] += x * z; S[2] += x; S[3] += z * z; S[4] += z; S[5] += x * y; S[6] += z * y; S[7] += y; n++;
+  }
+  const A = [[S[0], S[1], S[2]], [S[1], S[3], S[4]], [S[2], S[4], n]], y = [S[5], S[6], S[7]];
+  const det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const D = det(A); if (Math.abs(D) < 1e-9) return t;
+  const col = k => A.map((r, i) => r.map((x, j) => j === k ? y[i] : x));
+  const a = det(col(0)) / D, b = det(col(1)) / D, c = det(col(2)) / D, N = Math.hypot(a, 1, b);
+  return { ...t, nrm: [-a / N, 1 / N, -b / N], d: -c / N };
+}
+
+EX.push({
+  id: '10', name: 'Two Views', group: 'room', from: '08',
+  idea: 'One position only sees the front of things, so a map needs captures from several places, each placed by its pose: where the camera stood and which way it pointed. Here the pose is measured by hand.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'pose'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'Gap 0.5 cm at the true pose. It can\'t see sliding along a wall: 5 cm sideways only raised it to 1.2 cm. Try a real measured move and look at the double walls.',
+  setup(st) {
+    const fA = renderFrame(CAM_A, 0, { person: false }), fB = renderFrame(CAM_B, 0, { person: false });
+    st.rA = measure(fA, 6); st.rB = measure(fB, 6); st.fB = fB;
+    st.PA = cloudFrom(fA, st.rA); st.PB = cloudFrom(fB, st.rB);
+    st.topA = topSlice(st.PA); st.gapKey = '';
+  },
+  steps: [
+    {
+      name: 'Capture view A', a: 'Depth from spot A', b: 'View A from above (a slice at mid-height)',
+      text: 'SPACE stores view A as a point cloud (orange). Seen from above, a slice of it shows the walls as lines and the chair, cabinet and doorway as shapes.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.rA))); },
+      B(ctx, R, st) { drawTop(ctx, R, [{ ...st.topA, c: SCR.orange }], [{ x: 0, yaw: 0, c: SCR.yellow, label: 'A' }]); },
+    },
+    {
+      name: 'Move, then place B', a: 'Depth from spot B, 30 cm to the right', b: 'B placed by the typed pose: walls show double',
+      text: 'Slide the Kinect 30 cm to the right and capture B (blue). Each B point is turned and shifted into A\'s coordinates by the pose typed into the settings. Here it was typed 10 cm short and 4° off, so every wall shows double.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.rB))); },
+      B(ctx, R, st) { drawPose(ctx, R, st, { right: 0.20, turn: 4 * Math.PI / 180 }); },
+    },
+    {
+      name: 'Nudge until they meet', a: 'Colour from spot B', b: 'Nudging the pose: the gap shrinks',
+      text: 'Keys nudge the pose (J L right, U O turn) and the median gap between B\'s depth and A\'s shrinks as the clouds meet. Example 11 (ICP) will do this automatically.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.fB))); },
+      B(ctx, R, st, s) {
+        const k = Math.min(10, Math.floor(s / 0.45));       // one key press every 0.45 s
+        const right = 0.20 + 0.01 * Math.min(k, 10), turn = Math.max(0, 4 - 0.5 * Math.max(0, k - 2)) * Math.PI / 180;
+        drawPose(ctx, R, st, { right, turn });
+      },
+    },
+  ],
+});
+function gapFor(st, pose) {
+  const key = pose.right.toFixed(3) + '/' + pose.turn.toFixed(4);
+  if (key === st.gapKey) return st.gap;
+  const ct = Math.cos(pose.turn), stt = Math.sin(pose.turn), g = [];
+  for (let k = 0; k < st.PB.n; k += 3) {
+    const x = st.PB.x[k] * ct - st.PB.z[k] * stt + pose.right, y = st.PB.y[k], z = st.PB.x[k] * stt + st.PB.z[k] * ct;
+    const u = Math.round(CX + FX * x / z), v = Math.round(CY - FY * y / z);
+    if (u < 0 || u >= W || v < 0 || v >= H) continue;
+    const za = st.rA[v * W + u]; if (za) g.push(Math.abs(z - za));
+  }
+  st.gapKey = key; st.gap = median(g); st.topB = topSlice(st.PB, pose);
+  return st.gap;
+}
+function drawPose(ctx, R, st, pose) {
+  const gap = gapFor(st, pose);
+  drawTop(ctx, R, [{ ...st.topA, c: SCR.orange }, { ...st.topB, c: 'rgba(77,141,255,0.9)' }],
+    [{ x: 0, yaw: 0, c: SCR.yellow, label: 'A' }, { x: pose.right, yaw: pose.turn, c: '#3ee6ff', label: 'B' }]);
+  tag(ctx, R.x + 8, R.y + 8, `pose: ${(pose.right * 100).toFixed(0)} cm right, ${(pose.turn * 180 / Math.PI).toFixed(1)}° left`, SCR.text);
+  tag(ctx, R.x + 8, R.y + 28, `median gap ${(gap * 100).toFixed(1)} cm`, gap < 0.01 ? SCR.green : SCR.yellow);
+}
+
+// =====================================================================
+//  Setup: the page around the stage
+// =====================================================================
+const $ = id => document.getElementById(id);
+const canvas = $('stage'), ctx = canvas.getContext('2d'), stageBox = $('stageBox');
+let st, A, B, stageW = 600, stageH = 400;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+let playing = !reduceMotion;
+
+function buildNav() {
+  const nav = $('nav');
+  for (const g of Object.keys(GROUPS)) {
+    const div = document.createElement('div'); div.className = 'group ' + g;
+    div.innerHTML = `<h2>${GROUPS[g]}</h2><ul></ul>`;
+    for (const e of EX.filter(x => x.group === g)) {
+      const li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button'; b.id = 'ex-' + e.id; b.innerHTML = `<span class="n">${e.id}</span><span>${e.name}</span>`;
+      b.addEventListener('click', () => { location.hash = 'e' + e.id; });
+      li.appendChild(b); div.querySelector('ul').appendChild(li);
+    }
+    nav.appendChild(div);
+  }
+}
+function select(id) {
+  const e = EX.find(x => x.id === id) || EX[0];
+  seed = 12345;
+  st = { ex: e, t: 1.5, k: 45, step: 0, stepT: 0, acc: 0, frame: null, read: null, prevRead: null };
+  if (e.setup) e.setup(st);
+  enterStep(0, true);
+  for (let i = 0; i < 60; i++) simTick();     // warm up trackers and memories so the first view is a working one
+  renderHead();
+  layoutStage();
+}
+function simTick() {
+  st.k++; st.t = st.k / FPS;
+  const e = st.ex;
+  if (st.frame && e.blocking && st.k % 5 !== 0) return;   // 02-06 wait for YOLO: about 6 fps
+  const opt = e.sim(st);
+  st.frame = renderFrame(CAM_A, st.t, opt);
+  st.prevRead = st.read;
+  st.read = measure(st.frame, e.maxDepth ? e.maxDepth(st) : 4.5);
+  if (e.tick) e.tick(st, st.k);
+}
+function enterStep(i, quiet) {
+  st.step = i; st.stepT = 0;
+  const s = st.ex.steps[i];
+  if (s.enter) s.enter(st);
+  if (quiet) return;
+  updateSteps();
+}
+
+// =====================================================================
+//  Main operation
+// =====================================================================
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (playing && st) {
+    st.stepT += dt; st.acc += dt;
+    let n = 0;
+    while (st.acc >= 1 / FPS && n < 3) { simTick(); st.acc -= 1 / FPS; n++; }
+    if (st.acc > 1 / FPS) st.acc = 0;
+    if (st.stepT >= STEP_SECONDS) enterStep((st.step + 1) % st.ex.steps.length);
+  }
+  draw();
+  const bar = document.querySelector('.steps button[aria-current="true"] .bar');
+  if (bar) bar.style.width = (playing ? clamp(st.stepT / STEP_SECONDS, 0, 1) * 100 : 0) + '%';
+  requestAnimationFrame(loop);
+}
+
+// =====================================================================
+//  Output
+// =====================================================================
+function layoutStage() {
+  const w = Math.max(280, stageBox.clientWidth), pad = 14, cap = 26, wide = w >= 640;
+  const pw = wide ? (w - pad * 3) / 2 : w - pad * 2, ph = Math.round(pw * H / W);
+  A = { x: pad, y: pad + cap, w: pw, h: ph };
+  B = wide ? { x: pad * 2 + pw, y: pad + cap, w: pw, h: ph } : { x: pad, y: A.y + ph + pad + cap, w: pw, h: ph };
+  stageW = w; stageH = B.y + ph + pad;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.height = stageH + 'px';
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(stageH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function draw() {
+  if (!st) return;
+  ctx.fillStyle = SCR.bg; ctx.fillRect(0, 0, stageW, stageH);
+  const s = st.ex.steps[st.step];
+  for (const [R, cap, fn] of [[A, s.a, s.A], [B, s.b, s.B]]) {
+    ctx.fillStyle = SCR.panel; ctx.fillRect(R.x, R.y, R.w, R.h);
+    txt(ctx, R.x, R.y - 9, cap, { size: 12, c: SCR.dim, w: 500 });
+    ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
+    try { fn(ctx, R, st, st.stepT); } catch (err) { txt(ctx, R.x + 14, R.y + 24, 'Drawing failed: ' + err.message, { size: 12, c: SCR.red }); }
+    ctx.restore();
+    ctx.strokeStyle = SCR.line; ctx.lineWidth = 1; ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
+  }
+  txt(ctx, stageW - 14, 20, 'SIMULATED KINECT', { size: 10, mono: true, c: SCR.faint, align: 'right' });
+}
+function renderHead() {
+  const e = st.ex;
+  $('eyebrow').textContent = `${GROUPS[e.group]} · ${e.from ? 'starts from ' + e.from : 'the starting point'}`;
+  $('title').innerHTML = `<span class="num">${e.id}</span>${e.name}`;
+  $('idea').textContent = e.idea;
+  $('uses').innerHTML = '<span class="label">Uses</span>' + USES.map(([k, l]) => `<span class="chip ${e.uses.includes(k) ? 'on' : 'off'}">${l}</span>`).join('');
+  $('compare').textContent = e.compare;
+  $('steps').innerHTML = e.steps.map((s, i) => `<li><button type="button" id="step-${i}"><span class="i">${i + 1}</span>${s.name}<span class="bar"></span></button></li>`).join('');
+  e.steps.forEach((s, i) => $('step-' + i).addEventListener('click', () => enterStep(i)));
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-current', b.id === 'ex-' + e.id ? 'true' : 'false'));
+  document.title = `${e.id} ${e.name} · Spotter Visualizer`;
+  updateSteps();
+}
+function updateSteps() {
+  st.ex.steps.forEach((s, i) => $('step-' + i).setAttribute('aria-current', i === st.step ? 'true' : 'false'));
+  $('stepText').textContent = st.ex.steps[st.step].text;
+}
+
+buildNav();
+$('play').addEventListener('click', () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; });
+$('restart').addEventListener('click', () => select(st.ex.id));
+$('play').textContent = playing ? 'Pause' : 'Play';
+const fromHash = () => { const h = location.hash.replace('#e', ''); return EX.some(e => e.id === h) ? h : '01'; };
+window.addEventListener('hashchange', () => select(fromHash()));
+window.addEventListener('resize', () => layoutStage());
+select(fromHash());
+requestAnimationFrame(loop);
+</script>
