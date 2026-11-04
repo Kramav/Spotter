@@ -235,7 +235,7 @@ per edge that crosses. About 80 readable lines.
 **Why ICP against all earlier scans, not just the previous one:** errors don't pile up scan by
 scan; it costs one bigger k-d tree. Loop closure (a pose graph) is left for later.
 **Why the scans live in memory only:** colour pictures are images of the room and maybe of people
-(privacy rule). Only the final `.obj` is written, as with 08b and 09b.
+(privacy rule). Only the final `.obj` is written, as with 08b and 09b. *(Superseded by D29, 2026-11-04: K now saves the scans on request.)*
 **Why refuse scans with under 100 features:** a dark room gives a black colour picture (seen on the
 sensor: brightness 5/255) and 0 features; no later scan could ever be matched to such a scan.
 
@@ -399,3 +399,50 @@ merged mesh was fine (the ceiling flat to ±5 cm over 8 m), but the clean model 
   has its own box.
 
 The flat's existing file can't be rebuilt, because scans live only in memory. A levelled copy with only the mesh was made from it instead.
+
+### D29 — 2026-11-04 — Keeping the scans (K in 13c/13d), rebuilding later (13z), and 14 = textured room
+**What:** the user found E's `.obj` loses colour and detail, and asked for the scans to be kept and
+rebuilt later. Built: K in 13c and 13d writes a folder per room; 13z reads such folders back,
+without the Kinect, and views or rebuilds them. Option C (a textured mesh) is planned as 14, so the
+later examples shifted up one: 15 objects in the map, 16 visual odometry, 17 live mapping.
+**Why the `.obj` looks blurred:** the merge keeps one colour per 2 cm corner (`VoxelMeters`),
+averaged over every scan that saw it, and the triangles just blend between corners. At 2 m one depth
+pixel is about 0.5 cm wide, so roughly 16 pixels' colours become one. K's `points.ply` skips the
+merge: every scan's own points and colours, as the viewer shows them.
+**Privacy (the user's decision):** saving colour frames was forbidden (Conventions, D21). Now allowed
+for room scans only: the user said saving is fine, the folders go in `.gitignore`, and Claude never
+opens or views them unless the user asks. So `room_scans/` is in the root `.gitignore`, and K also
+writes a `.gitignore` of `*` into every folder, for folders saved elsewhere. Scan with nobody in view,
+as before. Tests use a synthetic room.
+**Where K saves:** the user asked to choose the place and the name. A console question (Enter = the
+default) works the same on Windows and Linux. A file dialog would be Windows-only code (D7). The
+windows wait while you type. An existing saved room is overwritten only after a yes, and a folder
+that isn't a saved room is never touched.
+**Folder format (format 1):** plain files, so other tools and 14 can read them. Per scan:
+- `cloud.bin`: the averaged points as raw floats, so no camera maths is needed to read them back.
+- `colour.bmp` and `colour_full.bmp`: the 512 × 424 and 1920 × 1080 pictures.
+- `colour_index.bin`: for 14's colour camera model.
+- `features.yml`: for re-placing later.
+- `pose.txt`.
+
+Per room: `room.txt` (both cameras' factory settings, the first camera turn), `points.ply`, and 13d's
+`landmarks.txt`.
+**Why BMP:** the first test failed, because `cv::imwrite` has no PNG writer here. `vcpkg.json` builds
+OpenCV without its `png` and `jpeg` features, and the `libspng` and `libjpeg-turbo` that are
+installed belong to libfreenect2. BMP is built into OpenCV and lossless, at about 11 MB per scan
+instead of about 8. Adding `png` would mean changing the pinned build (D14) and recompiling OpenCV
+on both PCs.
+**Why 13z copies 13c's code:** one file per example (Conventions). 13z holds 13c's viewer and merge
+code unchanged (assembled from 13c's own text), so a rebuilt `.obj` matches a live E.
+**Tested (synthetic, scratchpad, not committed):** 5 raycast scans of a 4 × 2.5 × 5 m textured box
+room with a couch, one excluded and one suspicious, were fed into the real 13c and 13d `KeepScans`,
+then rebuilt by 13z:
+- Floor and ceiling at −1.2996 / 1.2002 m (true −1.3 / 1.2), 4 walls, the couch one box.
+- The mesh is 0.4 mm (median) and 1.8 mm (95%) from the true surfaces.
+- 13d's landmark landed at the right place to the millimetre.
+- K's `points.ply` and 13z's rebuilt one were identical.
+- Loading a subset, a wrong answer, overwrite, refusal and cancel all behaved.
+- The viewer was smoke-tested. Nothing has run on the sensor yet.
+
+**Left for later (docs/ideas.md):** merging separate sessions of one space, P (re-place) in 13z, and
+auto-save after each placed scan.
