@@ -2,7 +2,9 @@
 
 Each C++ example teaches one idea on top of an earlier one. This page draws every example's
 pipeline, from the Kinect to what you see. **Boxes with a thick border are what that example adds**;
-the thin ones it takes over from the example it starts from. To build and run them, see the
+the thin ones it takes over from the example it starts from. For an animated version, where each
+example's steps run on a simulated Kinect, open [docs/visualizer.html](../../docs/visualizer.html)
+in a browser. To build and run them, see the
 [main README](../../README.md); the measurements behind the "What to compare" lines are in
 [README.md](README.md).
 
