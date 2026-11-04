@@ -35,8 +35,9 @@ Only one program can use the Kinect at a time: quit one demo (Q or Esc) before s
 - **Run on the PC**, not the Pi: YOLO takes over 1 s per frame on a Pi.
 - **A sign:** "Live only: nothing is recorded." That's true: no demo writes a file (privacy rule:
   never save images of people). Demo 4 reads a room file that you made beforehand with nobody in it.
-- **Keys in every demo:** F toggles fullscreen, Q or Esc quits. The rest are listed at the top of
-  each `main.cpp`.
+- **Keys in every demo:** F toggles fullscreen, Q or Esc quits. Every demo lists its keys along the
+  bottom of the screen ("g - fill marks", "wasd - turn"). Demos 2, 3 and 5 show them in a strip under
+  their pictures. They're also listed at the top of each `main.cpp`.
 
 ## Suggested set-up: two screens
 

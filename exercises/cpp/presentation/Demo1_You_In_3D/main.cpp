@@ -67,6 +67,8 @@ const float TurnStepDegrees = 5;
 const float ZoomStepMeters = 0.25f;
 
 const bool StartFullscreen = true;
+// The keys along the bottom of the screen, short (the user's ask).
+const char* KeyLegend = "c - colour   o - swing   [ ] - level   wasd - turn   z/x - zoom   r - reset   f - fullscreen   q - quit";
 
 // ---------------------------------------------------------------------
 //  The viewer (as in 08)
@@ -258,8 +260,10 @@ int main()
         }
         cv::putText(image, "This is you, in 3D. The camera only sees your front.", cv::Point(20, 45),
                     cv::FONT_HERSHEY_SIMPLEX, 1.1, cv::Scalar(255, 255, 255), 2);
+        cv::rectangle(image, cv::Rect(0, ViewHeight - 65, ViewWidth, 65), cv::Scalar(20, 20, 20), cv::FILLED);   // keeps the keys readable
         cv::putText(image, cv::format("%zu depth points, live   (live only: nothing is recorded)", points.size()),
-                    cv::Point(20, ViewHeight - 20), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(160, 160, 160), 1);
+                    cv::Point(20, ViewHeight - 45), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(160, 160, 160), 1);
+        cv::putText(image, KeyLegend, cv::Point(20, ViewHeight - 15), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(220, 220, 220), 1);
         cv::imshow(window, image);
     }
 

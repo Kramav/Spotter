@@ -73,6 +73,8 @@ const int PersonClass = 0;              // "person" is class 0 of the 80 COCO cl
 const int Width = 512, Height = 424, ColourWidth = 1920, ColourHeight = 1080;
 
 const bool StartFullscreen = true;
+// The keys along the bottom of the screen, short (the user's ask).
+const char* KeyLegend = "v - explain view   space - relearn room   f - fullscreen   q - quit";
 
 struct Detection
 {
@@ -344,6 +346,10 @@ int main()
         cv::hconcat(camera, picture, both);
         cv::putText(both, "live only: nothing is recorded", cv::Point(10, Height - 10),
                     cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(200, 200, 200), 1);
+        // The keys, in a strip under the pictures (new: the user's ask).
+        cv::Mat keys(26, both.cols, CV_8UC3, cv::Scalar(20, 20, 20));
+        cv::putText(keys, KeyLegend, cv::Point(10, 18), cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(220, 220, 220), 1);
+        cv::vconcat(both, keys, both);
         cv::imshow(window, both);
 
         if (++frameCount % 30 == 0)

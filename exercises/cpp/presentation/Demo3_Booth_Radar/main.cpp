@@ -111,6 +111,8 @@ const double FpsSmoothing = 0.9;
 const int ReportEveryMs = 1000;
 
 const bool StartFullscreen = true;
+// The keys along the bottom of the screen, short (the user's ask).
+const char* KeyLegend = "c - clear trails   f - fullscreen   q - quit";
 
 // The 80 COCO classes yolo26n.pt was trained on, in classId order.
 const char* ClassNames[] =
@@ -809,6 +811,10 @@ int main()
         cv::Mat camera, both;
         cv::resize(frame, camera, cv::Size(cameraWidth, RadarSizePixels));
         cv::hconcat(camera, radar, both);
+        // The keys, in a strip under the pictures (new: the user's ask).
+        cv::Mat keys(36, both.cols, CV_8UC3, cv::Scalar(20, 20, 20));
+        cv::putText(keys, KeyLegend, cv::Point(12, 25), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(220, 220, 220), 1);
+        cv::vconcat(both, keys, both);
         cv::imshow(window, both);
 
         if (frameTime - reportStart >= std::chrono::milliseconds(ReportEveryMs))

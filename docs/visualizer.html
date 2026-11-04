@@ -46,7 +46,7 @@ nav { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .group h2 { font: 500 11px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 8px; }
 .group.start h2 { color: var(--lane-start); }
 .group.objects h2 { color: var(--lane-objects); }
-.group.room h2 { color: var(--lane-room); }
+.group.room h2, .group.scan h2 { color: var(--lane-room); }
 .group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .group button {
   all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; width: 100%;
@@ -726,9 +726,10 @@ function topSlice(P, pose) {
 const USES = [
   ['depth', 'Depth camera'], ['colour', 'Colour camera'], ['reg', 'Registration'], ['onnx', 'yolo26n.onnx'],
   ['thread', 'Detector thread'], ['ids', 'Tracker IDs'], ['kalman', 'Kalman filter'], ['memory', 'Room memory'],
-  ['xyz', 'XYZ points'], ['ransac', 'RANSAC'], ['pose', 'Camera pose'],
+  ['xyz', 'XYZ points'], ['ransac', 'RANSAC'], ['pose', 'Camera pose'], ['feat', 'Features'], ['icp', 'ICP'],
+  ['mesh', 'Mesh / model'], ['disk', 'Saved folder'],
 ];
-const GROUPS = { start: 'First look', objects: 'Objects lane', room: 'Room lane' };
+const GROUPS = { start: 'First look', objects: 'Objects lane', room: 'Room lane', scan: 'Room scans' };
 const EX = [];
 const PATCH = { u: 24, v: 50 };
 const cross = t => ({ u: Math.round(64 + 44 * Math.sin(0.45 * t)), v: Math.round(53 + 28 * Math.sin(0.31 * t + 1)) });
@@ -1754,6 +1755,987 @@ function drawPose(ctx, R, st, pose) {
 }
 
 // =====================================================================
+//  06b-13z: shared pieces
+// =====================================================================
+// A camera-coordinate point (cloudFrom's: X right, Y up, Z ahead) -> the world (x right, y up, z forward).
+function toWorld(cam, x, y, z) {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const y1 = y * cp - z * sp, z1 = y * sp + z * cp;
+  return [cam.x + x * cy - z1 * sy, cam.y + y1, cam.z + x * sy + z1 * cy];
+}
+// ...and back: a world point -> that camera's pixel (u, v) and depth, or null behind it.
+function toPixel(cam, wx, wy, wz) {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const dx = wx - cam.x, dy = wy - cam.y, dz = wz - cam.z;
+  const x = dx * cy + dz * sy, z1 = -dx * sy + dz * cy;
+  const y = dy * cp + z1 * sp, z = -dy * sp + z1 * cp;
+  return z < 0.1 ? null : { u: CX + FX * x / z, v: CY - FY * y / z, z };
+}
+// Every "step"-th depth pixel as a world point, with its colour, material and pixel.
+function worldCloud(f, read, cam, step = 1) {
+  const P = { x: [], y: [], z: [], c: [], m: [], i: [] }, px = [0, 0, 0];
+  for (let v = 0; v < H; v += step) for (let u = 0; u < W; u += step) {
+    const i = v * W + u, z = read[i]; if (!z) continue;
+    const w = toWorld(cam, (u - CX) * z / FX, -(v - CY) * z / FY, z);
+    P.x.push(w[0]); P.y.push(w[1]); P.z.push(w[2]); P.m.push(f.mat[i]); P.i.push(i);
+    colourAt(f, i, px); P.c.push(`rgb(${px[0] | 0},${px[1] | 0},${px[2] | 0})`);
+  }
+  return P;
+}
+// World points -> drawCloud's format (it only needs x, y, z, colour and a row).
+function asCloud(list) {
+  const P = { x: [], y: [], z: [], c: [], v: [], n: 0 };
+  for (const [Q, colour, step = 1] of list) for (let k = 0; k < Q.x.length; k += step) {
+    P.x.push(Q.x[k]); P.y.push(Q.y[k]); P.z.push(Q.z[k]); P.c.push(colour || Q.c[k]); P.v.push(0); P.n++;
+  }
+  return P;
+}
+// The points between two heights, seen from above.
+function planOf(P, lo = -0.95, hi = 1.5, step = 1) {
+  const x = [], z = [];
+  for (let k = 0; k < P.x.length; k += step) if (P.y[k] > lo && P.y[k] < hi) { x.push(P.x[k]); z.push(P.z[k]); }
+  return { x, z };
+}
+// The room seen from above: world x across, z up the panel, a line every metre.
+function drawPlan(ctx, R, o) {
+  const zMin = -0.5, zMax = o.zMax || 5.0, xMax = 2.7;
+  const sc = Math.min((R.h - 22) / (zMax - zMin), (R.w - 20) / (2 * xMax));
+  const ox = R.x + R.w / 2, oy = R.y + R.h - 10 + zMin * sc;
+  const X = x => ox + x * sc, Y = z => oy - z * sc;
+  for (let z = 1; z <= Math.floor(zMax); z++) {
+    line(ctx, X(-xMax), Y(z), X(xMax), Y(z), '#18232a');
+    txt(ctx, X(-xMax) + 2, Y(z) - 3, z + ' m', { size: 10, mono: true, c: SCR.faint });
+  }
+  for (const L of o.layers || []) {
+    ctx.globalAlpha = L.a ?? 1; ctx.fillStyle = L.c; const s = L.s || 1.8;
+    for (let k = 0; k < L.x.length; k++) ctx.fillRect(X(L.x[k]) - s / 2, Y(L.z[k]) - s / 2, s, s);
+    ctx.globalAlpha = 1;
+  }
+  for (const r of o.rects || []) {
+    ctx.save(); ctx.strokeStyle = r.c; ctx.lineWidth = r.w || 2; if (r.dash) ctx.setLineDash(r.dash);
+    ctx.strokeRect(X(r.x0), Y(r.z1), (r.x1 - r.x0) * sc, (r.z1 - r.z0) * sc); ctx.restore();
+  }
+  for (const l of o.lines || []) line(ctx, X(l.x0), Y(l.z0), X(l.x1), Y(l.z1), l.c, l.w || 2.5, l.dash);
+  for (const d of o.dots || []) dot(ctx, X(d.x), Y(d.z), d.r || 3, d.c, d.hollow);
+  for (const c of o.cams || []) {
+    const x = X(c.x), y = Y(c.z);
+    ctx.globalAlpha = c.a ?? 1;
+    dot(ctx, x, y, 5, c.c, c.hollow);
+    line(ctx, x, y, x - Math.sin(c.yaw) * 18, y - Math.cos(c.yaw) * 18, c.c, 1.5);
+    if (c.label) txt(ctx, x + 8, y + 4, c.label, { size: 11, c: c.c });
+    ctx.globalAlpha = 1;
+  }
+  return { X, Y, sc };
+}
+// Lines of text in a monospaced console style (13e, 13z).
+function consoleLines(ctx, R, lines) {
+  lines.forEach((l, k) => {
+    const s = typeof l === 'string' ? { t: l } : l;
+    txt(ctx, R.x + 12, R.y + 22 + k * 17, s.t, { size: 11.5, mono: true, c: s.c || SCR.text });
+  });
+}
+
+// 06b's step: the biggest upright planes, found as lines seen from above by RANSAC (up to 4). Each
+// keeps its points, its ends, the camera's distance and how tall it is: under 0.8 m = furniture.
+function findWalls(P) {
+  const pool = [];
+  for (let k = 0; k < P.x.length; k++) if (P.y[k] > -0.95 && P.y[k] < 1.5) pool.push(k);
+  const out = [];
+  let left = pool;
+  for (let n = 0; n < 10 && out.length < 4 && left.length > 40; n++) {
+    let best = null;
+    for (let t = 0; t < 120; t++) {
+      // Two points near each other (09's trick): far-apart points rarely share a plane.
+      const a = left[(rnd() * left.length) | 0];
+      let b = -1, L = 0, dx = 0, dz = 0;
+      for (let k = 0; k < 12 && b < 0; k++) {
+        const c = left[(rnd() * left.length) | 0]; dx = P.x[c] - P.x[a]; dz = P.z[c] - P.z[a]; L = Math.hypot(dx, dz);
+        if (L > 0.2 && L < 0.8) b = c;
+      }
+      if (b < 0) continue;
+      const nx = -dz / L, nz = dx / L, d = nx * P.x[a] + nz * P.z[a];
+      let count = 0;
+      for (const k of left) if (Math.abs(nx * P.x[k] + nz * P.z[k] - d) < 0.03) count++;
+      if (!best || count > best.count) best = { nx, nz, d, count };
+    }
+    if (!best || best.count < 0.015 * pool.length) break;
+    // Refit the line to its points (least squares, seen from above), then take them again.
+    for (let round = 0; round < 2; round++) {
+      let n = 0, mx = 0, mz = 0, sxx = 0, sxz = 0, szz = 0;
+      for (const k of left) if (Math.abs(best.nx * P.x[k] + best.nz * P.z[k] - best.d) < 0.03) { n++; mx += P.x[k]; mz += P.z[k]; }
+      if (n < 3) break;
+      mx /= n; mz /= n;
+      for (const k of left) if (Math.abs(best.nx * P.x[k] + best.nz * P.z[k] - best.d) < 0.03) { const dx = P.x[k] - mx, dz = P.z[k] - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
+      const a = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+      best.nx = -Math.sin(a); best.nz = Math.cos(a); best.d = best.nx * mx + best.nz * mz;
+    }
+    // Its biggest connected piece along the line (a gap over 15 cm splits it), as in 06b: a person
+    // and a chair that happen to line up are not one plane.
+    const ax = -best.nz, az = best.nx, on = [], rest = [];
+    for (const k of left) (Math.abs(best.nx * P.x[k] + best.nz * P.z[k] - best.d) < 0.03 ? on : rest).push(k);
+    on.sort((p, q) => (ax * P.x[p] + az * P.z[p]) - (ax * P.x[q] + az * P.z[q]));
+    let run = [], inl = [];
+    for (let j = 0; j < on.length; j++) {
+      if (j && (ax * P.x[on[j]] + az * P.z[on[j]]) - (ax * P.x[on[j - 1]] + az * P.z[on[j - 1]]) > 0.15) { if (run.length > inl.length) inl = run; run = []; }
+      run.push(on[j]);
+    }
+    if (run.length > inl.length) inl = run;
+    const inSet = new Set(inl);
+    left = [...rest, ...on.filter(k => !inSet.has(k))];
+    if (inl.length < 0.015 * pool.length) continue;
+    const al = inl.map(k => ax * P.x[k] + az * P.z[k]).sort((p, q) => p - q);
+    let lo = 1e9, hi = -1e9;
+    for (const k of inl) { lo = Math.min(lo, P.y[k]); hi = Math.max(hi, P.y[k]); }
+    const a0 = al[(al.length * 0.02) | 0], a1 = al[(al.length * 0.98) | 0];
+    if (a1 - a0 < 0.6) continue;   // narrower than a cabinet: a person or a chair back, not a plane
+    out.push({ ...best, idx: inl, tall: hi - lo, wall: hi - lo >= 0.8, dist: Math.abs(best.d), length: a1 - a0,
+      x0: best.nx * best.d + ax * a0, z0: best.nz * best.d + az * a0, x1: best.nx * best.d + ax * a1, z1: best.nz * best.d + az * a1 });
+  }
+  return out;
+}
+function wallPixels(P, walls) {
+  const lab = new Int8Array(W * H).fill(-1);
+  walls.forEach((w, n) => { for (const k of w.idx) { const i = P.i[k], u = i % W, v = (i / W) | 0; for (const j of [i, i + 1, i + W, i + W + 1]) if (u + 1 < W && v + 1 < H) lab[j] = n; } });
+  return lab;
+}
+const PLANE_RGB = [[94, 198, 212], [255, 154, 60], [255, 210, 63], [255, 111, 181]];
+function wallsFn(read, lab, walls) {
+  return (i, px) => { depthPx(read[i], px); const n = lab[i]; if (n >= 0) tint(px, walls[n] && walls[n].wall ? PLANE_RGB[n % 4] : [120, 120, 120], 0.55); };
+}
+// 06's radar, with walls drawn as lines: the camera at the bottom, a ring every metre.
+function drawRadar(ctx, R, T, walls) {
+  const maxZ = 5, cx = R.x + R.w / 2, by = R.y + R.h - 14, sc = Math.min((R.h - 30) / maxZ, (R.w / 2 - 12) / 3.2);
+  const half = Math.atan(W / 2 / FX);
+  ctx.fillStyle = 'rgba(94,198,212,0.06)'; ctx.beginPath(); ctx.moveTo(cx, by);
+  ctx.arc(cx, by, maxZ * sc, -Math.PI / 2 - half, -Math.PI / 2 + half); ctx.closePath(); ctx.fill();
+  for (let r = 1; r <= maxZ; r++) {
+    ctx.beginPath(); ctx.strokeStyle = SCR.line; ctx.lineWidth = 1; ctx.arc(cx, by, r * sc, Math.PI, 2 * Math.PI); ctx.stroke();
+    txt(ctx, cx + 3, by - r * sc - 3, r + ' m', { size: 10, mono: true, c: SCR.dim });
+  }
+  for (const w of walls) line(ctx, cx + w.x0 * sc, by - w.z0 * sc, cx + w.x1 * sc, by - w.z1 * sc, w.c || SCR.accent, w.lw || 3, w.dash);
+  for (const tr of T.tracks) {
+    const c = ID_COLS[(tr.id - 1) % ID_COLS.length], X = (tr.ku.p - CX) * tr.kz.p / FX, x = cx + X * sc, y = by - tr.kz.p * sc;
+    dot(ctx, x, y, 5, c, !tr.det);
+    txt(ctx, x + 8, y + 4, `#${tr.id} ${tr.cls}`, { size: 11, c });
+  }
+  dot(ctx, cx, by, 5, SCR.yellow);
+}
+
+// Features (11b, 13-13d): corners in the colour picture, as the strongest local changes of brightness.
+// dim: how dark the room is (1 = lit); clahe: even out the contrast tile by tile first (13b).
+function features(f, read, thr, o = {}) {
+  const Lum = new Float32Array(W * H), px = [0, 0, 0];
+  for (let i = 0; i < W * H; i++) { colourAt(f, i, px); Lum[i] = (0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]) * (o.dim || 1) + gauss() * 0.6; }
+  if (o.clahe) {
+    const T = 16;
+    for (let tv = 0; tv < H; tv += T) for (let tu = 0; tu < W; tu += T) {
+      let lo = 1e9, hi = -1e9;
+      for (let v = tv; v < Math.min(H, tv + T); v++) for (let u = tu; u < Math.min(W, tu + T); u++) { lo = Math.min(lo, Lum[v * W + u]); hi = Math.max(hi, Lum[v * W + u]); }
+      const k = 255 / Math.max(hi - lo, 8);   // the clip: a flat tile isn't stretched into noise
+      for (let v = tv; v < Math.min(H, tv + T); v++) for (let u = tu; u < Math.min(W, tu + T); u++) Lum[v * W + u] = (Lum[v * W + u] - lo) * k;
+    }
+  }
+  const G = new Float32Array(W * H), out = [];
+  for (let v = 1; v < H - 1; v++) for (let u = 1; u < W - 1; u++) {
+    const i = v * W + u;
+    G[i] = Math.min(Math.abs(Lum[i + 1] - Lum[i - 1]), 255) + Math.min(Math.abs(Lum[i + W] - Lum[i - W]), 255);
+  }
+  for (let v = 2; v < H - 2; v++) for (let u = 2; u < W - 2; u++) {
+    const i = v * W + u, g = G[i];
+    if (g < thr) continue;
+    let best = true;
+    for (let dv = -2; dv <= 2 && best; dv++) for (let du = -2; du <= 2; du++) if ((du || dv) && G[i + dv * W + du] > g) { best = false; break; }
+    if (best && (o.noDepth || read[i])) out.push({ u, v, i, z: read[i], g });
+  }
+  out.lum = Lum;
+  return out;
+}
+
+// 11's ICP, seen from above: pair each B point with its nearest A point, fit the turn and shift
+// that bring the pairs together (Kabsch, in 2D here), repeat. Returns the pose after each round.
+function icpRounds(a, b, start, rounds, gate0 = 0.5) {
+  const A = { x: [], z: [] }, Bs = { x: [], z: [] };
+  for (let k = 0; k < a.x.length; k += Math.max(1, (a.x.length / 3000) | 0)) { A.x.push(a.x[k]); A.z.push(a.z[k]); }
+  for (let k = 0; k < b.x.length; k += Math.max(1, (b.x.length / 400) | 0)) { Bs.x.push(b.x[k]); Bs.z.push(b.z[k]); }
+  const out = [{ ...start, gap: 0, pairs: [] }];
+  let p = { ...start };
+  for (let r = 0; r <= rounds; r++) {
+    const gate = Math.max(0.05, gate0 * Math.pow(0.7, r)), ct = Math.cos(p.turn), sn = Math.sin(p.turn), pairs = [], gaps = [];
+    for (let k = 0; k < Bs.x.length; k++) {
+      const x = Bs.x[k] * ct - Bs.z[k] * sn + p.right, z = Bs.x[k] * sn + Bs.z[k] * ct + (p.ahead || 0);
+      let bi = -1, bd = 1e9;
+      for (let j = 0; j < A.x.length; j++) { const d = (A.x[j] - x) ** 2 + (A.z[j] - z) ** 2; if (d < bd) { bd = d; bi = j; } }
+      gaps.push(Math.sqrt(bd));
+      if (Math.sqrt(bd) < gate) pairs.push([x, z, A.x[bi], A.z[bi]]);
+    }
+    out[out.length - 1].gap = median(gaps); out[out.length - 1].pairs = pairs;
+    if (r === rounds || pairs.length < 5) break;
+    let mx = 0, mz = 0, ax = 0, az = 0;
+    for (const q of pairs) { mx += q[0]; mz += q[1]; ax += q[2]; az += q[3]; }
+    mx /= pairs.length; mz /= pairs.length; ax /= pairs.length; az /= pairs.length;
+    let sd = 0, sc = 0;
+    for (const q of pairs) { const bx = q[0] - mx, bz = q[1] - mz, qx = q[2] - ax, qz = q[3] - az; sd += bx * qx + bz * qz; sc += bx * qz - bz * qx; }
+    const d = Math.atan2(sc, sd), c = Math.cos(d), s = Math.sin(d);
+    const tx = p.right - mx, tz = (p.ahead || 0) - mz;
+    p = { turn: p.turn + d, right: tx * c - tz * s + ax, ahead: tx * s + tz * c + az };
+    out.push({ ...p, gap: 0, pairs: [] });
+  }
+  return out;
+}
+// A pose of B seen from above (10's slice), with its own shift ahead too.
+function slicePose(P, pose) {
+  const cp = Math.cos(CAM_A.pitch), sp = Math.sin(CAM_A.pitch), ct = Math.cos(pose.turn), sn = Math.sin(pose.turn), X = [], Z = [];
+  for (let k = 0; k < P.n; k++) {
+    const yw = P.y[k] * cp - P.z[k] * sp, zw = P.y[k] * sp + P.z[k] * cp;
+    if (yw < -0.7 || yw > 0.45) continue;
+    X.push(P.x[k] * ct - zw * sn + pose.right); Z.push(P.x[k] * sn + zw * ct + (pose.ahead || 0));
+  }
+  return { x: X, z: Z };
+}
+
+// 13-13z: one walk through the simulated room, six spots, scanned once each (never a person in view).
+const SPOTS = [
+  { x: 0, z: 0, yaw: 0 }, { x: 0.6, z: 0.4, yaw: -0.35 }, { x: -0.6, z: 0.5, yaw: 0.45 },
+  { x: 1.2, z: 1.4, yaw: -0.9 }, { x: -1.3, z: 1.5, yaw: 0.95 }, { x: 0.2, z: 2.0, yaw: 0.1 },
+].map(s => ({ ...s, y: 0, pitch: CAM_A.pitch }));
+let SCANS = null;
+function scans() {
+  if (SCANS) return SCANS;
+  const keep = seed; seed = 777;
+  SCANS = SPOTS.map((cam, k) => {
+    const f = renderFrame(cam, 0, { person: false }), r = measure(f, 6), P = worldCloud(f, r, cam, 2);
+    return { cam, f, r, P, plan: planOf(P, -0.95, 1.5), col: ID_COLS[k % ID_COLS.length] };
+  });
+  seed = keep;
+  return SCANS;
+}
+const camOf = (S, k, extra) => ({ x: S[k].cam.x, z: S[k].cam.z, yaw: S[k].cam.yaw, c: S[k].col, label: `${k + 1}`, ...extra });
+// A scan's plan points moved by a placing error (turned about its camera, then shifted).
+function moved(S, k, err) {
+  const c = Math.cos(err.turn), s = Math.sin(err.turn), o = S[k].cam, x = [], z = [];
+  for (let j = 0; j < S[k].plan.x.length; j++) {
+    const dx = S[k].plan.x[j] - o.x, dz = S[k].plan.z[j] - o.z;
+    x.push(o.x + dx * c - dz * s + err.dx); z.push(o.z + dx * s + dz * c + err.dz);
+  }
+  return { x, z };
+}
+// 13's E, seen from above: the walls (medians of the points on them), joined at the corners, and
+// what's left in the room as boxes (10 cm cells, joined into pieces).
+function cleanModel(S, use) {
+  const xs = [], zs = [], rest = [];
+  for (const k of use) {
+    const P = S[k].P;
+    for (let j = 0; j < P.x.length; j++) {
+      if (P.y[j] < -0.95 || P.y[j] > 1.5) continue;
+      if (P.x[j] < -2.2 || P.x[j] > 2.2 || P.z[j] > 4.3) { (P.z[j] > 4.3 && P.z[j] < 4.6 ? zs : xs).push(P.z[j] > 4.3 && P.z[j] < 4.6 ? P.z[j] : P.x[j]); continue; }
+      rest.push([P.x[j], P.z[j]]);
+    }
+  }
+  const left = median(xs.filter(x => x < 0)), right = median(xs.filter(x => x > 0)), back = median(zs);
+  const cell = 0.1, grid = new Map();
+  for (const [x, z] of rest) { const key = Math.floor(x / cell) + ',' + Math.floor(z / cell); grid.set(key, (grid.get(key) || 0) + 1); }
+  const seen = new Set(), boxes = [];
+  for (const key of grid.keys()) {
+    if (seen.has(key) || grid.get(key) < 2) continue;
+    const stack = [key], cells = [];
+    seen.add(key);
+    while (stack.length) {
+      const k = stack.pop(); cells.push(k);
+      const [a, b] = k.split(',').map(Number);
+      for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const n = (a + da) + ',' + (b + db);
+        if (!seen.has(n) && (grid.get(n) || 0) >= 2) { seen.add(n); stack.push(n); }
+      }
+    }
+    if (cells.length < 4) continue;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const k of cells) { const [a, b] = k.split(',').map(Number); x0 = Math.min(x0, a * cell); x1 = Math.max(x1, (a + 1) * cell); z0 = Math.min(z0, b * cell); z1 = Math.max(z1, (b + 1) * cell); }
+    boxes.push({ x0, x1, z0, z1 });
+  }
+  return { left, right, back, boxes };
+}
+function modelLines(m, c) {
+  return [{ x0: m.left, z0: -0.3, x1: m.left, z1: m.back, c }, { x0: m.right, z0: -0.3, x1: m.right, z1: m.back, c }, { x0: m.left, z0: m.back, x1: m.right, z1: m.back, c }];
+}
+
+// ---------------------------------------------------------------------
+//  06b-06c: walls on the radar
+// ---------------------------------------------------------------------
+EX.push({
+  id: '06b', name: 'Radar + Walls', group: 'objects', from: '06', blocking: true,
+  idea: '06\'s radar shows the objects but not the room around them. 06b finds the walls from depth alone (09\'s RANSAC, for upright planes) and draws them as lines on the radar.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids', 'kalman', 'xyz', 'ransac'], sim: () => ({ person: true }),
+  compare: 'On the sensor: 5.6–5.7 fps (the same as 06) and a wall at 3.15 m steady to 1 cm. Some near surfaces (0.26–0.88 m) still need naming by eye.',
+  setup(st) { st.T = newTracker('kalman', 12); st.walls = []; },
+  tick(st) {
+    const ds = runYolo(st.frame, st.read); predictTracks(st.T, 1 / 6); matchTracks(st.T, ds);
+    st.P = worldCloud(st.frame, st.read, CAM_A, 2); st.walls = findWalls(st.P); st.lab = wallPixels(st.P, st.walls);
+  },
+  steps: [
+    {
+      name: 'Upright planes', a: 'Depth: each plane found, in its own colour', b: 'Seen from above: the planes as lines',
+      text: 'RANSAC, as in 09, but keeping planes that stand upright: pick two points, count the points within 3 cm of the upright plane through them, keep the best, take its points out, and look again (up to 4 planes).',
+      A(ctx, R, st) { show(ctx, R, paint(0, wallsFn(st.read, st.lab, st.walls))); },
+      B(ctx, R, st) {
+        drawPlan(ctx, R, { layers: [{ ...planOf(st.P), c: SCR.faint }], lines: st.walls.map((w, n) => ({ ...w, c: w.wall ? `rgb(${PLANE_RGB[n % 4]})` : '#7a7a7a' })), cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'Kinect' }] });
+      },
+    },
+    {
+      name: 'Wall or furniture', a: 'Colour camera', b: 'Each plane: how far, how tall',
+      text: 'A wall is tall; the cabinet front is a plane too, but under 0.8 m tall, so it counts as furniture and stays off the radar. The distance is measured at right angles to the plane.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.frame))); },
+      B(ctx, R, st) {
+        bars(ctx, R, st.walls.map((w, n) => ({ label: `plane ${n + 1}: ${w.dist.toFixed(2)} m away, ${w.tall.toFixed(2)} m tall → ${w.wall ? 'wall' : 'furniture'}`, frac: w.tall / 2.6, value: `${w.length.toFixed(1)} m wide`, c: w.wall ? `rgb(${PLANE_RGB[n % 4]})` : '#7a7a7a' })), { title: 'Planes this frame' });
+      },
+    },
+    {
+      name: 'On the radar', a: 'Camera view (as in 06)', b: 'Radar: tracked objects and the walls',
+      text: 'The walls become lines on 06\'s radar, redrawn every frame from that frame\'s planes. Watch them wobble a little: 06c filters them.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); fpsTag(ctx, I, st); },
+      B(ctx, R, st) { drawRadar(ctx, R, st.T, st.walls.filter(w => w.wall).map((w, n) => ({ ...w, c: `rgb(${PLANE_RGB[n % 4]})` }))); },
+    },
+  ],
+});
+
+// 06c: an extended Kalman filter per wall. State: the wall's foot (the point nearest the camera),
+// X and Z; measurement: its distance and angle, a curved function of the state, hence the Jacobian.
+// How far the chart should reach either side of the middle: a little beyond the measured wobble.
+function wobble(h) { let lo = 1e9, hi = -1e9; for (const q of h) { lo = Math.min(lo, q.raw); hi = Math.max(hi, q.raw); } return Math.max(0.001, (hi - lo) * 0.75); }
+function ekfWall(foot) { return { X: foot[0], Z: foot[1], P: [[0.05, 0], [0, 0.05]], seen: 1 }; }
+function ekfStep(k, dist, angle) {
+  const Q = 1e-6, Rd = 0.01 ** 2, Ra = (1 * Math.PI / 180) ** 2;
+  k.P[0][0] += Q; k.P[1][1] += Q;                                       // predict: walls don't move
+  const r = Math.hypot(k.X, k.Z), Hm = [[k.X / r, k.Z / r], [k.Z / (r * r), -k.X / (r * r)]];
+  const y = [dist - r, angle - Math.atan2(k.X, k.Z)];
+  const PHt = [[k.P[0][0] * Hm[0][0] + k.P[0][1] * Hm[0][1], k.P[0][0] * Hm[1][0] + k.P[0][1] * Hm[1][1]],
+               [k.P[1][0] * Hm[0][0] + k.P[1][1] * Hm[0][1], k.P[1][0] * Hm[1][0] + k.P[1][1] * Hm[1][1]]];
+  const S = [[Hm[0][0] * PHt[0][0] + Hm[0][1] * PHt[1][0] + Rd, Hm[0][0] * PHt[0][1] + Hm[0][1] * PHt[1][1]],
+             [Hm[1][0] * PHt[0][0] + Hm[1][1] * PHt[1][0], Hm[1][0] * PHt[0][1] + Hm[1][1] * PHt[1][1] + Ra]];
+  const det = S[0][0] * S[1][1] - S[0][1] * S[1][0], Si = [[S[1][1] / det, -S[0][1] / det], [-S[1][0] / det, S[0][0] / det]];
+  const K = [[PHt[0][0] * Si[0][0] + PHt[0][1] * Si[1][0], PHt[0][0] * Si[0][1] + PHt[0][1] * Si[1][1]],
+             [PHt[1][0] * Si[0][0] + PHt[1][1] * Si[1][0], PHt[1][0] * Si[0][1] + PHt[1][1] * Si[1][1]]];
+  k.X += K[0][0] * y[0] + K[0][1] * y[1]; k.Z += K[1][0] * y[0] + K[1][1] * y[1];
+  const KH = [[K[0][0] * Hm[0][0] + K[0][1] * Hm[1][0], K[0][0] * Hm[0][1] + K[0][1] * Hm[1][1]],
+              [K[1][0] * Hm[0][0] + K[1][1] * Hm[1][0], K[1][0] * Hm[0][1] + K[1][1] * Hm[1][1]]];
+  k.P = [[(1 - KH[0][0]) * k.P[0][0] - KH[0][1] * k.P[1][0], (1 - KH[0][0]) * k.P[0][1] - KH[0][1] * k.P[1][1]],
+         [-KH[1][0] * k.P[0][0] + (1 - KH[1][1]) * k.P[1][0], -KH[1][0] * k.P[0][1] + (1 - KH[1][1]) * k.P[1][1]]];
+  k.seen++;
+}
+EX.push({
+  id: '06c', name: 'Wall Filter', group: 'objects', from: '06b', blocking: true,
+  idea: '06b\'s walls wobble from frame to frame. 06c gives each wall its own extended Kalman filter (05\'s idea, for a measurement that isn\'t a straight line of the state), and draws a wall only after 3 sightings.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'ids', 'kalman', 'xyz', 'ransac'], sim: () => ({ person: true }),
+  compare: 'On the sensor the wobble fell 3–6× (the wall ahead: 1.7 → 0.3 mm), and the plane\'s own distance fixed 06b\'s tilt error (3.255 → 3.16 m at about 14°). The radar still needs a look by eye.',
+  setup(st) { st.T = newTracker('kalman', 12); st.walls = []; st.kw = []; st.hist = []; },
+  tick(st) {
+    const ds = runYolo(st.frame, st.read); predictTracks(st.T, 1 / 6); matchTracks(st.T, ds);
+    st.P = worldCloud(st.frame, st.read, CAM_A, 2); st.walls = findWalls(st.P).filter(w => w.wall); st.lab = wallPixels(st.P, st.walls);
+    for (const w of st.walls) {
+      const foot = [w.nx * w.d, w.nz * w.d], dist = Math.hypot(...foot), angle = Math.atan2(foot[0], foot[1]);
+      let k = st.kw.find(q => Math.hypot(q.X - foot[0], q.Z - foot[1]) < 0.3);
+      if (!k) { st.kw.push(k = ekfWall(foot)); k.ends = [w.x0, w.z0, w.x1, w.z1]; }
+      else { ekfStep(k, dist, angle); k.ends = k.ends.map((e, j) => e * 0.8 + [w.x0, w.z0, w.x1, w.z1][j] * 0.2); }
+      k.raw = dist; k.lastRaw = w; k.tick = st.k;
+    }
+    // The chart follows one wall: the first one seen straight ahead, past 4 m.
+    if (!st.back) st.back = st.kw.find(q => q.Z > 4 && Math.abs(q.X) < 0.5);
+    const back = st.back;
+    if (back && back.tick === st.k) { st.hist.push({ raw: back.raw, est: Math.hypot(back.X, back.Z) }); if (st.hist.length > 60) st.hist.shift(); }
+  },
+  steps: [
+    {
+      name: 'Measure distance and angle', a: 'Depth: the walls (06b)', b: 'The back wall\'s measured distance, frame by frame',
+      text: 'Each frame, each wall gives two numbers: how far its foot is (the nearest point on it, at right angles) and which way. RANSAC\'s plane moves a little every frame.',
+      A(ctx, R, st) { show(ctx, R, paint(0, wallsFn(st.read, st.lab, st.walls))); },
+      B(ctx, R, st) {
+        const h = st.hist, m = median(h.map(q => q.raw)), r = wobble(h);
+        chart(ctx, R, { n: h.length, ymin: m - r, ymax: m + r, title: 'distance (m)', yfmt: v => v.toFixed(4), xlabel: 'frames',
+          series: [{ vals: h.map(q => q.raw), c: SCR.dim, dots: true, label: 'measured' }] });
+      },
+    },
+    {
+      name: 'Predict, then correct', a: 'Depth: the walls (06b)', b: 'Measured (dots) and filtered (line)',
+      text: 'The filter predicts the foot hasn\'t moved, then corrects towards the measurement by its gain. Distance and angle are curved functions of the foot\'s X and Z, so it uses their slopes (the Jacobian): an extended Kalman filter.',
+      A(ctx, R, st) { show(ctx, R, paint(0, wallsFn(st.read, st.lab, st.walls))); },
+      B(ctx, R, st) {
+        const h = st.hist, m = median(h.map(q => q.raw)), r = wobble(h);
+        chart(ctx, R, { n: h.length, ymin: m - r, ymax: m + r, title: 'distance (m)', yfmt: v => v.toFixed(4), xlabel: 'frames',
+          series: [{ vals: h.map(q => q.raw), c: SCR.dim, dots: true, label: 'measured' }, { vals: h.map(q => q.est), c: SCR.accent, w: 2.2, label: 'filtered' }] });
+      },
+    },
+    {
+      name: 'Radar: steady walls', a: 'Camera view (as in 06)', b: 'Radar: filtered walls (after 3 sightings); dashed = this frame\'s',
+      text: 'Each wall is drawn from its filtered foot and ends, and only after 3 sightings, so a plane seen once (a person standing still, a door) doesn\'t become a wall.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.frame))); drawTracks(ctx, I, st.T); fpsTag(ctx, I, st); },
+      B(ctx, R, st) {
+        const raw = st.walls.map(w => ({ ...w, c: SCR.faint, lw: 1.5, dash: [4, 3] }));
+        const kept = st.kw.filter(k => k.seen >= 3).map(k => ({ x0: k.ends[0], z0: k.ends[1], x1: k.ends[2], z1: k.ends[3], c: SCR.accent }));
+        drawRadar(ctx, R, st.T, [...raw, ...kept]);
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  08b-09c: one view, meshed
+// ---------------------------------------------------------------------
+// A still room, averaged over 30 frames (07), for 08b-09c.
+function stillRoom(st) {
+  const keep = seed; seed = 4242;
+  st.f = renderFrame(CAM_A, 0, { person: false });
+  const sum = new Float32Array(W * H), n = new Uint8Array(W * H);
+  st.one = measure(st.f, 6);
+  for (let k = 0; k < 30; k++) { const r = k ? measure(st.f, 6) : st.one; for (let i = 0; i < W * H; i++) if (r[i]) { sum[i] += r[i]; n[i]++; } }
+  st.avg = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) if (n[i] >= 15) st.avg[i] = sum[i] / n[i];
+  seed = keep;
+}
+EX.push({
+  id: '08b', name: 'Object Mesh', group: 'room', from: '08',
+  idea: 'Click a YOLO box and get that object as a 3D mesh file: the front from depth, and a guessed back, because the camera only sees the front.',
+  uses: ['depth', 'colour', 'reg', 'onnx', 'xyz', 'mesh'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A TV at 4.5 m measured 1.55–1.57 m wide, repeatable to 2 cm (it needed MaxDepthMeters 6). A paper cup was "toilet" or "fire hydrant" to YOLO, but 8–9 × 13.5 cm by its box: right.',
+  setup(st) {
+    stillRoom(st);
+    st.det = detect(st.f, 0).find(d => d.cls === 'chair');
+    const d = st.det, mask = new Uint8Array(W * H), zs = [];
+    if (d) {
+      st.zMid = centreDepth(st.avg, d).z;
+      for (let v = d.v0; v <= d.v1; v++) for (let u = d.u0; u <= d.u1; u++) {
+        const i = v * W + u, z = st.avg[i]; if (!z || Math.abs(z - st.zMid) > 0.4) continue;   // the box, and the depth band
+        const w = toWorld(CAM_A, (u - CX) * z / FX, -(v - CY) * z / FY, z);
+        if (w[1] < ROOM.floor + 0.03) continue;                                                 // the support plane (the floor)
+        mask[i] = 1;
+      }
+      const B = blobs(mask, st.avg, 1), big = B.list.reduce((a, b) => (!a || b.n > a.n ? b : a), null);
+      st.cut = new Uint8Array(W * H);
+      if (big) for (let i = 0; i < W * H; i++) if (B.lab[i] === big.id) st.cut[i] = 1;
+    }
+    const front = { x: [], y: [], z: [], c: [], v: [], n: 0 }, back = { x: [], y: [], z: [], c: [], v: [], n: 0 }, px = [0, 0, 0];
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9;
+    for (let i = 0; st.cut && i < W * H; i++) {
+      if (!st.cut[i]) continue;
+      const u = i % W, v = (i / W) | 0, z = st.avg[i], x = (u - CX) * z / FX, y = -(v - CY) * z / FY;
+      colourAt(st.f, i, px);
+      front.x.push(x); front.y.push(y); front.z.push(z); front.c.push(`rgb(${px[0] | 0},${px[1] | 0},${px[2] | 0})`); front.v.push(v); front.n++;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z);
+    }
+    const mid = z0 + (x1 - x0) / 2;   // Mirror: as deep as it is wide
+    for (let k = 0; k < front.n; k++) { back.x.push(front.x[k]); back.y.push(front.y[k]); back.z.push(2 * mid - front.z[k]); back.c.push('#8a8f94'); back.v.push(0); back.n++; }
+    st.front = front; st.both = asCloud([[front], [back]]); st.width = x1 - x0;
+  },
+  steps: [
+    {
+      name: 'Click a box', a: 'Colour camera: YOLO\'s boxes; the chair clicked', b: 'What happens next',
+      text: 'Click a box (here the chair). 30 frames are averaged first (07), so the mesh isn\'t noisy. Clicking where there\'s no box grows the object from the clicked point instead, stopping at depth jumps.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.f)));
+        for (const d of detect(st.f, 0)) { bx(ctx, I, d, d === st.det || d.cls === 'chair' ? SCR.yellow : SCR.white, d.cls === 'chair' ? 3 : 1.5); tag(ctx, U(I, d.u0), V(I, d.v0) - 18, d.cls, d.cls === 'chair' ? SCR.yellow : SCR.white, I); }
+      },
+      B(ctx, R) { para(ctx, R, ['1. average 30 frames', '2. keep: inside the box,', '   within 40 cm of its middle depth,', '   off the floor it stands on,', '   the biggest connected piece', '3. a grid of triangles over it', '4. a guessed back, then save .obj']); },
+    },
+    {
+      name: 'Cut it out', a: 'Depth: the cut-out in green', b: 'Its points (the front only)',
+      text: 'Inside the box: drop what\'s farther or nearer than the object (the depth band), drop the floor it stands on (the support plane), and keep the biggest connected piece.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { depthPx(st.avg[i], px); if (st.cut && st.cut[i]) tint(px, G_RGB, 0.65); }));
+        if (st.det) bx(ctx, I, st.det, SCR.yellow, 1.5, [4, 3]);
+      },
+      B(ctx, R, st, s) { drawCloud(ctx, R, st.front, { yaw: 0.5 * Math.sin(s * 0.8), pitch: 0.15, pivot: st.zMid || 2.5, dist: 1.4 }); },
+    },
+    {
+      name: 'A guessed back', a: 'Colour camera', b: 'Front (seen) + back (guessed, grey)',
+      text: 'The camera never saw the back. Mirror copies the front behind it, as deep as the object is wide; Flat closes it with a flat back instead (better for a TV). The back goes in its own OBJ group, so it can be hidden.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.f))); },
+      B(ctx, R, st, s) {
+        drawCloud(ctx, R, st.both, { yaw: Math.min(2.2, 0.3 + s * 0.4), pitch: 0.2, pivot: (st.zMid || 2.5) + (st.width || 0.5) / 2, dist: 1.6 });
+        tag(ctx, R.x + 8, R.y + 8, `back: mirror, ${((st.width || 0) * 100).toFixed(0)} cm deep (as wide as it is)`, SCR.dim);
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '09b', name: 'Room Mesh', group: 'room', from: '09',
+  idea: 'The first step towards recreating the room: one view, averaged, turned into a coloured mesh of triangles and saved as an .obj.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'mesh'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'On the sensor: 46k points, 89k triangles, 3.8 MB. Open the .obj in Blender: the room is one shell, seen from one spot.',
+  setup(st) {
+    stillRoom(st);
+    st.P = cloudFrom(st.f, st.avg);
+    st.jump = new Uint8Array(W * H); st.tris = 0;
+    for (let v = 0; v + 1 < H; v++) for (let u = 0; u + 1 < W; u++) {
+      const i = v * W + u, a = st.avg[i], b = st.avg[i + 1], c = st.avg[i + W];
+      if (!a) continue;
+      if ((b && Math.abs(b - a) > 0.03 * a) || (c && Math.abs(c - a) > 0.03 * a)) { st.jump[i] = 1; continue; }   // jumps over 3% of the distance: skipped
+      if (b && c) st.tris += 2;
+    }
+  },
+  steps: [
+    {
+      name: 'Average 30 frames', a: 'One frame', b: 'The average of 30',
+      text: 'S scans: 30 frames are averaged per pixel (07), so the mesh shows the room, not the noise. A pixel needs a reading in at least half the frames to count.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.one))); },
+      B(ctx, R, st) { show(ctx, R, paint(1, depthFn(st.avg))); },
+    },
+    {
+      name: 'A grid of triangles', a: 'Depth: red = a jump, no triangle there', b: 'The mesh, turning',
+      text: 'Each square of four neighbouring pixels becomes two triangles. Where neighbours jump by more than 3% of the distance (the chair\'s edge against the wall), no triangle is made, or the chair would be glued to the wall.',
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { depthPx(st.avg[i], px); if (st.jump[i]) { px[0] = 255; px[1] = 60; px[2] = 60; } })); },
+      B(ctx, R, st, s) { drawCloud(ctx, R, st.P, { yaw: 0.6 * Math.sin(s * 0.6), pitch: 0.2, pivot: 2.6, dist: 2.8 }); tag(ctx, R.x + 8, R.y + 8, `${st.tris} triangles here (a quarter of the resolution)`, SCR.dim); },
+    },
+    {
+      name: 'Saved as .obj', a: 'Colour camera', b: 'The file',
+      text: 'The points, their colours and the triangles go into one .obj file. It is a capture of the room: gitignored, never committed.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.f))); },
+      B(ctx, R, st) { consoleLines(ctx, R, ['room_mesh_<time>.obj', '', `v x y z r g b   × ${st.P.n} points`, `f a b c         × ${st.tris} triangles`, '', { t: 'one view: only the front of things', c: SCR.dim }, { t: '(08\'s shell): 09c tidies it', c: SCR.dim }]); },
+    },
+  ],
+});
+
+EX.push({
+  id: '09c', name: 'Room Model', group: 'room', from: '09b',
+  idea: '09b\'s mesh is exact but messy. 09c adds a clean model next to it: flat walls, floor and ceiling, the room stood up straight, and whatever is left as boxes on the floor.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'mesh'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic room came out right at 0°, 10° down and 14° up. On the sensor the view held only things 0.5–1.5 m away, so it hasn\'t modelled a real room view yet.',
+  setup(st) {
+    stillRoom(st);
+    st.P = cloudFrom(st.f, st.avg);
+    st.cls = new Uint8Array(W * H);   // 1 floor, 2 wall, 3 ceiling, 4 left over
+    const W2 = { x: [], y: [], z: [], c: [], v: [], n: 0 }, rest = [];
+    for (let i = 0; i < W * H; i++) {
+      const z = st.avg[i]; if (!z) continue;
+      const u = i % W, v = (i / W) | 0, w = toWorld(CAM_A, (u - CX) * z / FX, -(v - CY) * z / FY, z);
+      st.cls[i] = w[1] < ROOM.floor + 0.04 ? 1 : w[1] > ROOM.ceil - 0.04 ? 3 : (w[0] < ROOM.left + 0.05 || w[0] > ROOM.right - 0.05 || w[2] > ROOM.back - 0.05) ? 2 : 4;
+      W2.x.push(w[0]); W2.y.push(w[1]); W2.z.push(w[2]); W2.c.push(['', '#3fd47a', '#4d8dff', '#ffd23f', '#ff9a3c'][st.cls[i]]); W2.v.push(0); W2.n++;
+      if (st.cls[i] === 4) rest.push([w[0], w[2]]);
+    }
+    st.level = W2;
+    st.model = cleanModel([{ P: { x: W2.x, y: W2.y, z: W2.z } }], [0]);
+  },
+  steps: [
+    {
+      name: 'Planes, sorted', a: 'Depth: floor, walls, ceiling, the rest', b: 'How much of the view each is',
+      text: 'Planes facing any way are found (06b\'s search), then sorted by which way they face: up = floor, down = ceiling, sideways = walls. What no plane took is left over.',
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { depthPx(st.avg[i], px); const c = st.cls[i]; if (c) tint(px, [[0, 0, 0], G_RGB, [77, 141, 255], Y_RGB, [255, 154, 60]][c], 0.55); })); },
+      B(ctx, R, st) {
+        const n = [0, 0, 0, 0, 0]; for (let i = 0; i < W * H; i++) n[st.cls[i]]++;
+        const all = n[1] + n[2] + n[3] + n[4] || 1;
+        bars(ctx, R, [['floor', 1, SCR.green], ['walls', 2, SCR.blue], ['ceiling', 3, SCR.yellow], ['left over → boxes', 4, SCR.orange]].map(([l, k, c]) => ({ label: l, frac: n[k] / all, value: (100 * n[k] / all).toFixed(0) + '%', c })), { title: 'Share of the view' });
+      },
+    },
+    {
+      name: 'Stand it up straight', a: 'Colour camera', b: 'Tilted as the camera saw it, then levelled',
+      text: 'The camera looks 8° down, so its room is tilted. "Up" comes from the floor (or the ceiling, or two walls), and the whole model is turned so the floor is level.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.f))); },
+      B(ctx, R, st, s) {
+        const lev = s > 3.5;
+        drawCloud(ctx, R, lev ? st.level : st.P, { yaw: 1.45, pitch: 0, pivot: 2.4, dist: 4.5 });
+        tag(ctx, R.x + 8, R.y + 8, lev ? 'levelled: up from the floor' : 'the camera\'s own view: tilted 8°', lev ? SCR.green : SCR.yellow);
+      },
+    },
+    {
+      name: 'Walls joined, boxes', a: 'Depth: floor, walls, ceiling, the rest', b: 'The clean model from above',
+      text: 'The walls are joined where they meet, the floor and ceiling are flat rectangles, and each left-over piece (the chair, the cabinet) becomes a box on the floor. The model goes in the .obj next to 09b\'s mesh, in its own groups.',
+      A(ctx, R, st) { show(ctx, R, paint(0, (i, px) => { depthPx(st.avg[i], px); const c = st.cls[i]; if (c) tint(px, [[0, 0, 0], G_RGB, [77, 141, 255], Y_RGB, [255, 154, 60]][c], 0.55); })); },
+      B(ctx, R, st) {
+        drawPlan(ctx, R, { layers: [{ ...planOf(st.level), c: SCR.faint }], lines: modelLines(st.model, SCR.blue),
+          rects: st.model.boxes.map(b => ({ ...b, c: SCR.orange })), cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'Kinect' }] });
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  11-11b: placing a second view automatically
+// ---------------------------------------------------------------------
+function twoViews(st) {
+  const keep = seed; seed = 999;
+  st.fA = renderFrame(CAM_A, 0, { person: false }); st.fB = renderFrame(CAM_B, 0, { person: false });
+  st.rA = measure(st.fA, 6); st.rB = measure(st.fB, 6);
+  st.PA = cloudFrom(st.fA, st.rA); st.PB = cloudFrom(st.fB, st.rB);
+  st.topA = topSlice(st.PA); st.topB0 = slicePose(st.PB, { turn: 0, right: 0 }); st.gapKey = '';
+  seed = keep;
+}
+EX.push({
+  id: '11', name: 'ICP', group: 'room', from: '10',
+  idea: '10 needed the pose typed in by hand. ICP (iterative closest point) finds it: pair each point of B with its nearest point of A, fit the turn and shift that bring the pairs together, and repeat.',
+  uses: ['depth', 'xyz', 'pose', 'icp'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'On the sensor with the Kinect not moved it held 0.000 m / 0.00°. It needs a roughly right start: 11b finds one. Still to try: a real move.',
+  setup(st) { twoViews(st); st.rounds = icpRounds(st.topA, st.topB0, { turn: -4 * Math.PI / 180, right: 0.18, ahead: 0.05 }, 14); },
+  steps: [
+    {
+      name: 'Pair the nearest points', a: 'Depth from spot B', b: 'Each B point (blue) paired with its nearest A point (orange)',
+      text: 'Start from a rough guess (here 12 cm short, 5 cm ahead and 4° off). Every B point is paired with the nearest A point. Pairs farther apart than a gate are dropped (50 cm, shrinking each round). From a worse start it can slide into a wrong fit: hence 11b.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.rB))); },
+      B(ctx, R, st, s) {
+        const k = Math.min(st.rounds.length - 1, Math.floor(s / 1.2)), p = st.rounds[k], top = slicePose(st.PB, p);
+        const pl = drawPlan(ctx, R, { zMax: 5.0, layers: [{ ...st.topA, c: SCR.orange }, { ...top, c: 'rgba(77,141,255,0.9)' }] });
+        for (const q of p.pairs.filter((_, j) => j % 4 === 0)) line(ctx, pl.X(q[0]), pl.Y(q[1]), pl.X(q[2]), pl.Y(q[3]), 'rgba(255,255,255,0.35)', 1);
+        tag(ctx, R.x + 8, R.y + 8, `round ${k + 1}: ${p.pairs.length} pairs, median gap ${(p.gap * 100).toFixed(1)} cm`, SCR.text);
+      },
+    },
+    {
+      name: 'Fit, then repeat', a: 'Depth from spot A', b: 'The median gap, round by round',
+      text: 'The turn and shift that best bring each pair together come straight from the pairs (the Kabsch method, with an SVD in 3D). Move B by it, pair again, fit again: the gap shrinks each round.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.rA))); },
+      B(ctx, R, st) {
+        chart(ctx, R, { n: st.rounds.length, ymin: 0, ymax: Math.max(0.05, st.rounds[0].gap) * 100, title: 'median gap (cm)', yfmt: v => v.toFixed(1), xlabel: 'rounds',
+          series: [{ vals: st.rounds.map(r => r.gap * 100), c: SCR.accent, w: 2 }, { vals: st.rounds.map(r => r.gap * 100), c: SCR.accent, dots: true }] });
+      },
+    },
+    {
+      name: 'Placed', a: 'Colour from spot B', b: 'B where ICP put it',
+      text: 'After a few rounds the walls lie on top of each other. The true move was 30 cm to the right, no turn.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.fB))); },
+      B(ctx, R, st) {
+        const p = st.rounds[st.rounds.length - 1];
+        drawPlan(ctx, R, { zMax: 5.0, layers: [{ ...st.topA, c: SCR.orange }, { ...slicePose(st.PB, p), c: 'rgba(77,141,255,0.9)' }],
+          cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'A' }, { x: p.right, z: p.ahead, yaw: p.turn, c: '#3ee6ff', label: 'B' }] });
+        tag(ctx, R.x + 8, R.y + 8, `found: ${(p.right * 100).toFixed(1)} cm right, ${(p.ahead * 100).toFixed(1)} cm ahead, ${(p.turn * 180 / Math.PI).toFixed(2)}°`, SCR.green);
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '11b', name: 'Feature Pose', group: 'room', from: '11',
+  idea: 'ICP needs a roughly right start. 11b finds one the way Meshroom does: corners in the colour pictures, matched between the two views, lifted to 3D by depth, then the best turn and shift that agree with most matches.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'pose', 'feat', 'icp'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'On the sensor it found 0 features: the colour picture was black (a dark room or a covered lens). It needs a lit room; 13b copes with a dim one.',
+  setup(st) {
+    twoViews(st);
+    const keep = seed; seed = 31;
+    const fs = features(st.fA, st.rA, 40).sort((a, b) => b.g - a.g).slice(0, 36), m = [];
+    for (const q of fs) {
+      const w = toWorld(CAM_A, (q.u - CX) * q.z / FX, -(q.v - CY) * q.z / FY, q.z), b = toPixel(CAM_B, ...w);
+      if (!b || b.u < 1 || b.u > W - 2 || b.v < 1 || b.v > H - 2) continue;
+      const zb = st.rB[Math.round(b.v) * W + Math.round(b.u)]; if (!zb || Math.abs(zb - b.z) > 0.1) continue;   // hidden from B
+      m.push({ a: q, b: { u: b.u, v: b.v, z: zb }, wA: w, ok: true });
+    }
+    for (const q of m) if (rnd() < 0.2) { const o = m[(rnd() * m.length) | 0]; q.b = o.b; q.ok = q === o; }   // a fifth matched wrongly (a ratio test lets some through)
+    // RANSAC: two matches give a turn and shift (seen from above); count the matches that agree within 5 cm.
+    const lift = q => { const w = toWorld({ ...CAM_B, x: 0 }, (q.b.u - CX) * q.b.z / FX, -(q.b.v - CY) * q.b.z / FY, q.b.z); return [w[0], w[2]]; };
+    const pose2 = (p, q) => { const a1 = [p.wA[0], p.wA[2]], a2 = [q.wA[0], q.wA[2]], b1 = lift(p), b2 = lift(q); const t = Math.atan2(a2[1] - a1[1], a2[0] - a1[0]) - Math.atan2(b2[1] - b1[1], b2[0] - b1[0]), c = Math.cos(t), s = Math.sin(t); return { turn: t, right: a1[0] - (b1[0] * c - b1[1] * s), ahead: a1[1] - (b1[0] * s + b1[1] * c) }; };
+    const agree = (p, q) => { const b = lift(q), c = Math.cos(p.turn), s = Math.sin(p.turn); return Math.hypot(b[0] * c - b[1] * s + p.right - q.wA[0], b[0] * s + b[1] * c + p.ahead - q.wA[2]) < 0.05; };
+    st.tries = []; st.best = null;
+    for (let t = 0; t < 40 && m.length > 2; t++) {
+      const p = m[(rnd() * m.length) | 0], q = m[(rnd() * m.length) | 0]; if (p === q) continue;
+      const pose = pose2(p, q), n = m.filter(r => agree(pose, r)).length;
+      st.tries.push({ n, ok: p.ok && q.ok });
+      if (!st.best || n > st.best.n) st.best = { ...pose, n };
+    }
+    for (const q of m) q.inlier = st.best ? agree(st.best, q) : false;
+    // Refit to every match that agrees (Kabsch on all of them, not just two).
+    const ins = m.filter(q => q.inlier);
+    if (ins.length >= 3) {
+      const a = ins.map(q => [q.wA[0], q.wA[2]]), b = ins.map(lift), n = ins.length;
+      const ma = [a.reduce((p, q) => p + q[0], 0) / n, a.reduce((p, q) => p + q[1], 0) / n], mb = [b.reduce((p, q) => p + q[0], 0) / n, b.reduce((p, q) => p + q[1], 0) / n];
+      let sd = 0, sc = 0;
+      for (let j = 0; j < n; j++) { const bx = b[j][0] - mb[0], bz = b[j][1] - mb[1], ax = a[j][0] - ma[0], az = a[j][1] - ma[1]; sd += bx * ax + bz * az; sc += bx * az - bz * ax; }
+      const t = Math.atan2(sc, sd), c = Math.cos(t), s = Math.sin(t);
+      st.best = { turn: t, right: ma[0] - (mb[0] * c - mb[1] * s), ahead: ma[1] - (mb[0] * s + mb[1] * c), n: st.best.n };
+    }
+    st.m = m;
+    st.rounds = st.best ? icpRounds(st.topA, st.topB0, st.best, 6, 0.08) : [];   // a close start: a narrow gate (13 uses 5 cm)
+    seed = keep;
+  },
+  steps: [
+    {
+      name: 'Features, matched', a: 'Colour from spot A: features', b: 'Colour from spot B: the same features (red = a wrong match)',
+      text: 'ORB finds corners in each colour picture and describes the patch around each one. Matching descriptors pair them across the two views, keeping a match only if it\'s clearly better than the second best (the ratio test). A few wrong ones still get through.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.fA))); st.m.forEach((q, k) => dot(ctx, U(I, q.a.u + 0.5), V(I, q.a.v + 0.5), 3.5, ID_COLS[k % ID_COLS.length])); },
+      B(ctx, R, st) { const I = show(ctx, R, paint(1, colourFn(st.fB))); st.m.forEach((q, k) => dot(ctx, U(I, q.b.u + 0.5), V(I, q.b.v + 0.5), 3.5, q.ok ? ID_COLS[k % ID_COLS.length] : SCR.red)); },
+    },
+    {
+      name: 'RANSAC + Kabsch', a: 'Colour from spot B: green = agrees with the best pose', b: 'Tries: matches that agree with each',
+      text: 'Each match is lifted to 3D by its depth. RANSAC picks a few matches, fits the turn and shift between them (Kabsch), and counts how many other matches agree within a few cm. A try with a wrong match agrees with almost nothing.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.fB))); for (const q of st.m) dot(ctx, U(I, q.b.u + 0.5), V(I, q.b.v + 0.5), 3.5, q.inlier ? SCR.green : SCR.red); },
+      B(ctx, R, st) {
+        const mx = Math.max(1, ...st.tries.map(t => t.n));
+        bars(ctx, R, st.tries.slice(0, 8).map((t, k) => ({ label: `try ${k + 1}: ${t.ok ? 'two good matches' : 'a wrong match in it'}`, frac: t.n / mx, value: t.n + ' agree', c: t.ok ? SCR.green : SCR.red })), { title: 'RANSAC tries' });
+      },
+    },
+    {
+      name: 'Then ICP', a: 'Depth from spot B', b: 'B placed: features first, then 11\'s ICP',
+      text: 'The best pose is already close; 11\'s ICP finishes it on all the points. This is how 13 places every scan.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.rB))); },
+      B(ctx, R, st, s) {
+        if (!st.rounds.length) { para(ctx, R, ['No pose found.']); return; }
+        const k = Math.min(st.rounds.length - 1, Math.floor(s / 1.0)), p = st.rounds[k];
+        drawPlan(ctx, R, { zMax: 5.0, layers: [{ ...st.topA, c: SCR.orange }, { ...slicePose(st.PB, p), c: 'rgba(77,141,255,0.9)' }],
+          cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'A' }, { x: p.right, z: p.ahead, yaw: p.turn, c: '#3ee6ff', label: 'B' }] });
+        tag(ctx, R.x + 8, R.y + 8, `${k ? 'ICP round ' + k : 'features'}: ${(p.right * 100).toFixed(1)} cm right, ${(p.ahead * 100).toFixed(1)} cm ahead, ${(p.turn * 180 / Math.PI).toFixed(2)}°`, k ? SCR.green : SCR.yellow);
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  13-13z: a room from many spots
+// ---------------------------------------------------------------------
+EX.push({
+  id: '13', name: 'Room Scan', group: 'scan', from: '11b',
+  idea: 'The whole room, from as many spots as it takes. SPACE scans where you stand; each scan is placed by features and ICP against all the earlier ones; E merges everything into one model.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic textured room from 4 spots: placed within 2.1 mm / 0.08°, the mesh 0.6 mm off. On the sensor, scans are refused under 100 features, so a dark room gets nowhere: light it.',
+  setup(st) { st.S = scans(); st.model = cleanModel(st.S, [0, 1, 2, 3, 4, 5]); st.all = asCloud(st.S.map(q => [q.P, null, 2])); },
+  steps: [
+    {
+      name: 'SPACE at each spot', a: 'Depth from the newest spot', b: 'The room so far, from above',
+      text: 'Stand somewhere, press SPACE: 30 frames are averaged into one scan. Move, turn, SPACE again. Each new spot should still see part of what earlier scans saw, so it can be placed.',
+      A(ctx, R, st, s) { const k = Math.min(5, Math.floor(s / 1.1)); show(ctx, R, paint(0, depthFn(st.S[k].r))); },
+      B(ctx, R, st, s) {
+        const k = Math.min(5, Math.floor(s / 1.1));
+        drawPlan(ctx, R, { layers: st.S.slice(0, k + 1).map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.slice(0, k + 1).map((_, j) => camOf(st.S, j)) });
+      },
+    },
+    {
+      name: 'Placed against all', a: 'Colour from spot 6: its features', b: 'Features give a rough place; ICP snaps it',
+      text: 'A new scan\'s features are matched against every earlier scan (11b), which gives a rough pose; point-to-plane ICP against all earlier scans finishes it. Directions a bare wall can\'t pin (sliding along it) keep the features\' value.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.S[5].f))); for (const q of features(st.S[5].f, st.S[5].r, 40)) dot(ctx, U(I, q.u + 0.5), V(I, q.v + 0.5), 2.5, SCR.green); },
+      B(ctx, R, st, s) {
+        const k = clamp((s - 2) / 3, 0, 1), err = { dx: 0.08 * (1 - k), dz: -0.05 * (1 - k), turn: 0.05 * (1 - k) };
+        drawPlan(ctx, R, { layers: [...st.S.slice(0, 5).map(q => ({ ...q.plan, c: SCR.faint })), { ...moved(st.S, 5, err), c: st.S[5].col }], cams: [camOf(st.S, 5)] });
+        tag(ctx, R.x + 8, R.y + 8, k < 1 ? (s < 2 ? 'features: 9 cm and 3° off' : 'ICP…') : 'ICP: within a few mm', k < 1 ? SCR.yellow : SCR.green);
+      },
+    },
+    {
+      name: 'E: one model', a: 'Every scan merged (turning)', b: 'The clean model: walls, boxes (09c, across all scans)',
+      text: 'E merges every scan (a TSDF: each 3 cm cube averages how far it is from a surface, over all scans) and draws the surface, then 09c\'s clean model across all scans. U undoes the last scan.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R, st) {
+        drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: SCR.faint })), lines: modelLines(st.model, SCR.blue),
+          rects: st.model.boxes.map(b => ({ ...b, c: SCR.orange })), cams: st.S.map((_, j) => camOf(st.S, j, { label: '' })) });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '13b', name: 'Room Scan HQ', group: 'scan', from: '13',
+  idea: '13 for quality over time. In a dim room 13 finds too few features to place a scan; 13b evens out the picture\'s contrast first (CLAHE) and lowers the corner detector\'s threshold, then buys quality everywhere else too.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'The same dim view on the sensor: 13 found 48–73 features (refused), 13b 1225–1271, and a second scan placed 0.5 mm off. A 34-scan real room later slowed down from scan 28: hence 13c.',
+  setup(st) {
+    st.S = scans(); const f = st.S[0].f, r = st.S[0].r;
+    const keep = seed; seed = 5;
+    st.dim = features(f, r, 20, { dim: 0.25 }); st.eq = features(f, r, 7, { dim: 0.25, clahe: true });
+    seed = keep;
+  },
+  steps: [
+    {
+      name: 'A dim room', a: 'The colour picture in a dim room', b: 'Features found',
+      text: 'With the lights low the colour picture is dark and flat: hardly any corners stand out, so 13 refuses the scan (it can\'t be matched later).',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, (i, px) => { colourAt(st.S[0].f, i, px); px[0] *= 0.25; px[1] *= 0.25; px[2] *= 0.25; })); for (const q of st.dim) dot(ctx, U(I, q.u + 0.5), V(I, q.v + 0.5), 2.5, SCR.yellow); },
+      B(ctx, R, st) { const mx = Math.max(st.dim.length, st.eq.length, 1); bars(ctx, R, [{ label: '13: FAST threshold 20', frac: st.dim.length / mx, value: st.dim.length + '', c: SCR.red }], { title: 'Features (at a quarter of the resolution)' }); },
+    },
+    {
+      name: 'Even out the contrast', a: 'After CLAHE (tile by tile)', b: 'Features found',
+      text: 'CLAHE stretches each small tile\'s contrast on its own, with a clip so flat tiles don\'t turn into noise. Then the corner detector\'s threshold goes from 20 down to 7.',
+      A(ctx, R, st) { const L = st.eq.lum, I = show(ctx, R, paint(0, (i, px) => { const g = clamp(L[i], 0, 255); px[0] = px[1] = px[2] = g; })); for (const q of st.eq) dot(ctx, U(I, q.u + 0.5), V(I, q.v + 0.5), 2.5, SCR.green); },
+      B(ctx, R, st) {
+        const mx = Math.max(st.dim.length, st.eq.length, 1);
+        bars(ctx, R, [{ label: '13: FAST threshold 20', frac: st.dim.length / mx, value: st.dim.length + '', c: SCR.red }, { label: '13b: CLAHE + FAST threshold 7', frac: st.eq.length / mx, value: st.eq.length + '', c: SCR.green }], { title: 'Features (at a quarter of the resolution)' });
+      },
+    },
+    {
+      name: 'Quality everywhere', a: 'Depth from the same spot', b: 'What else 13b raises',
+      text: 'The rest of 13b trades time for quality: more frames per scan, more features, more RANSAC tries, more ICP points and rounds, and 2 cm cubes instead of 3 cm.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.S[0].r))); },
+      B(ctx, R) { para(ctx, R, ['more frames averaged per scan', 'more features per picture', 'more RANSAC tries', 'more ICP points, more rounds', '2 cm cubes in the merged mesh', '', { t: 'slower: from scan 28 of a real 34-scan room,', c: SCR.dim }, { t: 'placing took too long (13c fixes that)', c: SCR.dim }]); },
+    },
+  ],
+});
+
+EX.push({
+  id: '13c', name: 'Scan Assist', group: 'scan', from: '13b',
+  idea: '13b leaves you guessing: will this spot place? 13c shows it live (green anchors: what the next scan will be placed by), suggests the next shot, flags suspicious scans, and stays fast at 30+ scans.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh', 'thread'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic 30-scan walk: worst 2.9 mm / 0.18°, about 3 s per scan at any count (13b: 3–45 s and 12+ cm drift). The live anchors still need a run on the sensor.',
+  setup(st) {
+    st.S = scans(); st.hash = new Set();
+    for (const k of [0, 1, 2]) { const P = st.S[k].P; for (let j = 0; j < P.x.length; j++) st.hash.add(`${Math.floor(P.x[j] / 0.1)},${Math.floor(P.y[j] / 0.1)},${Math.floor(P.z[j] / 0.1)}`); }
+    // The next shot: the longest stretch of wall no scan has seen yet.
+    const seenCells = new Set();
+    for (const k of [0, 1, 2]) { const q = st.S[k].plan; for (let j = 0; j < q.x.length; j++) seenCells.add(`${Math.round(q.x[j] / 0.2)},${Math.round(q.z[j] / 0.2)}`); }
+    st.wallBits = [];
+    for (let z = 0; z <= ROOM.back; z += 0.2) for (const x of [ROOM.left, ROOM.right]) st.wallBits.push({ x, z });
+    for (let x = ROOM.left; x <= ROOM.right; x += 0.2) st.wallBits.push({ x, z: ROOM.back });
+    for (const b of st.wallBits) { b.seen = false; for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (seenCells.has(`${Math.round(b.x / 0.2) + dx},${Math.round(b.z / 0.2) + dz}`)) b.seen = true; }
+    const unseen = st.wallBits.filter(b => !b.seen), aim = unseen.length ? { x: median(unseen.map(b => b.x)), z: median(unseen.map(b => b.z)) } : { x: 0, z: 4 };
+    const toward = { x: 0 - aim.x, z: 2 - aim.z }, L = Math.hypot(toward.x, toward.z) || 1;
+    st.next = { x: aim.x + toward.x / L * 1.8, z: aim.z + toward.z / L * 1.8, aim };
+    st.next.yaw = Math.atan2(-(aim.x - st.next.x), aim.z - st.next.z);
+  },
+  tick(st) {
+    const a = 0.5 + 0.5 * Math.sin(st.t * 0.5), c0 = SPOTS[2], c1 = SPOTS[4];
+    st.live = { x: c0.x + (c1.x - c0.x) * a, y: 0, z: c0.z + (c1.z - c0.z) * a, yaw: c0.yaw + (c1.yaw - c0.yaw) * a, pitch: CAM_A.pitch };
+    st.lf = renderFrame(st.live, st.t, { person: false }); st.lr = measure(st.lf, 6);
+    st.feats = features(st.lf, st.lr, 20);
+    for (const q of st.feats) { const w = toWorld(st.live, (q.u - CX) * q.z / FX, -(q.v - CY) * q.z / FY, q.z); q.w = w; q.anchor = st.hash.has(`${Math.floor(w[0] / 0.1)},${Math.floor(w[1] / 0.1)},${Math.floor(w[2] / 0.1)}`); }
+  },
+  steps: [
+    {
+      name: 'Live anchors', a: 'Live colour: green = an anchor', b: 'From above: scans 1–3, and where you stand now',
+      text: 'Twice a second, in the background, the live picture\'s features are matched against the scans so far. Green ones (anchors) are what a scan here would be placed by; the counter says whether it\'s enough. It replaces 13\'s "move 0.5–1 m" rule.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, colourFn(st.lf)));
+        for (const q of st.feats) dot(ctx, U(I, q.u + 0.5), V(I, q.v + 0.5), 2.8, q.anchor ? SCR.green : SCR.faint);
+        const n = st.feats.filter(q => q.anchor).length;
+        tag(ctx, I.x + 6, I.y + 6, `${n} anchors`, n >= 12 ? SCR.green : SCR.red, I);
+      },
+      B(ctx, R, st) {
+        drawPlan(ctx, R, { layers: [0, 1, 2].map(k => ({ ...st.S[k].plan, c: st.S[k].col, a: 0.6 })), dots: st.feats.filter(q => q.anchor).map(q => ({ x: q.w[0], z: q.w[2], c: SCR.green, r: 2.5 })),
+          cams: [...[0, 1, 2].map(k => camOf(st.S, k)), { x: st.live.x, z: st.live.z, yaw: st.live.yaw, c: SCR.white, hollow: true, label: 'now' }] });
+      },
+    },
+    {
+      name: 'The next shot', a: 'Live colour', b: 'Red = wall nobody has seen; the suggested spot',
+      text: 'In the background 13c also looks for the biggest stretch of wall no scan has seen, and suggests a spot and a turn that would see it while keeping anchors in view. The console prints the "Next" line.',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.lf))); },
+      B(ctx, R, st) {
+        const pl = drawPlan(ctx, R, { layers: [0, 1, 2].map(k => ({ ...st.S[k].plan, c: SCR.faint })), dots: st.wallBits.map(b => ({ x: b.x, z: b.z, c: b.seen ? SCR.green : SCR.red, r: 2.5 })),
+          cams: [...[0, 1, 2].map(k => camOf(st.S, k)), { x: st.next.x, z: st.next.z, yaw: st.next.yaw, c: SCR.yellow, label: 'next' }] });
+        arrow(ctx, pl.X(st.next.x), pl.Y(st.next.z), pl.X(st.next.aim.x), pl.Y(st.next.aim.z), SCR.yellow, 1.5);
+      },
+    },
+    {
+      name: 'Suspicious: X or P', a: 'Depth from spot 4', b: 'Scan 4 placed badly, flagged; X excludes, P places it again',
+      text: 'A scan whose placing looks doubtful (a second ICP against all but the scan it matched disagrees) is flagged red. Click it: X excludes it from placing, advice and export; P places it again against all the others.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.S[3].r))); },
+      B(ctx, R, st, s) {
+        const phase = s < 2.3 ? 0 : s < 4.6 ? 1 : 2, err = phase === 2 ? { dx: 0, dz: 0, turn: 0 } : { dx: 0.22, dz: -0.12, turn: 0.1 };
+        const layers = [0, 1, 2, 4].map(k => ({ ...st.S[k].plan, c: SCR.faint }));
+        layers.push({ ...moved(st.S, 3, err), c: phase === 2 ? SCR.green : SCR.red, a: phase === 1 ? 0.25 : 1 });
+        drawPlan(ctx, R, { layers, cams: [0, 1, 2, 3, 4].map(k => camOf(st.S, k, k === 3 ? { c: phase === 2 ? SCR.green : SCR.red } : {})) });
+        tag(ctx, R.x + 8, R.y + 8, ['scan 4: SUSPICIOUS (red)', 'X: excluded', 'P: placed again'][phase], [SCR.red, SCR.dim, SCR.green][phase]);
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '13d', name: 'Scan Far', group: 'scan', from: '13c',
+  idea: 'Down a hallway, most of what you see is past the depth camera\'s range. 13d still uses those features: with no depth they are rays, which help to turn a scan, and seen from two spots they cross at a far landmark.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh', 'thread'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic plain hallway with a 12 m end wall: 13c refuses every scan; 13d places a sideways step 34 mm off and a 2 m walk 33 mm off, through 95 landmarks with a 12 cm median depth error.',
+  setup(st) {
+    st.S = scans();
+    const keep = seed; seed = 61;
+    const f0 = st.S[0].f, r0 = st.S[0].r;
+    st.feats = features(f0, r0, 12, { noDepth: true });
+    st.far = [];
+    for (const q of st.feats) {
+      if (q.z) continue;                                               // has depth: an ordinary feature
+      const t = f0.depth[q.i]; if (t < 6) continue;                    // no reading, but not past the range: skip
+      const w = toWorld(SPOTS[0], (q.u - CX) * t / FX, -(q.v - CY) * t / FY, t);
+      const e = 1 + gauss() * 0.02;                                    // triangulated: about 12 cm off at 7 m
+      st.far.push({ q, w, est: [w[0] * e, w[1], w[2] * e] });
+    }
+    seed = keep;
+  },
+  steps: [
+    {
+      name: 'Far details: rays', a: 'Colour from spot 1: green = has depth, blue = too far', b: 'From above: a far feature is only a direction',
+      text: 'The full colour picture, masked by where depth reads nothing, gives the far features (through the doorway, down the hall). Each is a direction from the camera, not a point.',
+      A(ctx, R, st) { const I = show(ctx, R, paint(0, colourFn(st.S[0].f))); for (const q of st.feats) dot(ctx, U(I, q.u + 0.5), V(I, q.v + 0.5), 2.6, q.z ? SCR.green : SCR.blue); },
+      B(ctx, R, st) {
+        const c = SPOTS[0], lines = st.far.map(f => ({ x0: c.x, z0: c.z, x1: c.x + (f.w[0] - c.x) * 1.15, z1: c.z + (f.w[2] - c.z) * 1.15, c: 'rgba(77,141,255,0.5)', w: 1 }));
+        drawPlan(ctx, R, { zMax: 8.2, layers: [{ ...st.S[0].plan, c: SCR.faint }], lines, cams: [camOf(st.S, 0)] });
+      },
+    },
+    {
+      name: 'Two spots: the rays cross', a: 'Colour from spot 2', b: 'Rays from spots 1 and 2 cross at far landmarks',
+      text: 'The same far feature seen from a second, placed scan gives a second ray. Where the two rays cross is the landmark, kept for the rest of the session (and exported as far_landmarks).',
+      A(ctx, R, st) { show(ctx, R, paint(0, colourFn(st.S[1].f))); },
+      B(ctx, R, st) {
+        const lines = [];
+        for (const [k, col] of [[0, 'rgba(77,141,255,0.45)'], [1, 'rgba(62,230,255,0.45)']]) { const c = SPOTS[k]; for (const f of st.far) lines.push({ x0: c.x, z0: c.z, x1: f.w[0], z1: f.w[2], c: col, w: 1 }); }
+        drawPlan(ctx, R, { zMax: 8.2, layers: [{ ...st.S[0].plan, c: SCR.faint }], lines, dots: st.far.map(f => ({ x: f.est[0], z: f.est[2], c: SCR.magenta, r: 3 })), cams: [camOf(st.S, 0), camOf(st.S, 1)] });
+      },
+    },
+    {
+      name: 'Landmarks pin later scans', a: 'Depth from spot 6: little in range', b: 'A later scan, pinned by the landmarks it sees',
+      text: 'When near matches are few, the rays give the turn and the landmarks give the position; ICP then finishes with a wider gate. A hallway that 13c couldn\'t place at all, 13d places within a few cm.',
+      A(ctx, R, st) { show(ctx, R, paint(0, depthFn(st.S[5].r))); },
+      B(ctx, R, st) {
+        const c = SPOTS[5], lines = st.far.slice(0, 14).map(f => ({ x0: c.x, z0: c.z, x1: f.est[0], z1: f.est[2], c: 'rgba(255,61,242,0.4)', w: 1 }));
+        drawPlan(ctx, R, { zMax: 8.2, layers: [{ ...st.S[0].plan, c: SCR.faint }], lines, dots: st.far.map(f => ({ x: f.est[0], z: f.est[2], c: SCR.magenta, r: 3 })), cams: [camOf(st.S, 0), camOf(st.S, 5)] });
+      },
+    },
+  ],
+});
+
+EX.push({
+  id: '13e', name: 'Room Scan Autosave', group: 'scan', from: '13d',
+  idea: 'Our most advanced scanner, the one for real rooms: 13d, plus every scan written to disk the moment it\'s placed. A crash, a blue screen or an unplugged Kinect costs at most the scan in progress.',
+  uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh', 'thread', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'Synthetic: 0.027 s per scan to write, points.ply byte-identical to 13d\'s, and a scan cut off half-way skipped by 13z. On the sensor it has scanned a real room, and Demo 6 ran on it.',
+  setup(st) { st.S = scans(); },
+  steps: [
+    {
+      name: 'The folder first', a: 'Nothing scanned yet', b: 'The console, before the windows open',
+      text: 'Where the room goes is asked at start-up, before anything is scanned (Enter = room_scans\\room_<date>_<time>). An existing room is only overwritten after a yes.',
+      A(ctx, R) { drawPlan(ctx, R, { cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'Kinect' }] }); },
+      B(ctx, R) {
+        consoleLines(ctx, R, ['Folder for this room\'s scans', '(Enter = room_scans\\room_2026-11-04_1532):', { t: '> ', c: SCR.accent }, '', 'Saving into room_scans\\room_2026-11-04_1532', { t: 'Every scan is written there as it\'s placed.', c: SCR.dim }]);
+      },
+    },
+    {
+      name: 'Each scan, saved at once', a: 'The room so far', b: 'The folder: pose.txt written last',
+      text: 'As soon as a scan is placed, its folder is written: points, pictures, features, and pose.txt last. A scan cut off half-way has no pose.txt, so 13z skips it. X, P and U update the folder too.',
+      A(ctx, R, st, s) { const k = Math.min(5, Math.floor(s / 1.1)); drawPlan(ctx, R, { layers: st.S.slice(0, k + 1).map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.slice(0, k + 1).map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R, st, s) {
+        const k = Math.min(5, Math.floor(s / 1.1)), part = (s % 1.1) / 1.1, rows = ['room_scans\\room_2026-11-04_1532\\', '  room.txt   landmarks.txt   .gitignore'];
+        for (let j = 0; j <= k; j++) {
+          const newest = j === k, files = newest && part < 0.5 ? 'cloud.bin colour.bmp features.yml …' : 'cloud.bin colour.bmp features.yml … pose.txt';
+          rows.push({ t: `  scan_00${j + 1}\\  ${files}`, c: newest ? (part < 0.5 ? SCR.yellow : SCR.green) : SCR.text });
+        }
+        consoleLines(ctx, R, rows);
+      },
+    },
+    {
+      name: 'Kinect lost', a: 'The camera window, frozen', b: 'The console',
+      text: 'No frame for 10 seconds (unplugged, a knocked cable, a stuck USB): the scans are already on disk, so 13e only finishes the folder (points.ply and the levelled coordinates) before touching the device again.',
+      A(ctx, R, st) {
+        const I = show(ctx, R, paint(0, (i, px) => { colourAt(st.S[5].f, i, px); px[0] *= 0.55; px[1] *= 0.55; px[2] *= 0.55; }));
+        tag(ctx, I.x + 6, I.y + I.h / 2 - 8, 'KINECT LOST - finishing the saved folder', SCR.red, I);
+      },
+      B(ctx, R) { consoleLines(ctx, R, ['No frame for 10 seconds: the Kinect is unplugged or stuck.', 'Finishing room_scans\\room_2026-11-04_1532 ...', '  points.ply (6 scans)', '  room.txt: finished 1, the levelled turn', { t: 'Saved. Nothing was lost.', c: SCR.green }]); },
+    },
+  ],
+});
+
+EX.push({
+  id: '13z', name: 'Room Rebuild', group: 'scan', from: '13e',
+  idea: 'No Kinect needed: rebuild rooms later from the folders 13e saves (or 13c/13d\'s K, or a rescue). Pick rooms and which scans to load, look at them, exclude bad ones, and build the .obj and .ply again.',
+  uses: ['xyz', 'mesh', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic room: floor −1.2996 / ceiling 1.2002 m (true −1.3 / 1.2), 4 walls, the couch one box within 1–4 cm, mesh 0.4 mm median off, 0.4 s; K\'s points.ply and 13z\'s identical.',
+  setup(st) { st.S = scans(); st.use = [0, 1, 2, 3, 5]; st.model = cleanModel(st.S, st.use); st.all = asCloud(st.use.map(k => [st.S[k].P, null, 2])); },
+  steps: [
+    {
+      name: 'Find the saved rooms', a: 'The chosen room, from above', b: 'Rooms found under room_scans\\',
+      text: 'It lists every saved room under its search folder (up to 3 folders down), each with its scan count. You pick one or more by number.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Saved rooms:', '  1. room_2026-11-04_1532   6 scans (13e)', '  2. rescue_2026-11-04_0951  4 scans', '  3. room_2026-11-03_2210   12 scans (K)', '', 'Which rooms? > 1', 'Which scans of room 1 (Enter = all)? > 1-4,6']); },
+    },
+    {
+      name: 'Pick the scans', a: 'Scan 5 left out', b: 'Which scans load',
+      text: 'Per room you choose which scans to load (1-4,6). In 13c\'s viewer, X excludes a scan and writes that back to its pose.txt, so the next rebuild leaves it out too.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map((q, k) => ({ ...q.plan, c: st.use.includes(k) ? q.col : SCR.faint, a: st.use.includes(k) ? 0.75 : 0.3 })), cams: st.S.map((_, j) => camOf(st.S, j, st.use.includes(j) ? {} : { c: SCR.faint })) }); },
+      B(ctx, R, st) { bars(ctx, R, st.S.map((q, k) => ({ label: `scan ${k + 1}`, frac: st.use.includes(k) ? 1 : 0.15, value: st.use.includes(k) ? 'loaded' : 'left out', c: st.use.includes(k) ? q.col : SCR.faint })), { title: 'Scans' }); },
+    },
+    {
+      name: 'Build .obj and .ply', a: 'The loaded scans, merged (turning)', b: 'What it writes into the room\'s folder',
+      text: 'It runs 13c\'s E on the loaded scans (merged mesh + clean model, plus far landmarks for a 13d room) and/or rebuilds points.ply, the raw colour points, into the room\'s own folder.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Build: 1 = .obj, 2 = .ply, 3 = both > 3', 'Merging 5 scans ...', '  room_scan_1762270000.obj', '    seen_room + clean_* + furniture_blocks', '  points.ply  (every scan\'s own colours)', { t: 'Done in 0.4 s.', c: SCR.green }]); },
+    },
+  ],
+});
+
+// =====================================================================
 //  Setup: the page around the stage
 // =====================================================================
 const $ = id => document.getElementById(id);
@@ -1767,7 +2749,7 @@ function buildNav() {
   for (const g of Object.keys(GROUPS)) {
     const div = document.createElement('div'); div.className = 'group ' + g;
     div.innerHTML = `<h2>${GROUPS[g]}</h2><ul></ul>`;
-    for (const e of EX.filter(x => x.group === g)) {
+    for (const e of EX.filter(x => x.group === g).sort((a, b) => a.id.localeCompare(b.id))) {
       const li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.id = 'ex-' + e.id; b.innerHTML = `<span class="n">${e.id}</span><span>${e.name}</span>`;
       b.addEventListener('click', () => { location.hash = 'e' + e.id; });
