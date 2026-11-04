@@ -47,11 +47,12 @@ flowchart LR
     E06c --> D3["Demo 3 Booth Radar"]
     E13 --> D4["Demo 4 Room Twin"]
     E03 --> D5["Demo 5 How Tall"]
+    D4 --> D6["Demo 6 Room Filled"]
 
     classDef planned stroke-dasharray: 5 5
     class E14,E15 planned
     classDef demo fill:#fff3d6,stroke:#c08a00
-    class D1,D2,D3,D4,D5 demo
+    class D1,D2,D3,D4,D5,D6 demo
 ```
 
 ---
@@ -688,10 +689,10 @@ spine), and the `.obj` at `VoxelMeters` 0.02 and 0.01.
 
 ## Presentation demos
 
-Five fullscreen remixes for an exhibition, in [presentation/](presentation/README.md) (yellow in
+Six fullscreen remixes for an exhibition, in [presentation/](presentation/README.md) (yellow in
 the family tree). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
 save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
-15, for people.
+15, for people. Demo 6 is Demo 4 with the holes in flat surfaces filled (below).
 
 ```mermaid
 flowchart LR
@@ -712,6 +713,34 @@ flowchart LR
 
 **What to compare:** walk to a corner of the stand: does your orange shell stand in the same
 corner of the doll's house?
+
+### Demo 6 Room Filled
+
+Demo 4, plus one step at start-up (D31, D32): the room's flat surfaces, their holes filled and
+marked, for a simple layout (walls upright, surfaces level).
+
+```mermaid
+flowchart LR
+    OBJ["Demo 4's room<br/>points + normals, levelled"] --> WALL["Walls from above:<br/>upright points stacked 1.2 m,<br/>thinned, gaps bridged,<br/>unrolled along their path"]
+    OBJ --> UP["Cabinet fronts:<br/>RANSAC + 2D refit"]
+    OBJ --> LV["Level surfaces:<br/>crowded heights,<br/>height per tile"]
+    WALL --> SEEN["Seen: a real point 5 cm in front<br/>to 50 cm behind. Farther behind:<br/>an opening"]
+    UP --> SEEN
+    LV --> SEEN
+    SEEN --> FILL["Fill the rest,<br/>colour by cv::inpaint;<br/>unseen floor at the walls' foot"]
+    LV --> LEG["Legs: thin stacked blobs<br/>under a top, made whole"]
+    WALL --> DARK["Shadows nothing seen explains:<br/>a dark thing, at its<br/>nearby readings' distance"]
+    FILL --> V["Demo 4's viewer + the fill:<br/>G marked / unmarked / off"]
+    LEG --> V
+    DARK --> V
+    OBJ --> V
+
+    classDef new stroke-width:3px
+    class WALL,UP,LV,SEEN,FILL,LEG,DARK new
+```
+
+**What to compare:** press G until it's off (Demo 4's holes), then marked: is every blue patch a
+place no scan could have seen, and is every purple cut-out something dark in the room?
 
 ---
 

@@ -34,7 +34,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. `presentation/` = five fullscreen exhibition demos remixed from the examples (D22). |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. `presentation/` = six fullscreen exhibition demos remixed from the examples (D22, D31). |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -68,7 +68,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
 - C++ / libfreenect2 examples 01–05: built, and all run on the sensor. Reproducible build (D14).
-- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–5 built (D22); Demo 4 (room twin) passed a synthetic test; none run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Then D30: 13c/13d save a rescue folder when the Kinect is lost, and 13e (13d + auto-save after every placed scan) is our most advanced scanner, the one to use for real rooms; both synthetic-tested, not yet run on the sensor. Known problem, fix soon: every picture, 3D view and room scan is mirrored left-right (Housekeeping). Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
+- C++ examples through 06 (stage A) built, plus 05b/05c, 06b (walls on the radar) and 06c (an EKF per wall). Pi bring-up paused (2026-10-30). Stage B: 07, 07b, 08 and 09 built; 09 still needs a test with the floor in view. Room recreation from one view: 09b (raw mesh) and 09c (clean model) built. Stage C: 11 (ICP), 11b (feature pose) and 13 (room scan from many spots, the full tool) built; not yet run in a lit room. 13b (13 for quality: CLAHE + FAST 7 for features in dim light, D24) built: the current dim view gives 13 about 60 features (refused), 13b about 1250. 13c (scan assist: live anchors, next shot, exclude/re-place, suspicious flag, no slowdown, D26) built and synthetic-tested; it also fixes an ICP drift that 13 and 13b share. 13d (far features for hallways: rays, landmarks, D27) built and synthetic-tested. Stage C: 10 built. Side branches: 07c/07d (remove people from the picture) built; 08b (a detected object as an `.obj`) built and run on the sensor. Exhibition: `exercises/cpp/presentation/` Demos 1–6 built (D22); Demo 4 (room twin) passed a synthetic test; Demo 6 (Demo 4 with the flat surfaces' holes filled and marked, D31) passed a synthetic test. Its first real run (a 13e room) painted over a seen wall, so round 2 (D32: walls traced from above, any path along the floor; a seen slab; legs and dark things from the readings) passed new synthetic tests and needs that room again. Demos 1–5 not run on the sensor yet. 2026-11-04: K in 13c/13d keeps the scans in a folder (raw-colour `points.ply` + every scan's data, D29) and 13z rebuilds rooms from such folders; both synthetic-tested, not yet run on the sensor. Then D30: 13c/13d save a rescue folder when the Kinect is lost, and 13e (13d + auto-save after every placed scan) is our most advanced scanner, the one to use for real rooms; both synthetic-tested, not yet run on the sensor. Known problem, fix soon: every picture, 3D view and room scan is mirrored left-right (Housekeeping). Planned next: 14 = textured room (not started); the later examples shifted up one (15 objects in the map, 16 visual odometry, 17 live mapping).
 
 ## Roadmap
 
@@ -171,6 +171,8 @@ example, each building on the one before. Numbers are the planned example folder
       (the user's requirement). 28 fps. Removal untested: nobody in view, YOLO found nothing.
 - [ ] **07e Fill never-seen pixels** (needed later, the user's call): what nobody has seen yet
       (magenta in 07d) gets a guess: `cv::inpaint` for colour, plane fill for depth (09).
+      Presentation Demo 6 (D31) already does the plane-fill + inpaint idea on a room's surfaces;
+      07e is still the one-picture version.
 - [x] **09 Find the floor:** built 2026-10-30. A RANSAC plane fit gives the camera's height, tilt
       and roll, and any point's height above the floor. Three random points from anywhere almost
       never all hit a small floor, so it picks three neighbours. Run with no floor in view, it
@@ -308,7 +310,7 @@ example, each building on the one before. Numbers are the planned example folder
       `registration.apply` (which needs the raw frames): `cv::flip(…, 1)` the colour, `undistorted`,
       `registered` and `bigdepth` pictures; reverse `colourIndex` per row and remap its column to
       1919 − column; replace `getPointXYZ` with the pinhole formula using `cx' = 512 − cx` (colour
-      camera: `1920 − cx`). Do the demos, 13e and 13z together, and mark the new folders (room.txt
+      camera: `1920 − cx`). Do the demos (Demo 6 included), 13e and 13z together, and mark the new folders (room.txt
       format 2, plus a line in exported `.obj`s) so 13z and Demo 4 can mirror older rooms on load
       (points x → −x, turns R → S R S with S = diag(−1, 1, 1)). Log it as a D-entry.
 - [ ] **libusbK blue screen (D25, the user chose: document only for now).** If it happens again:

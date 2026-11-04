@@ -1,6 +1,6 @@
 # Presentation demos
 
-Five fullscreen demos for a small exhibition. Each one is an example from `exercises/cpp/`,
+Six fullscreen demos for a small exhibition. Each one is an example from `exercises/cpp/`,
 remixed for a crowd: fullscreen, big text, no save keys, and a "live only: nothing is recorded" line.
 Visitors see themselves, which is what makes people stop at a stand.
 
@@ -11,8 +11,9 @@ Visitors see themselves, which is what makes people stop at a stand.
 | **3 Booth Radar** | Camera with boxes and distances, plus a top-down radar with a dot and trail for each visitor, and the stand's walls | 06c | Good light |
 | **4 Room Twin** | The room scanned with 13, as a turning doll's house, with visitors live inside it | 13 + 08 + 03 | A room scan from 13 first |
 | **5 How Tall** | Their height in metres over their head, plus "tallest today" (a number, no picture) | 03 | Head and feet in view |
+| **6 Room Filled** | Demo 4, with the holes in walls, floor and table tops filled by software and marked in blue stripes (G: marked / unmarked / off) | Demo 4 + 07e's idea | As Demo 4 |
 
-All five build with the other examples. They're in the same `CMakeLists.txt`, so the README's
+All six build with the other examples. They're in the same `CMakeLists.txt`, so the README's
 build command builds them too. They run from `exercises\cpp\build\`, like the examples:
 
 ```powershell
@@ -40,7 +41,7 @@ Only one program can use the Kinect at a time: quit one demo (Q or Esc) before s
 ## Suggested set-up: two screens
 
 - **Screen 1:** Demo 1, the eye-catcher: people walking past see themselves turn round.
-- **Screen 2:** Demo 4 if your room scan worked, otherwise Demo 3. Switch to Demo 5 or 2 when a
+- **Screen 2:** Demo 4 or 6 if your room scan worked, otherwise Demo 3. Switch to Demo 5 or 2 when a
   group stops and wants to play.
 
 With one Kinect, run one demo at a time and switch.
@@ -84,6 +85,34 @@ the floor, 0 level). The real thing needs the most preparation:
 again later. Check it on someone who knows their height: expect a few cm short (hair gives no
 depth reading). "step back" means head or feet are cut off. T resets "tallest today".
 
+**6 Room Filled.** Prepare it exactly as Demo 4: the same room file, and the same Kinect spot.
+It also falls back to the Kinect's own view without a file. On start-up the console prints how
+much it filled (`Filled … m^2 in … s: floor …, N walls …, N other surfaces …, N legs, N dark
+shadows`), then one line per surface (each wall's length, how much it bends and how much of it was
+seen). If something looks wrong on screen, those lines say why.
+
+What it does:
+- **Walls** are found from above, wherever upright readings stack over 1.2 m high, so they can be
+  straight, bent or curved (always upright).
+- **The parts no scan saw are painted in:** the wall behind the couch, the floor under the table,
+  the table top under a box. A floor nobody saw is laid at the walls' foot.
+- **Table legs** are made whole from the floor to the top, where the depth camera read part of them.
+- **Something dark** (a black chair, a TV screen, glass) sends no depth back but leaves a shadow
+  on the wall. That becomes a purple cut-out, placed where its few readings (a chair's legs) are.
+
+G cycles **marked** (blue stripes and purple), **unmarked**, and **off** (Demo 4's look). Showing
+off, then marked, is the best way to explain it.
+
+Its limits:
+- it assumes a simple room (upright walls, level floor and tables);
+- it only fills flat things and legs it has readings of, never a chair back or a plant;
+- big holes get smeared colour;
+- a doorway that nothing was seen through gets filled shut (an open doorway the Kinect saw through
+  stays open);
+- a dark thing's cut-out is flat, and placed from the first scan's view only.
+
+The keys are listed along the bottom of the screen.
+
 ## What's been checked, and what hasn't
 
 | Demo | Checked | Not yet |
@@ -93,6 +122,7 @@ depth reading). "step back" means head or feet are cut off. T resets "tallest to
 | 3 | Builds; it's 06c (runs on the sensor) in one window | Run on the sensor |
 | 4 | Fallback without a room file (`OneViewRoom.h`): a synthetic wall seen 14° tilted comes out upright to ±1.5 mm. Synthetic test (bare room, the worst case): located within 0.2 mm when put back up to 15° and 58 cm off, in 0.3 s; at 20° and 30° it's lost and warns (38–40% matched). 13's own test: the saved turn lands 94% of scan 1's points within 3 cm of the merged mesh | 13 has never run in a lit room, so there's no real room file yet |
 | 5 | Builds; the height now uses each end's own depth | Run on the sensor; check against a known height |
+| 6 | Builds. Round 1 synthetic room (couch shadow, floor patch, box on a table, doorway): all filled as expected, nothing in the doorway, within 1 mm of the true planes. Round 2 (D32), synthetic rooms with only what the first camera could see: no fill within 1.5 cm of a seen point on bent, doubled or curved walls (the curve to 3.1 mm); a 1.5° tilted table top found; 4 legs seen over 13–22 cm each rebuilt full height; no sheet from things in a line; an unseen floor guessed at its true height; a black chair's ghost 11 cm from its legs, a black TV's on the wall, none for a normal chair. 0.14–0.19 s per room | Run on the real room file again (the first run, before D32, painted over a seen wall) |
 
 Rehearse on the sensor before the day. For each demo, look at the points under "Each demo" and
 note anything that looks wrong.

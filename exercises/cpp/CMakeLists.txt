@@ -19,7 +19,7 @@ foreach(example 01_Kinect_Depth_Peek 02_Kinect_Detect_Distance 03_Kinect_Depth_B
 endforeach()
 
 # The presentation demos (presentation/README.md): fullscreen remixes of the examples above, for an exhibition.
-foreach(demo Demo1_You_In_3D Demo2_Invisibility_Cloak Demo3_Booth_Radar Demo4_Room_Twin Demo5_How_Tall)
+foreach(demo Demo1_You_In_3D Demo2_Invisibility_Cloak Demo3_Booth_Radar Demo4_Room_Twin Demo5_How_Tall Demo6_Room_Filled)
     add_executable(${demo} presentation/${demo}/main.cpp)
     target_include_directories(${demo} PRIVATE ${freenect2_INCLUDE_DIRS})
     target_link_libraries(${demo} PRIVATE ${freenect2_LIBRARIES} ${OpenCV_LIBS})

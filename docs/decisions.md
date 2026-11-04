@@ -496,3 +496,131 @@ the files it wrote, then the folder only if it is empty. Anything else in the fo
   loaded scans 1–2 and skipped scan 3.
 - Not tested: the timeout path itself (that needs the Kinect unplugged for real), and 13e on the
   sensor.
+
+### D31 — 2026-11-04 — Demo 6: Demo 4 with the holes in flat surfaces filled by software, and marked
+*(Its wall finding is superseded by D32, after the first real run.)*
+**What:** the user wanted Demo 4 without "massive holes" (walls and tables), as a new Demo 6 that
+shows which areas the software reconstructed. Demo 6 is a copy of Demo 4 with one new step, run
+once at start-up:
+- find the flat surfaces in the room's points: upright planes by RANSAC, where a point and its
+  normal propose the plane; level ones as crowded heights of up-facing points;
+- lay a 3 cm grid on each one, and fill the cells no room point is near;
+- colour the filled cells with `cv::inpaint`, from the seen cells around.
+
+The floor fills to its outline, a wall from the floor to the doll's-house cut, and a table top to
+its rectangle when the piece covers at least half of it (otherwise only its enclosed holes).
+G cycles marked (blue stripes) / unmarked / off. The keys are listed along the bottom of the
+screen, tersely (the user's ask; now the rule for demos).
+
+**Why mark the fill:** every filled cell is a guess. The point of the demo is that visitors can
+see real and guessed side by side, and G's "off" is Demo 4 itself.
+
+**Why only flat surfaces:** a plane is the one shape a hole can be filled from honestly: its
+edges pin it down. Chairs, plants, legs and what's under a table would be invented. Those are
+ideas.md material (shape by class).
+
+**Why points seen behind a wall keep it open:** without that, every doorway and window would be
+filled shut. Where the first camera's line of sight to a point more than 10 cm behind the wall
+crosses the wall, there's an opening. It uses scan 1's camera only, because the `.obj` doesn't
+keep the other scans' spots. A doorway nothing was seen through still gets filled.
+
+**Why the floor stops at walls:** the floor seen through a doorway is the next room's. Its convex
+outline would otherwise spill out past the wall.
+
+**Why a demo and not 07e:** 07e (fill never-seen pixels in one picture) stays on the ladder. This
+does its plane-fill half on the room instead, for the exhibition. It reuses Demo 4's fallback by
+including `../Demo4_Room_Twin/OneViewRoom.h` (one copy, D23).
+
+**Tests (synthetic, through the real `FillHoles`):** a 4 × 5 m room, 155k points:
+- the couch shadow on the wall was filled 1.27 m² (hole 1.26);
+- the never-seen floor patch 0.41 of 0.42 m²;
+- the table top under a box 0.035 of 0.040 m²;
+- nothing was filled between the floor and the table top, and nothing in the doorway;
+- every filled point was within 0.4 mm of a true plane;
+- 0.07 s.
+
+Not run on the sensor. Like Demo 4, it inherits the left-right mirror (Housekeeping).
+
+### D32 — 2026-11-04 — Demo 6, round 2: walls traced from above, a slab for "seen", legs and dark things from the readings
+**What went wrong on the first real room** (a 13e `.obj`, the user's screenshots):
+- blue was painted over a wall that had clearly been seen;
+- a blue sheet floated in front of the table, from the floor to the cut;
+- the table got no fill;
+- the unseen floor stayed black.
+
+The causes:
+- the plane's tilt came from one point's noisy normal and was never refitted;
+- a merged wall is slightly bent or doubled by scan drift, and one flat plane can't follow that;
+- "seen" was a 5 cm slab, so where the plane stood more than 5 cm in front of the real wall,
+  the wall counted as unseen and the fill covered it;
+- anything upright with 1.5 m of height range counted as a wall (a chair back, a table edge and
+  a shelf in a line);
+- a 2 cm height histogram cut a table top tilted 1–2° into strips.
+
+**The user's calls:**
+- a simple layout for now: walls exactly upright, surfaces level;
+- but walls may curve along the floor;
+- table tops filled, and legs only from what the depth camera read of them;
+- the "negative space" on walls used to guess at things that sent no reflection back.
+
+**What changed:**
+- **Walls are paths seen from above.**
+  - Upright points that stack at least 1.2 m high in one 3 cm cell (and at 15 points per metre
+    or more, so stray points don't count) are wall cells.
+  - These are thinned to one cell across the wall's thickness, placed at their points' mean.
+  - Gaps up to 1.2 m between two ends pointing at each other are bridged (doorways).
+  - The paths are split where three meet, then ordered by the shortest walk along them and
+    unrolled into a flat picture (along × height), which handles straight, bent and curved walls
+    alike.
+  - A wall must be at least 1 m long and 40% seen, and not seen only through another wall.
+- **"Seen" is a slab:** a real point from 5 cm in front of the wall to 50 cm behind it (10 cm for a
+  cabinet front or a table top). A wall drawn a little in front of the real one can't hide it.
+  Points further behind are still openings.
+- **Cabinet fronts** are RANSAC planes refitted by a 2D least-squares line (PCA, as 13's
+  `FitPlane`).
+- **Level surfaces:**
+  - gathered ±4 cm around each crowded height;
+  - their height fitted per 50 cm tile;
+  - pieces up to 10 cm apart are joined (a top cut by a shadow).
+- **The floor nobody saw** is guessed at the walls' foot (their lowest readings), inside the walls
+  (seen from the first camera, no wall in the way).
+- **Legs:** under a top, a blob of cells whose own readings stack up (a flat seat doesn't), at
+  most 12 cm across, spanning 15% of the floor-to-top gap and crossing its middle height, with no
+  seat on it. It becomes a post from the floor to the top. Only unread heights are filled.
+  - *Why "crossing the middle", not "reaching high up":* the table top hides the far legs' upper
+    part from a camera above it, a chair hides the near legs' lower part, and the sides of a box
+    standing on the table don't reach down that far.
+- **Dark things (step 1c):** a wall cell that is unseen, inside the first camera's view and within
+  4.5 m, with no reading on that camera's line of sight in front of it, is a shadow nothing seen
+  explains: something black, glossy or see-through sent no depth back.
+  - Pieces of at least 0.03 m² become purple cut-outs.
+  - Each is placed at the median floor distance of the readings just below it and to its sides
+    (8° down, 2° sideways, not wall or floor): a dark chair's legs, a TV's stand. With none, it
+    goes on the wall.
+  - *Why mostly downward:* a dark object's readable parts are usually what it stands on, and a wide
+    cone picked up a normal chair next to the TV.
+  - *Why floor distance, not straight-line distance:* the legs are lower than the seat, so their
+    straight-line distance from the camera is longer.
+
+**Tests (synthetic, scratchpad, through the real `FillHoles`; every point hidden from the first
+camera by a box dropped):**
+
+| Case | Result |
+|---|---|
+| Bent, doubled and curved walls | no filled point within 1.5 cm of a real one; the curve followed to 3.1 mm; the doubled wall's hole one layer (117 points, about 106 expected) |
+| Table top tilted 1.5° | found, the hole under its box 0.032 of 0.040 m² filled, within 7 mm of the top |
+| 4 legs seen over only 13–22 cm each | all 4 rebuilt from the floor to the top |
+| A chair back, a table edge and a shelf in a line | no sheet |
+| The floor never seen | guessed at −1.20 m (true −1.20), nothing outside the walls |
+| A black chair with only its legs read | ghost 11 cm from the legs' distance |
+| A black TV | ghost on the wall |
+| A normal chair | no ghost |
+
+- Round 1's checks still pass.
+- Each room took 0.14–0.19 s.
+- Noise no longer makes walls.
+- Known leftovers:
+  - a chair pushed under a table, whose seat the table top hides, can have its legs taken for
+    table legs;
+  - a short post can appear at the corner of a box under a table.
+- Not yet run on the real room again.
