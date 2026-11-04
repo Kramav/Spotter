@@ -64,6 +64,8 @@ const double FpsSmoothing = 0.9;
 const double MinPersonMeters = 1.0, MaxPersonMeters = 2.3;
 
 const bool StartFullscreen = true;
+// The keys along the bottom of the screen, short (the user's ask).
+const char* KeyLegend = "b - relearn room   t - reset tallest   f - fullscreen   q - quit";
 
 // Middle value of a list. For an even count, the average of the two middle values (like numpy's median).
 float Median(std::vector<float> values)
@@ -307,7 +309,11 @@ int main()
         liveFps = (liveFps == 0) ? newestFps : FpsSmoothing * liveFps + (1 - FpsSmoothing) * newestFps;
         cv::putText(picture, cv::format("%.1f fps", liveFps), cv::Point(10, picture.rows - 10),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);   // yellow
-        cv::imshow(windowName, picture);
+        // The keys, in a strip under the picture (new: the user's ask).
+        cv::Mat keys(22, picture.cols, CV_8UC3, cv::Scalar(20, 20, 20)), shown;
+        cv::putText(keys, KeyLegend, cv::Point(8, 15), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(220, 220, 220), 1);
+        cv::vconcat(picture, keys, shown);
+        cv::imshow(windowName, shown);
 
         auto now = std::chrono::steady_clock::now();
         if (backgroundRecorded && now - reportStart >= std::chrono::milliseconds(ReportEveryMs))
