@@ -17,3 +17,7 @@ vcpkg_installed/
 *.ply
 *.pcd
 *.obj
+
+# Room-scan folders from 13c/13d's K (D29): colour pictures of a room. Each also holds its own
+# .gitignore, for folders saved anywhere else.
+room_scans/

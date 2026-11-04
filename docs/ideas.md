@@ -351,3 +351,18 @@ warning first, so scans don't silently skip the floor, then the floor fill for l
 
 Not worth it: guessing the floor from furniture feet or wall bottoms. The ceiling and the walls
 already give the height (D28); the problem is coverage, not height.
+
+## Room scans kept by K: what 13z could do next
+
+*Added 2026-11-04, from the K / 13z plan (D29). Not scheduled.*
+- **Merge separate sessions of one space.** Two K folders of the same flat, scanned on different
+  days, each have their own coordinates. To merge them, place one session's scans against the other
+  with 13c's features + ICP (the saved `features.yml` holds what's needed). Pays off when a big
+  space takes more than one sitting, or a scan session crashed (D25) halfway.
+- **P in 13z: place a scan again, offline.** The saved features and points are enough to run 13c's
+  `PlaceScan` without the Kinect, so a misplaced scan could be fixed after the fact. Needs 13c's
+  feature and ICP code copied into 13z (about 400 lines).
+- **Auto-save after every placed scan.** Write just the new `scan_NNN` folder and rewrite
+  `room.txt` each time, so a blue screen (D25) loses at most one scan. It costs about 11 MB and a
+  fraction of a second per scan. It needs a folder chosen at the first scan, not at K.
+

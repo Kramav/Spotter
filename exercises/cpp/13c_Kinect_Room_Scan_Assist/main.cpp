@@ -27,6 +27,13 @@
 //  Everything else is 13b: SPACE scans, U undoes, E merges and saves
 //  room_scan_<time>.obj (which Demo 4 reads as well).
 //
+//  Added later: K keeps the scans. E's .obj averages colours (one per 2 cm
+//  corner, mixed over every scan), and the scans themselves were gone on
+//  quit. K asks (in the console) for a folder and a name, and writes every
+//  scan's points, pictures and placement there, plus points.ply: every
+//  scan's own points and colours, what the viewer shows. 13z rebuilds rooms
+//  from such folders later, without the Kinect.
+//
 //  Window 1 (viewer): every scan placed in the room. C colours each scan
 //            differently, to check they line up. Circles + 4 arrows = where
 //            each camera stood and what it saw: yellow = fine, red =
@@ -34,14 +41,17 @@
 //            recommended next shot.
 //  Window 2 (camera): what the Kinect sees now, the live anchors, what to do next.
 //  Keys:     SPACE scan here   U undo the last scan   E export (merge + save)
+//            K keep the scans (a folder, for 13z)
 //            click a camera circle to select it: X exclude / include   P place again
 //            Esc deselect      C colour by scan
 //            mouse drag / W A S D turn    wheel / + - zoom (13b's Z/X: X now excludes)
 //            R reset view      Q quit
 //
-//  Privacy: the scans stay in memory and are gone when you quit. Only
-//  E writes a file: room_scan_<time>.obj, a 3D capture of the room in
-//  colour. *.obj is gitignored: never commit one. Scan with nobody in view.
+//  Privacy: the scans stay in memory unless you press K. E writes
+//  room_scan_<time>.obj and K a folder of pictures and points: both are
+//  captures of the room in colour. *.obj, *.ply and room_scans/ are
+//  gitignored, and K puts a .gitignore in every folder it writes: never
+//  commit them. Scan with nobody in view.
 // =====================================================================
 
 #include <algorithm>
@@ -52,6 +62,7 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <iostream>
 #include <map>
 #include <numeric>
 #include <random>
@@ -182,6 +193,10 @@ const float SuspiciousOverlap = 0.4f;        // under 40% of its points found a 
 // counts when at least 20% of the points overlap the rest of the room.
 const float CheckStartPairMeters = 0.3f;
 const float CheckMinOverlap = 0.2f;
+
+// --- Keeping the scans (added: K) ---
+// Where K saves when you just press Enter at its question. Relative = inside the folder you ran from.
+const std::string SaveFolder = "room_scans";
 
 const int Width = 512, Height = 424, ColorWidth = 1920, ColorHeight = 1080;
 
@@ -468,6 +483,8 @@ struct Scan
     bool excluded = false;            // new: X takes it out of placing, the advice and E (and puts it back)
     bool suspicious = false;          // new: its placement looked wrong (see the Suspicious settings)
     std::string stats;                // new: how its placement went, shown when it's selected
+    cv::Mat fullPicture;              // added (K): the full 1920 x 1080 colour picture...
+    std::vector<int> colourIndex;     // ...and which of its pixels each depth pixel landed on (-1 = none)
 };
 
 // New: a number for the little cube of space a point is in (21 bits per axis), to keep one point per cube.
@@ -1502,6 +1519,180 @@ void Export(const std::vector<Scan>& allScans, const Lens& lens, std::mt19937& r
     std::printf("  (positions: X right, Z ahead, along the biggest wall, from the first camera)\n");
 }
 
+// ---------------------------------------------------------------------
+//  Keeping the scans: K writes a folder that 13z rebuilds from (added)
+// ---------------------------------------------------------------------
+
+// Every point with its own colour, as a binary PLY. 08 wrote text, but a room's 5 million points
+// would be about 150 MB of it. MeshLab and Blender read both.
+bool SavePly(const std::string& path, const std::vector<cv::Point3f>& points, const std::vector<cv::Vec3b>& colours)
+{
+    std::ofstream file(path, std::ios::binary);
+    file << "ply\nformat binary_little_endian 1.0\n"
+         << "comment Spotter: every scan's own points. A capture of the room: never commit it.\n"
+         << "element vertex " << points.size() << "\n"
+         << "property float x\nproperty float y\nproperty float z\n"
+         << "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n";
+    for (size_t i = 0; i < points.size(); i++)
+    {
+        file.write((const char*)&points[i], 3 * sizeof(float));
+        const unsigned char rgb[3] = { colours[i][2], colours[i][1], colours[i][0] };   // OpenCV keeps BGR
+        file.write((const char*)rgb, 3);
+    }
+    return (bool)file;
+}
+
+// A line typed in the console, without the spaces or quotes round it (Explorer's "Copy as path" adds quotes).
+std::string Ask(const std::string& question)
+{
+    std::printf("%s", question.c_str());
+    std::string answer;
+    if (!std::getline(std::cin, answer)) return "cancel";
+    while (!answer.empty() && (answer.back() == ' ' || answer.back() == '"' || answer.back() == '\r')) answer.pop_back();
+    size_t start = answer.find_first_not_of(" \"");
+    return start == std::string::npos ? "" : answer.substr(start);
+}
+
+// Where K saves: a folder (Enter = SaveFolder) and a name (Enter = room_<date>_<time>). A saved room
+// of the same name is overwritten only if you say so; any other folder already there is never
+// touched. Returns an empty path if you type cancel.
+std::filesystem::path AskWhere()
+{
+    namespace fs = std::filesystem;
+    std::printf("\n=== K: keep the scans. Answer here, in the console (the windows wait). cancel stops. ===\n");
+    std::string folder = Ask(cv::format("Folder [%s]: ", fs::absolute(SaveFolder).string().c_str()));
+    if (folder == "cancel") return {};
+    if (folder.empty()) folder = SaveFolder;
+    char stamp[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof stamp, "room_%Y-%m-%d_%H%M", std::localtime(&now));
+    while (true)
+    {
+        std::string name = Ask(cv::format("Name [%s]: ", stamp));
+        if (name == "cancel") return {};
+        if (name.empty()) name = stamp;
+        if (name.find_first_of("\\/:*?\"<>|") != std::string::npos)
+        {
+            std::printf("A name can't hold \\ / : * ? \" < > |. Again.\n");
+            continue;
+        }
+        fs::path where = fs::absolute(fs::path(folder) / name);
+        std::error_code error;
+        if (!fs::exists(where)) return where;
+        if (!fs::exists(where / "room.txt"))
+        {
+            if (fs::is_directory(where) && fs::is_empty(where, error)) return where;
+            std::printf("%s is there already and isn't a saved room, so it's left alone. Another name.\n", where.string().c_str());
+            continue;
+        }
+        if (Ask(cv::format("%s is a saved room already. Overwrite it? [y/N]: ", where.string().c_str())) == "y")
+        {
+            fs::remove_all(where, error);
+            if (!error) return where;
+            std::printf("Couldn't remove it (%s). Another name.\n", error.message().c_str());
+        }
+    }
+}
+
+// The folder K writes. Plain files, so 13z (and you) can read it without this program:
+//   .gitignore      "*": git never takes anything in this folder, wherever it is
+//   room.txt        what this is, both cameras' factory settings, and how scan 1's camera sat in the room
+//   points.ply      every included scan's own points and colours, in the same coordinates as E's .obj
+//   scan_001\ ...   cloud.bin        the averaged depth as x, y, z floats per depth pixel (NaN = none)
+//                   colour.bmp       the colour picture on the depth grid (512 x 424)
+//                   colour_full.bmp  the full colour picture (1920 x 1080)
+//                   colour_index.bin which full-picture pixel each depth pixel landed on (int, -1 = none)
+//                   features.yml     its keypoints and ORB descriptors
+//                   pose.txt         where it sits in the room, excluded, suspicious, how it was placed
+// The pictures are BMP: lossless, and the only format this OpenCV writes (vcpkg.json leaves out
+// its png and jpeg features). About 11 MB per scan.
+void KeepScans(const std::vector<Scan>& scans, const libfreenect2::Freenect2Device::IrCameraParams& ir,
+               const libfreenect2::Freenect2Device::ColorCameraParams& colour)
+{
+    namespace fs = std::filesystem;
+    if (scans.empty()) { std::printf("Nothing to keep yet: SPACE scans.\n"); return; }
+    fs::path where = AskWhere();
+    if (where.empty()) { std::printf("K cancelled: nothing written.\n"); return; }
+    std::error_code error;
+    fs::create_directories(where, error);
+    if (error) { std::printf("Could not make %s: %s\n", where.string().c_str(), error.message().c_str()); return; }
+    auto start = std::chrono::steady_clock::now();
+    std::ofstream(where / ".gitignore") << "# A capture of a room (Spotter's K): never commit it.\n*\n";
+
+    // The room's coordinates as E's .obj has them (levelled by the biggest floor or ceiling). Only
+    // the clean model's planes decide them, so the merged mesh isn't needed.
+    std::vector<Scan> included;
+    for (const Scan& s : scans) if (!s.excluded) included.push_back(s);
+    std::mt19937 random(1);
+    Room room = included.empty() ? Room() : BuildRoom(included, Mesh(), random);
+    const cv::Matx33f& t = room.firstCamera;
+
+    char saved[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(saved, sizeof saved, "%Y-%m-%d %H:%M", std::localtime(&now));
+    {
+        std::ofstream file(where / "room.txt");
+        file << "# A Spotter room scan folder, written by K. 13z rebuilds the room from it. A capture of a room: never commit it.\n"
+             << "format 1\nprogram 13c_Kinect_Room_Scan_Assist\nsaved " << saved << "\nscans " << scans.size() << "\n"
+             << "depth_size " << Width << " " << Height << "\ncolour_size " << ColorWidth << " " << ColorHeight << "\n";
+        // The cameras' factory settings as libfreenect2 reads them, in its own order: the depth camera's
+        // fx fy cx cy k1 k2 k3 p1 p2, then the colour camera's fx fy cx cy shift_d shift_m mx_... my_...
+        file << "ir_params";
+        for (size_t i = 0; i < sizeof ir / sizeof(float); i++) file << cv::format(" %.9g", (&ir.fx)[i]);
+        file << "\ncolour_params";
+        for (size_t i = 0; i < sizeof colour / sizeof(float); i++) file << cv::format(" %.9g", (&colour.fx)[i]);
+        file << cv::format("\nfirst_camera_turn %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
+                           t(0, 0), t(0, 1), t(0, 2), t(1, 0), t(1, 1), t(1, 2), t(2, 0), t(2, 1), t(2, 2))
+             << "up_from " << room.upFrom << "\n";
+    }
+
+    int failed = 0;
+    for (size_t s = 0; s < scans.size(); s++)
+    {
+        const Scan& scan = scans[s];
+        fs::path dir = where / cv::format("scan_%03zu", s + 1);
+        fs::create_directories(dir, error);
+        std::ofstream(dir / "cloud.bin", std::ios::binary).write((const char*)scan.cloud.data(), scan.cloud.size() * sizeof(cv::Point3f));
+        if (!cv::imwrite((dir / "colour.bmp").string(), scan.picture)) failed++;
+        if (!scan.fullPicture.empty() && !cv::imwrite((dir / "colour_full.bmp").string(), scan.fullPicture)) failed++;
+        if (!scan.colourIndex.empty())
+            std::ofstream(dir / "colour_index.bin", std::ios::binary).write((const char*)scan.colourIndex.data(), scan.colourIndex.size() * sizeof(int));
+        cv::FileStorage features((dir / "features.yml").string(), cv::FileStorage::WRITE);
+        features << "keypoints" << scan.keypoints << "descriptors" << scan.descriptors;
+        features.release();
+        const cv::Matx33f& r = scan.pose.turn;
+        std::ofstream(dir / "pose.txt")
+            << cv::format("# scan %zu's camera -> the room (scan 1's camera): room point = turn * point + shift\n", s + 1)
+            << cv::format("turn %.7f %.7f %.7f %.7f %.7f %.7f %.7f %.7f %.7f\n", r(0, 0), r(0, 1), r(0, 2), r(1, 0), r(1, 1), r(1, 2),
+                          r(2, 0), r(2, 1), r(2, 2))
+            << cv::format("shift %.6f %.6f %.6f\n", scan.pose.shift.x, scan.pose.shift.y, scan.pose.shift.z)
+            << "excluded " << (int)scan.excluded << "\nsuspicious " << (int)scan.suspicious << "\nstats " << scan.stats << "\n";
+        std::printf("  scan %zu of %zu written\r", s + 1, scans.size());
+    }
+
+    // points.ply: no averaging, no cubes. Every included scan's points, as the viewer shows them.
+    std::vector<cv::Point3f> points;
+    std::vector<cv::Vec3b> colours;
+    for (const Scan& scan : included)
+        for (int i = 0; i < Width * Height; i++)
+        {
+            const cv::Point3f& p = scan.cloud[i];
+            if (std::isnan(p.z)) continue;
+            points.push_back(t * scan.pose(p));
+            colours.push_back(scan.picture.at<cv::Vec3b>(i / Width, i % Width));
+        }
+    if (!points.empty() && !SavePly((where / "points.ply").string(), points, colours)) failed++;
+
+    uintmax_t bytes = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(where, error))
+        if (entry.is_regular_file(error)) bytes += entry.file_size(error);
+    double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    std::printf("Kept %zu scans (%zu included) in %s: %.0f MB, %.1f s.%s\n", scans.size(), included.size(), where.string().c_str(),
+                bytes / 1e6, seconds, failed ? cv::format(" %d files could NOT be written.", failed).c_str() : "");
+    std::printf("  points.ply: %zu points, each with its own colour. Rebuild the room any time: 13z_Kinect_Room_Rebuild.\n"
+                "  A capture of the room: never commit it (the folder has its own .gitignore).\n", points.size());
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -1527,7 +1718,8 @@ int main()
     device->startStreams(true, true);
     libfreenect2::Freenect2Device::IrCameraParams ir = device->getIrCameraParams();
     const Lens lens{ ir.fx, ir.fy, ir.cx, ir.cy };
-    libfreenect2::Registration registration(ir, device->getColorCameraParams());
+    const libfreenect2::Freenect2Device::ColorCameraParams colourParams = device->getColorCameraParams();   // added: K saves both
+    libfreenect2::Registration registration(ir, colourParams);
     libfreenect2::Frame undistorted(Width, Height, 4), registered(Width, Height, 4), averaged(Width, Height, 4);
     std::vector<int> colourIndex(Width * Height);   // new: the colour pixel each depth pixel maps to (05c)
 
@@ -1590,7 +1782,7 @@ int main()
     };
 
     const std::string viewer = "13c room scan assist - the room so far  (drag/WASD turn, wheel zoom, click a camera to select)";
-    const std::string camera = "13c room scan assist - camera  (SPACE scan, U undo, X exclude, P place again, E export, Q quit)";
+    const std::string camera = "13c room scan assist - camera  (SPACE scan, U undo, X exclude, P place again, E export, K keep, Q quit)";
     cv::namedWindow(viewer, cv::WINDOW_AUTOSIZE);
     cv::setMouseCallback(viewer, OnMouse);
     cv::namedWindow(camera, cv::WINDOW_AUTOSIZE);
@@ -1601,7 +1793,7 @@ int main()
     // -----------------------------------------------------------------
 
     libfreenect2::FrameMap frames;
-    cv::Mat frame;
+    cv::Mat frame, display;
     while (true)
     {
         int key = cv::waitKey(1);
@@ -1734,6 +1926,22 @@ int main()
             message = scans.empty() ? "Nothing to export yet." : "Exported (see the console). Scan more and export again, or Q.";
         }
 
+        // --- Added: K keeps the scans in a folder, for 13z (the questions are asked in the console) ---
+        if (key == 'k' && idle)
+        {
+            WaitForReaders();
+            if (!display.empty())
+            {
+                cv::Mat note = display.clone();
+                cv::putText(note, "K: answer the questions in the CONSOLE window", cv::Point(10, 160), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                            cv::Scalar(0, 0, 255), 2);
+                cv::imshow(camera, note);
+                cv::waitKey(1);
+            }
+            KeepScans(scans, ir, colourParams);
+            message = scans.empty() ? "Nothing to keep yet." : "K done (see the console). Scan more and K again, or Q.";
+        }
+
         // --- Step 1: SPACE starts a scan; average AverageFrames frames (07) ---
         if (key == ' ' && idle)
         {
@@ -1769,6 +1977,8 @@ int main()
             cv::Mat picture;
             cv::cvtColor(cv::Mat(Height, Width, CV_8UC4, registered.data), picture, cv::COLOR_BGRA2BGR);
             Scan scan = MakeScan(cloud, picture);
+            scan.fullPicture = frame.clone();   // added: for K
+            scan.colourIndex = colourIndex;
 
             // --- Step 2: place it, in the background (new). Without features no later scan could be matched to it. ---
             if ((int)scan.keypoints.size() < MinScanFeatures)
@@ -1857,7 +2067,6 @@ int main()
                     cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 1);
         cv::imshow(viewer, image);
 
-        cv::Mat display;
         cv::resize(frame, display, cv::Size(ColorWidth / 2, ColorHeight / 2));
         // New: the live anchors. Green = shared with the scanned room: the next scan is placed by these.
         if (idle && !scans.empty())
@@ -1877,7 +2086,7 @@ int main()
                         cv::Point(10, 125), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(255, 255, 255), 1);
         std::string top = busy ? std::string("PLACING... (the windows keep working)")
                         : framesCaptured >= 0 ? cv::format("HOLD STILL  %d / %d", framesCaptured, AverageFrames)
-                                              : cv::format("%zu scans   SPACE scan here   U undo   E export   Q quit", scans.size());
+                                              : cv::format("%zu scans   SPACE scan here   U undo   E export   K keep   Q quit", scans.size());
         cv::putText(display, top, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
         cv::putText(display, message, cv::Point(10, display.rows - 15), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 255, 255), 1);
         cv::imshow(camera, display);
@@ -1924,3 +2133,10 @@ int main()
 // 13. Set PlaceCandidates = 1, then 27: how long does placing take, and how often is a scan refused?
 // 14. Follow only the Next line, scan after scan. How many scans until "these spots have seen it all"?
 // 15. Exclude a good scan with X and export: the hole it leaves is what only that scan saw.
+//
+//  Added (K):
+// 16. Press E, then K, and open both room_scan_<time>.obj and the folder's points.ply in MeshLab.
+//     Zoom in on a poster or a book spine: the .ply keeps every pixel's colour, the .obj one
+//     colour per 2 cm corner. Where the .ply looks doubled, two scans disagree slightly.
+// 17. K, quit, then run 13z on the folder with VoxelMeters = 0.01: a finer mesh than live, from
+//     the same scans, without the Kinect.

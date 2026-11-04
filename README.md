@@ -43,6 +43,8 @@ flowchart TB
         V11["ICP alignment (11)"]
         V12["ArUco marker pose (12)"]
         V13["Room scan: many spots merged (13)<br/>TSDF mesh + clean model"]
+        KEEP["Kept scans, rebuilt later<br/>K folders + 13z"]
+        TEX["Textured room (14)"]
         AV -.->|6 m cut-off| PC
         PC --> FL
         PC --> RM
@@ -52,6 +54,7 @@ flowchart TB
         V11b --> V13
         V12 -.->|fallback| V13
         RM -.->|clean model of the merged room| V13
+        V13 -->|K| KEEP --> TEX
     end
 
     R -->|colour| Y
@@ -66,7 +69,7 @@ flowchart TB
     V13 --> MAP
 
     classDef planned stroke-dasharray: 5 5
-    class V12,MAP planned
+    class V12,TEX,MAP planned
 ```
 
 The Kinect's colour and depth come in through an open-source driver, then split into two lanes.
@@ -205,6 +208,7 @@ Then work through the other examples in this order:
 | 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere |
 | 13c | `13c_Kinect_Room_Scan_Assist` | 13b with help: live green "anchors" show what the next scan will be placed by, a suggested next shot, suspicious scans flagged red, click a scan to exclude (X) or re-place (P) it, and no slowdown at 30+ scans. **Use this one for a real scan** |
 | 13d | `13d_Kinect_Room_Scan_Far` | 13c plus details too far for depth (a hallway's far doorway): they still give a direction, which helps place scans, and seen from two spots they become "far landmarks" in the model. **Use this one where there are long hallways or big rooms** |
+| 13z | `13z_Kinect_Room_Rebuild` | No Kinect: rebuild rooms later from the folders 13c/13d's **K** key keeps. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
 **Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, and "how tall are you") are in
@@ -325,7 +329,8 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 
 11. Press **E**. After a few seconds the console prints the file name (`room_scan_<number>.obj`),
     the room's height, its walls and furniture boxes. You can keep scanning and press E again:
-    each export is a new file. **Q** quits; the scans themselves are thrown away.
+    each export is a new file. **Q** quits; the scans themselves are thrown away, unless you
+    pressed **K** first (below).
 12. **Open it in Blender** (free): File > Import > Wavefront (.obj). In the import options tick
     **Split by Group**. To see the colours: in the viewport's Solid shading menu, set Color to
     **Attribute**. Or in **MeshLab**: File > Import Mesh; colours show by themselves.
@@ -339,6 +344,37 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 
 14. **Never commit the `.obj`** (it's a capture of your room; `*.obj` is gitignored). Delete it
     when you're done if it shows anything private.
+
+### Keep the scans and rebuild later (K and 13z)
+
+E's `.obj` keeps one colour per 2 cm corner, averaged over every scan, so posters and small details
+blur. And once you quit, the scans are gone. In **13c and 13d, press K** before quitting:
+
+1. **Answer in the console window** (the program's windows wait meanwhile):
+   - `Folder`: Enter saves into `room_scans\` in the folder you ran from, or type or paste any
+     folder.
+   - `Name`: Enter gives `room_<date>_<time>`. A saved room of the same name is overwritten only if
+     you answer `y`. Type `cancel` at either question to stop.
+2. K writes one folder: every scan's points, pictures and placement, plus **`points.ply`**. That's
+   every scan's own points with their own colours, what the viewer shows, with no averaging. Open
+   it in MeshLab (File > Import Mesh) or Blender (File > Import > Stanford PLY). It's about 11 MB
+   per scan.
+3. **Rebuild any time, without the Kinect:**
+
+       build\13z_Kinect_Room_Rebuild.exe
+
+   It lists every saved room in `room_scans\` (or give a folder: `13z_Kinect_Room_Rebuild D:\scans`).
+   Then you choose:
+   - **Which rooms:** `2`, `1,3`, or Enter for all.
+   - **What to do:** view, build `.obj`, build `.ply`, or both.
+   - **For each room, which scans to load:** `1-12,15`, or Enter for all.
+
+   In the viewer, click a camera circle and press **X** to exclude a bad scan (13z remembers it).
+   Then **E** builds the `.obj` and **K** the `.ply`, into the room's own folder. For a finer mesh,
+   set `VoxelMeters` to 0.01 at the top of `13z_Kinect_Room_Rebuild/main.cpp` and rebuild it.
+4. **Privacy:** the folder holds colour pictures of your room. `room_scans/` is gitignored, and K
+   puts a `.gitignore` into every folder it writes, wherever that is. Never commit one, and scan
+   with nobody in view.
 
 ### If something goes wrong
 
