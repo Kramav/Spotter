@@ -68,8 +68,8 @@ clears the trails between visitors.
 as the room (`OneViewRoom.h`: clear the view when the console says so). That's one view only, but
 it's good for rehearsing. Set `OneView::LevelDegrees` in that file to the Kinect's tilt (14 on
 the floor, 0 level). The real thing needs the most preparation:
-1. The day before, or in the morning, scan the stand with `13c_Kinect_Room_Scan_Assist` (13d for long halls; 13 and 13b work too), following
-   "Recreate a room" in the [main README](../../../README.md#recreate-a-room-example-13), with
+1. The day before, or in the morning, scan the stand with `13e_Kinect_Room_Scan_Autosave` (our most advanced scanner, D30; 13 to 13d work too), following
+   "Recreate a room" in the [main README](../../../../README.md#recreate-a-room-example-13), with
    nobody in view. Press E. It writes `room_scan_<time>.obj` into the folder you ran it from.
    The file has the line `# first camera turn:` at the end; Demo 4 needs it, so use a scan made
    after 2026-11-03.

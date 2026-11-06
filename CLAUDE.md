@@ -34,7 +34,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. `presentation/` = six fullscreen exhibition demos remixed from the examples (D22, D31). |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); kept unchanged and still built (D34). `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (one synthetic self-check per module, e.g. `build\check_box_depth.exe`). So far: `depth` (`BoxDepthSampler`). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -62,8 +62,16 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
      its `pose.txt` last.
 
   Build new ones from **13e, our most advanced scanner**, not from 13–13d.
+- **Shared code lives in the `spotter` CMake library (D34, the user's choice).** Examples are still
+  one file each with the usual sections, and keep their own new idea inline; everything else comes
+  from the library. An external dependency shows in the file name (`source_freenect2`,
+  `detector_yolo_opencvdnn`, `features_orb`), so it can be swapped by adding a sibling file. A
+  different YOLO model (or one the user trained) is a settings change: model path, input size,
+  `.names` file, output layout. The originals in `legacy/` are never edited to fit the library.
 
-## Status (2026-11-04)
+## Status (2026-11-05)
+
+- 2026-11-05: adversarial review of every example and demo ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)). The originals moved to `exercises/cpp/legacy/` unchanged; all 34 targets still build. Next: the user re-implements them on a shared `spotter` CMake library (D34), starting with `source_freenect2`/`DepthCamera` (which also fixes the mirror). First module built: `spotter::BoxDepthSampler` (a box's median depth). Its check matches 05c's `SampleMeters` exactly on 4,000 synthetic boxes, in 2.0 ms instead of 5.1 ms per frame with 5 boxes. Not yet used by an example.
 
 - Python exercises: done.
 - C# + Kinect SDK examples 01–03: done, frozen (commit cea5c21).
@@ -300,6 +308,20 @@ example, each building on the one before. Numbers are the planned example folder
 - [ ] **17 Live mapping:** a coarse CPU KinectFusion, or decide to adopt RTAB-Map instead. (Was 16.)
 
 ### Housekeeping
+
+- [ ] **Adversarial review 2026-11-05 ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)).**
+      Open bugs in `legacy/`; fix each while porting it to the `spotter` library (D34):
+  - [ ] ICP: a zero cross product gives a NaN normal that ruins the solve (13e:535, also 13–13d and Demos 4/6).
+  - [ ] 13z builds `sparse` differently from 13e, so its 3D grid differs and a rebuild ≠ a live E (breaks D29).
+  - [ ] Autosave doesn't flush before writing pose.txt; a zeroed `cloud.bin` after a blue screen loads as real points.
+  - [ ] 13z: `SaveExcluded` isn't atomic; `scan_1000` sorts before `scan_101`.
+  - [ ] 13c/13d: Q quits without saving; an exception skips the rescue (13e too).
+  - [ ] Demo 4's floor is still the lowest 2% (D33's fix is only in Demo 6). Demo 6's `FindFloor` accepts a patch too far below.
+  - [ ] Plane search re-finds a plane whose biggest piece is too small (06b:320, 06c:344, 09c:252).
+  - [ ] Wall length 0 → NaN in the EKF (06c:401, Demo 3).
+  - [ ] Occlusion filter off where the registered colour is used (07d, 08b, 09b, 09c).
+  - [ ] No RAII: an exception leaves the Kinect streaming or terminates a joinable thread.
+  - [ ] `ClassNames[classId]` unchecked; Demo 5 with no bottom row draws the distance to the camera as the height.
 
 - [ ] **FIX SOON: everything is mirrored left-right (found 2026-11-04; the user: "very important
       for room scans", left as is for that day's demos).** The Kinect sends mirror-image colour and
