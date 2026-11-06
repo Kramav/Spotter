@@ -690,3 +690,38 @@ that fit matched 46–64% of the view, sometimes over the 60% warning line, so n
 - Demo 4 gives the same locating results.
 - D31's and D32's checks still pass, with the same numbers.
 - Not yet run on the sensor.
+
+### D34 — 2026-11-05 — The examples move to `legacy/`; new ones share a `spotter` CMake library
+**What:** after an adversarial review ([review-2026-11-05.md](review-2026-11-05.md)), the user
+chose to re-implement the examples and demos themselves on shared classes:
+- **Moved, not deleted.** The 28 example folders and `presentation/` are now under
+  `exercises/cpp/legacy/` (`git mv`, history kept). `CMakeLists.txt` stays where it was, so
+  `SPOTTER_REPO_ROOT` and every `.exe` name are unchanged, and all 34 targets still build. 13e is
+  still the scanner for real rooms. Older entries keep their old paths.
+- **A real CMake library** (the user's choice over header-only files or keeping one file each):
+  `exercises/cpp/spotter/`, with `include/spotter/*.hpp` and `src/*.cpp`, built by
+  `add_library(spotter STATIC …)`. Each example still keeps its own new idea inline, in the usual
+  sections, and calls the library for the rest.
+- **External dependencies show in the file name.** Core modules (`geometry`, `depth`, `track`,
+  `register`, `room`, `mesh`, `view`, `detection.hpp`) use only OpenCV core types. Anything tied
+  to a sensor, a model or a backend is an adapter named `<role>_<dependency>`:
+  `source_freenect2`, `detector_yolo_opencvdnn`, `features_orb`. Swapping one means adding a
+  sibling file (e.g. `detector_yolo_ncnn`).
+- **A different model is a settings change, not a code change** (the user may train their own):
+  `YoloDetector::Options {modelPath, inputSize, namesPath, layout}`. The class names come from a
+  text file next to the model (one per line, `yolo26n.names`), because OpenCV DNN can't read
+  Ultralytics' ONNX metadata. `layout` is `EndToEnd` (today's 1x300x6) or `Classic`
+  (1x(4+classes)x8400 + NMS). Person is the class named "person", not id 0.
+
+**Why:** the copies drift, and the drift causes bugs. Two examples:
+- The ICP weak cut-off fix (D26) never reached 13 and 13b.
+- Demo 6's floor fix (D33) never reached Demo 4.
+
+The same Kinect setup is written 34 times, with three different depth cut-offs. And D29's promise
+that a 13z rebuild matches a live E is broken by two different `sparse` loops.
+
+**Not done yet:** no virtual `Detector` base class. A second backend copies the same `detect()`
+signature, and the base class waits until an example needs to choose a backend at run time.
+
+**Supersedes:** the one-file-per-example rule (Conventions, D29) for shared code only. Examples
+are still one file each, plus the library.

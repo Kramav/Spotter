@@ -216,7 +216,7 @@ Then work through the other examples in this order:
 **Showing it at an exhibition:** six fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, "how tall are you", and the scanned
 room with its holes filled in by software, marked as guesses) are in
-[exercises/cpp/presentation/](exercises/cpp/presentation/README.md), with a set-up checklist.
+[exercises/cpp/legacy/presentation/](exercises/cpp/legacy/presentation/README.md), with a set-up checklist.
 They build with the examples.
 
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in

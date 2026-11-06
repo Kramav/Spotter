@@ -689,7 +689,7 @@ spine), and the `.obj` at `VoxelMeters` 0.02 and 0.01.
 
 ## Presentation demos
 
-Six fullscreen remixes for an exhibition, in [presentation/](presentation/README.md) (yellow in
+Six fullscreen remixes for an exhibition, in [legacy/presentation/](legacy/presentation/README.md) (yellow in
 the family tree). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
 save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
 15, for people. Demo 6 is Demo 4 with the holes in flat surfaces filled (below).
