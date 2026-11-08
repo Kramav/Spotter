@@ -33,7 +33,7 @@ void DrawDepthDots(const spotter::RgbdFrame& frame, cv::Mat& picture)
             int index = frame.colourIndex[row * frame.depthMm.cols + column];
             if (index < 0) continue;
             cv::Point colourPixel(index % picture.cols, index / picture.cols);
-            float nearness = 1 - std::clamp((frame.depthMm.at<float>(row, column) - 500) / 4000, 0.0f, 1.0f);   // 1 at 0.5 m, 0 at 4.5 m
+            float nearness = 1 - std::clamp((frame.depthMm.at<float>(row, column) - 500) / 5500, 0.0f, 1.0f);   // 1 at 0.5 m, 0 at 6 m
             cv::circle(picture, colourPixel, 4, cv::Scalar(255 * (1 - nearness), 0, 255 * nearness), cv::FILLED);
         }
 }

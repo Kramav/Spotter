@@ -36,7 +36,7 @@ int main()
     while (kinect.Next(frame))
     {
         if (second.Due()) PrintCentre(frame.depthMm);
-        cv::imshow("01 step 2: depth", frame.depthMm / 4500);
+        cv::imshow("01 step 2: depth", frame.depthMm / 6000);
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

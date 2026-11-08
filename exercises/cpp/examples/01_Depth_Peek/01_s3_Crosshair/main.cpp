@@ -34,7 +34,7 @@ void MoveCrosshair(int key, cv::Point& crosshair)
 
 void Show(const cv::Mat& depthMm, cv::Point crosshair)
 {
-    cv::Mat picture = spotter::DepthPicture(depthMm);   // 0.5 m = white .. 4.5 m = black, red = no reading
+    cv::Mat picture = spotter::DepthPicture(depthMm);   // 0.5 m = white .. 6 m = black, red = no reading
     float mm = depthMm.at<float>(crosshair);
     std::string text = mm > 0 ? std::to_string((int)mm) + " mm" : "no reading";
     cv::drawMarker(picture, crosshair, cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 20, 1);

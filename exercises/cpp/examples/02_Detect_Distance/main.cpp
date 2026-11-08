@@ -65,7 +65,7 @@ const std::string Window = "02 detect + distance  (Q quits)";
 
 spotter::KinectSource::Options KinectSettings()
 {
-    spotter::KinectSource::Options options;   // colour + depth, cut-off 4.5 m
+    spotter::KinectSource::Options options;   // colour + depth, cut-off 6 m
     return options;
 }
 

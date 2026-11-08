@@ -30,7 +30,7 @@ int main()
     std::printf("Step out of view and press B.\n");
     while (kinect.Next(frame))
     {
-        if (backgroundMm.empty()) cv::imshow("03 step 1: press B to remember the room", frame.depthMm / 4500);
+        if (backgroundMm.empty()) cv::imshow("03 step 1: press B to remember the room", frame.depthMm / 6000);
         else cv::imshow("03 step 1: press B to remember the room", (backgroundMm - frame.depthMm) / 1000);   // 1 m nearer = white
 
         int key = cv::waitKey(1);

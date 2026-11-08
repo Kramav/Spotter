@@ -1,5 +1,6 @@
 #include "spotter/detector_yolo_opencvdnn.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -96,6 +97,63 @@ std::vector<Detection> YoloDetector::Detect(const cv::Mat& bgr)
     // Pixel values 0..1, RGB order, laid out 1 x 3 x size x size.
     net.setInput(cv::dnn::blobFromImage(square, 1.0 / 255.0, square.size(), cv::Scalar(), true, false));
     return DecodeYolo(net.forward(), options.layout, letterbox, options.minConfidence, options.maxOverlap);
+}
+
+AsyncDetector::AsyncDetector(YoloDetector& detector) : detector(detector), thread(&AsyncDetector::Run, this) {}
+
+AsyncDetector::~AsyncDetector()
+{
+    {
+        std::lock_guard<std::mutex> lock(shared);
+        quit = true;
+    }
+    handedOver.notify_one();
+    thread.join();
+}
+
+void AsyncDetector::Offer(const cv::Mat& bgr)
+{
+    std::lock_guard<std::mutex> lock(shared);
+    if (busy) return;
+    picture = bgr.clone();   // a copy: the caller keeps drawing on its own
+    pictureWaiting = busy = true;
+    handedOver.notify_one();
+}
+
+std::optional<std::vector<Detection>> AsyncDetector::TryTake()
+{
+    std::lock_guard<std::mutex> lock(shared);
+    std::optional<std::vector<Detection>> taken;
+    taken.swap(result);
+    return taken;
+}
+
+double AsyncDetector::LastMs() const
+{
+    std::lock_guard<std::mutex> lock(shared);
+    return lastMs;
+}
+
+void AsyncDetector::Run()
+{
+    while (true)
+    {
+        cv::Mat image;
+        {
+            std::unique_lock<std::mutex> lock(shared);
+            handedOver.wait(lock, [this] { return pictureWaiting || quit; });   // sleep until there's work
+            if (quit) return;
+            image = picture;
+            pictureWaiting = false;
+        }
+        auto start = std::chrono::steady_clock::now();
+        std::vector<Detection> found = detector.Detect(image);   // the slow part, without the lock
+        double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        std::lock_guard<std::mutex> lock(shared);
+        result = std::move(found);
+        lastMs = ms;
+        busy = false;
+    }
 }
 
 }

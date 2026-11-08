@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <opencv2/imgproc.hpp>
 
 namespace spotter
 {
@@ -28,6 +29,96 @@ cv::Mat DepthPicture(const cv::Mat& depthMm, float nearMm, float farMm)
         }
     }
     return picture;
+}
+
+void DepthAverager::Start()
+{
+    sumMm.release();
+    readings.release();
+    added = 0;
+}
+
+bool DepthAverager::Add(const cv::Mat& depthMm)
+{
+    if (!Running()) return false;
+    if (sumMm.empty())
+    {
+        sumMm = cv::Mat::zeros(depthMm.size(), CV_64F);
+        readings = cv::Mat::zeros(depthMm.size(), CV_32S);
+    }
+    const float* mm = depthMm.ptr<float>();
+    double* sum = sumMm.ptr<double>();
+    int* count = readings.ptr<int>();
+    for (size_t i = 0; i < depthMm.total(); i++)
+        if (mm[i] > 0) { sum[i] += mm[i]; count[i]++; }   // holes don't count, they'd drag the average to 0
+    return ++added == frames;
+}
+
+cv::Mat DepthAverager::Mean(double minShare) const
+{
+    cv::Mat mean = cv::Mat::zeros(sumMm.size(), CV_32F);
+    for (size_t i = 0; i < sumMm.total(); i++)
+    {
+        int count = readings.ptr<int>()[i];
+        if (count > 0 && count >= minShare * frames) mean.ptr<float>()[i] = (float)(sumMm.ptr<double>()[i] / count);
+    }
+    return mean;
+}
+
+cv::Mat AdaptiveBackground::Update(const cv::Mat& liveMm, const cv::Mat& neverAbsorb)
+{
+    if (rememberedMm.size() != liveMm.size())
+    {
+        rememberedMm = cv::Mat::zeros(liveMm.size(), CV_32F);
+        nearerFrames = cv::Mat::zeros(liveMm.size(), CV_32S);
+        fartherFrames = cv::Mat::zeros(liveMm.size(), CV_32S);
+    }
+    cv::Mat foreground = cv::Mat::zeros(liveMm.size(), CV_8U);
+    const float* live = liveMm.ptr<float>();
+    float* remembered = rememberedMm.ptr<float>();
+    int* nearer = nearerFrames.ptr<int>();
+    int* farther = fartherFrames.ptr<int>();
+    for (size_t i = 0; i < liveMm.total(); i++)
+    {
+        if (live[i] <= 0) continue;                                        // no reading: learn nothing
+        if (remembered[i] <= 0) { remembered[i] = live[i]; continue; }     // first reading here
+        if (live[i] < remembered[i] - options.nearerMm)                    // something in front
+        {
+            farther[i] = 0;
+            bool keep = !neverAbsorb.empty() && neverAbsorb.data[i];
+            if (++nearer[i] < options.absorbFrames || keep) { foreground.data[i] = 255; continue; }
+            remembered[i] = live[i];                                       // it stayed: part of the room now
+        }
+        else if (live[i] > remembered[i] + options.nearerMm)               // something left?
+        {
+            nearer[i] = 0;
+            if (++farther[i] < options.leaveFrames) continue;
+            remembered[i] = live[i];
+        }
+        else remembered[i] += options.blendRate * (live[i] - remembered[i]);   // the same: blend in
+        nearer[i] = farther[i] = 0;
+    }
+    return foreground;
+}
+
+void AdaptiveBackground::Forget() { rememberedMm.release(); }
+
+std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask, int minPixels)
+{
+    cv::Mat labels, stats, centroids;
+    int count = cv::connectedComponentsWithStats(mask, labels, stats, centroids);
+    std::vector<cv::Rect> boxes;
+    std::vector<uchar> keep(count, 0);
+    for (int label = 1; label < count; label++)   // label 0 = everything else
+    {
+        if (stats.at<int>(label, cv::CC_STAT_AREA) < minPixels) continue;
+        keep[label] = 255;
+        boxes.emplace_back(stats.at<int>(label, cv::CC_STAT_LEFT), stats.at<int>(label, cv::CC_STAT_TOP),
+                           stats.at<int>(label, cv::CC_STAT_WIDTH), stats.at<int>(label, cv::CC_STAT_HEIGHT));
+    }
+    const int* label = labels.ptr<int>();
+    for (size_t i = 0; i < mask.total(); i++) mask.data[i] = keep[label[i]];
+    return boxes;
 }
 
 void BoxDepthSampler::Build(const float* depthMm, const std::vector<int>& colourIndex, int colourWidth, int colourHeight)

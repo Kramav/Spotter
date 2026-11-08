@@ -46,6 +46,21 @@ struct RgbdFrame
     double seconds = 0;   // when it arrived (steady clock), for time steps between frames
 };
 
+// The time between two frames, for filters that move things on by speed x time (example 05).
+class FrameTimer
+{
+public:
+    double Step(const RgbdFrame& frame)   // seconds since the previous frame (1/30 for the first)
+    {
+        double dt = last > 0 ? frame.seconds - last : 1.0 / 30;
+        last = frame.seconds;
+        return dt;
+    }
+
+private:
+    double last = 0;
+};
+
 // The Kinect sends mirror images, like a selfie camera: your right hand shows on the left.
 // This flips every picture left-right, moves colourIndex to match, and moves both cameras'
 // principal points (cx -> width - cx), so 3D points come out the right way round too.

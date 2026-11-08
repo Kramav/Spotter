@@ -49,7 +49,7 @@ const int MinBlobPixels = 400;
 const int CleanupSizePixels = 5;
 
 const double SecondsBeforeBackground = 3;   // to step out of view before the background is recorded
-const float NearMm = 500, FarMm = 4500;     // the grey scale, as in example 01
+const float NearMm = 500, FarMm = 6000;     // the grey scale, as in example 01
 const int ReportEveryMs = 1000;
 const std::string Window = "03 depth blobs  (B = new background, Q quits)";
 

@@ -1,7 +1,10 @@
 // spotter/depth.hpp: helpers for the Kinect's depth picture (D34).
 #pragma once
 
+#include "spotter/frame.hpp"
+
 #include <opencv2/core.hpp>
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -19,7 +22,57 @@ namespace spotter
 // Only for boxes. Room scans and point clouds still use every depth pixel directly.
 // The depth picture as grey: near (nearMm) = white, far (farMm and beyond) = black, and red
 // where there's no reading (too close, too far, black, shiny or glass). Example 01's picture.
-cv::Mat DepthPicture(const cv::Mat& depthMm, float nearMm = 500, float farMm = 4500);
+cv::Mat DepthPicture(const cv::Mat& depthMm, float nearMm = 500, float farMm = 6000);
+
+// Averages depth over many frames, per pixel (example 07): random noise falls with the square root
+// of the frame count, and a pixel that only sometimes reads gets filled from the frames where it did.
+class DepthAverager
+{
+public:
+    explicit DepthAverager(int frames) : frames(frames) {}
+    void Start();                          // forget any capture in progress and begin a new one
+    bool Running() const { return added >= 0 && added < frames; }
+    int Added() const { return std::max(added, 0); }
+    int Frames() const { return frames; }
+    bool Add(const cv::Mat& depthMm);      // while running; true when this was the last frame needed
+    // The average in mm; 0 where a pixel read in fewer than minShare of the frames (too often a hole).
+    cv::Mat Mean(double minShare = 0.5) const;
+
+private:
+    int frames, added = -1;
+    cv::Mat sumMm, readings;               // CV_64F, CV_32S
+};
+
+// Remembers the room's depth per pixel and keeps itself up to date (example 07c): the same
+// distance blends in, clearly farther for leaveFrames = something left, clearly nearer for
+// absorbFrames = something new stayed. Update() returns what is in front of it (255 = foreground).
+class AdaptiveBackground
+{
+public:
+    struct Options
+    {
+        float nearerMm = 100;     // foreground = at least this much nearer than remembered
+        int absorbFrames = 300;   // something new that stays this long joins the room (~10 s)
+        int leaveFrames = 10;     // farther this long = it left (one frame isn't enough: ceiling fans)
+        float blendRate = 0.05f;  // per frame, how far the memory moves toward what it sees
+    };
+
+    explicit AdaptiveBackground(const Options& options) : options(options) {}
+
+    // liveMm: depth in mm, 0 = no reading. neverAbsorb (optional, CV_8U, same size): pixels
+    // that must stay foreground however long they stay (07d: inside a person box).
+    cv::Mat Update(const cv::Mat& liveMm, const cv::Mat& neverAbsorb = cv::Mat());
+    void Forget();   // the next frame becomes the background
+    const cv::Mat& DepthMm() const { return rememberedMm; }
+
+private:
+    Options options;
+    cv::Mat rememberedMm, nearerFrames, fartherFrames;   // CV_32F, CV_32S, CV_32S
+};
+
+// Drops blobs (groups of touching 255 pixels) smaller than minPixels from the mask.
+// Returns the boxes of the ones left.
+std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask, int minPixels);
 
 class BoxDepthSampler
 {
@@ -29,6 +82,7 @@ public:
     // colourIndex: registration.apply's last output: for each depth pixel, the colour pixel it
     //   lands on (row * colourWidth + column), or -1 for none. Same length as depthMm.
     void Build(const float* depthMm, const std::vector<int>& colourIndex, int colourWidth, int colourHeight);
+    void Build(const RgbdFrame& frame) { Build(frame.depthMm.ptr<float>(), frame.colourIndex, frame.colour.cols, frame.colour.rows); }
 
     // The median distance in metres of the middle part of the box. shrink 0.5 = the middle half
     // each way: the whole box mostly measures the wall behind the object (example 02).
