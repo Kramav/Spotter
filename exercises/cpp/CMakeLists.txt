@@ -28,10 +28,22 @@ foreach(demo Demo1_You_In_3D Demo2_Invisibility_Cloak Demo3_Booth_Radar Demo4_Ro
 endforeach()
 
 # The shared library (D34): new and re-implemented examples link it.
-add_library(spotter STATIC spotter/src/depth.cpp)
-target_include_directories(spotter PUBLIC spotter/include)
-target_link_libraries(spotter PUBLIC ${OpenCV_LIBS})
+file(GLOB spotter_sources CONFIGURE_DEPENDS spotter/src/*.cpp)
+add_library(spotter STATIC ${spotter_sources})
+target_include_directories(spotter PUBLIC spotter/include PRIVATE ${freenect2_INCLUDE_DIRS})
+target_link_libraries(spotter PUBLIC ${freenect2_LIBRARIES} ${OpenCV_LIBS})
 
-# One self-check per module, on synthetic data. Run it after changing the module.
-add_executable(check_box_depth spotter/checks/check_box_depth.cpp)
-target_link_libraries(check_box_depth PRIVATE spotter)
+# One self-check per module, on synthetic data (no Kinect). Run them all: ctest --test-dir build
+enable_testing()
+file(GLOB spotter_checks CONFIGURE_DEPENDS spotter/checks/check_*.cpp)
+foreach(check_source ${spotter_checks})
+    get_filename_component(check ${check_source} NAME_WE)
+    add_executable(${check} ${check_source})
+    target_include_directories(${check} PRIVATE ${freenect2_INCLUDE_DIRS})   # check_frame compares with libfreenect2
+    target_link_libraries(${check} PRIVATE spotter)
+    target_compile_definitions(${check} PRIVATE SPOTTER_REPO_ROOT="${repo_root}")
+    add_test(NAME ${check} COMMAND ${check})
+endforeach()
+
+# The examples re-written on the library (examples/README.md).
+add_subdirectory(examples)

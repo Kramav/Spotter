@@ -1,4 +1,5 @@
 #include "spotter/depth.hpp"
+#include "spotter/stats.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -8,18 +9,25 @@ namespace spotter
 
 namespace
 {
-// The middle value; for an even count, the mean of the two middle ones (as the examples' Median).
-// nth_element instead of a full sort: only the middle has to be in place.
-float Median(std::vector<float> values)
-{
-    size_t middle = values.size() / 2;
-    std::nth_element(values.begin(), values.begin() + middle, values.end());
-    if (values.size() % 2 == 1) return values[middle];
-    float below = *std::max_element(values.begin(), values.begin() + middle);
-    return (below + values[middle]) / 2;
+bool HasReading(float mm) { return mm > 0 && !std::isinf(mm); }   // NaN fails mm > 0
 }
 
-bool HasReading(float mm) { return mm > 0 && !std::isinf(mm); }   // NaN fails mm > 0
+cv::Mat DepthPicture(const cv::Mat& depthMm, float nearMm, float farMm)
+{
+    cv::Mat picture(depthMm.size(), CV_8UC3);
+    for (int row = 0; row < depthMm.rows; row++)
+    {
+        const float* mm = depthMm.ptr<float>(row);
+        cv::Vec3b* pixel = picture.ptr<cv::Vec3b>(row);
+        for (int column = 0; column < depthMm.cols; column++)
+        {
+            if (!HasReading(mm[column])) { pixel[column] = cv::Vec3b(0, 0, 255); continue; }   // B, G, R: red
+            float fraction = std::clamp((mm[column] - nearMm) / (farMm - nearMm), 0.0f, 1.0f);
+            uchar grey = (uchar)(255 * (1 - fraction));
+            pixel[column] = cv::Vec3b(grey, grey, grey);
+        }
+    }
+    return picture;
 }
 
 void BoxDepthSampler::Build(const float* depthMm, const std::vector<int>& colourIndex, int colourWidth, int colourHeight)
