@@ -23,6 +23,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const int Tries = 200, Reach = 10;
 const float ThicknessMeters = 0.02f, MaxSlopeDegrees = 45;
 
@@ -68,7 +71,7 @@ int main()
             if (count > 0 && !std::isnan(cloud[i].z) && std::abs(floor.DistanceTo(cloud[i])) < ThicknessMeters) picture.at<cv::Vec3b>(i) = cv::Vec3b(0, 255, 0);
         cv::putText(picture, count > 0 ? cv::format("floor: camera %.2f m above it", floor.distance) : "no level plane",
                     cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
-        cv::imshow("09 step 3: the biggest LEVEL plane", picture);
+        cv::imshow("09 step 3: the biggest LEVEL plane", spotter::WithKeys(picture, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

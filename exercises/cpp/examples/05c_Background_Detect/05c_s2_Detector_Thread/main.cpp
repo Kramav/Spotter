@@ -26,6 +26,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 // Everything the two threads share. Touch it only while holding `lock`.
 struct Shared
 {
@@ -89,7 +92,7 @@ int main()
         for (const spotter::Detection& d : latest) cv::rectangle(frame.colour, d.box, cv::Scalar(0, 255, 0), 3);
         fps.Tick();
         fps.Draw(frame.colour);
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
 

@@ -24,6 +24,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const int FeatureCount = 1000;   // at most this many, the strongest first
 
 int main()
@@ -42,7 +45,7 @@ int main()
         orb->detect(grey, keypoints);
         cv::drawKeypoints(frame.registered, keypoints, display, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
         cv::resize(display, display, display.size() * 2);
-        cv::imshow("11b step 1: ORB features (circle = patch size, line = its direction)", display);
+        cv::imshow("11b step 1: ORB features (circle = patch size, line = its direction)", spotter::WithKeys(display, Keys));
         if (report.Due()) std::printf("%zu features\n", keypoints.size());
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }

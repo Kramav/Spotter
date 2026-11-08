@@ -52,6 +52,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "click an object  capture it     C  clear the tint     Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -395,7 +398,7 @@ void Show(const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>
     std::string status = averager.Running() ? cv::format("HOLD STILL  %d / %d", averager.Added(), averager.Frames()) : "click an object to capture";
     cv::putText(display, status, cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
     fps.Draw(display);
-    cv::imshow(Window, display);
+    cv::imshow(Window, spotter::WithKeys(display, Keys));
 }
 
 // ---------------------------------------------------------------------

@@ -23,6 +23,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const int DotSpacing = 8;   // draw every 8th depth pixel each way, so the dots don't cover everything
 
 void DrawDepthDots(const spotter::RgbdFrame& frame, cv::Mat& picture)
@@ -50,7 +53,7 @@ int main()
     while (kinect.Next(frame))
     {
         DrawDepthDots(frame, frame.colour);
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

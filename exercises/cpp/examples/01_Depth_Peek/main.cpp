@@ -30,6 +30,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "W A S D   move the crosshair   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -103,7 +106,7 @@ void Show(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& 
     cv::drawMarker(picture, crosshair, green, cv::MARKER_CROSS, 20, 1);
     cv::putText(picture, ReadingAt(depthMm, crosshair), crosshair + cv::Point(8, -8), cv::FONT_HERSHEY_SIMPLEX, 0.5, green, 1);
     fps.Draw(picture);
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
 void Report(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& fps)

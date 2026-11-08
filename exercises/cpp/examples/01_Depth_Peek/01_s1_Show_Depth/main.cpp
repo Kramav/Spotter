@@ -16,6 +16,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 int main()
 {
     spotter::KinectSource::Options options;
@@ -26,7 +29,7 @@ int main()
     spotter::RgbdFrame frame;
     while (kinect.Next(frame))   // waits for the next frame: 30 a second
     {
-        cv::imshow("01 step 1: depth (far = bright, no reading = black)", frame.depthMm / 6000);
+        cv::imshow("01 step 1: depth (far = bright, no reading = black)", spotter::WithKeys(frame.depthMm / 6000, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;   // waitKey also lets the window redraw
     }
     return 0;

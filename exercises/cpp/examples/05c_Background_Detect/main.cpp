@@ -47,6 +47,9 @@
 #include "spotter/track.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -211,7 +214,7 @@ void Show(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::Clas
                     cv::FONT_HERSHEY_SIMPLEX, 1.0, colour, track.Coasting() ? 1 : 2);
     }
     fps.Draw(picture, cv::format(" | YOLO %d ms", (int)detectMs));
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
 void Report(const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps, Handover& handover)

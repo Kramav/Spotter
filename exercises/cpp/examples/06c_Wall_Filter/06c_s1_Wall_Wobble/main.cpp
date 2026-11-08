@@ -23,6 +23,9 @@
 #include "spotter/view.hpp"
 #include "spotter/walls.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});
@@ -52,7 +55,7 @@ int main()
             for (double m : lastSecond) squares += (m - mean) * (m - mean) / (lastSecond.size() - 1);
             std::printf("nearest wall %.3f m, wobbles +-%.1f mm from frame to frame\n", mean, 1000 * std::sqrt(squares));
         }
-        cv::imshow("06c step 1: raw walls, found afresh each frame", radar.Image());
+        cv::imshow("06c step 1: raw walls, found afresh each frame", spotter::WithKeys(radar.Image(), Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

@@ -789,3 +789,60 @@ in `legacy/` for comparison.
 
 **Why:** one ICP for everything from 11b on, with two of the review's bugs closed and a check
 that fails without each fix.
+
+### D38 — 2026-11-07 — Room folder format 2; 13e and 13z on the library
+
+- **Format 2** (`spotter::room_folder`): the same files as format 1, the right way round. Also new:
+  - `room.txt` has a `depth_camera fx fy cx cy` line, the camera the clouds were made with.
+  - `pose.txt` holds the cloud's point count.
+  - Every file is flushed to disk (`_commit` / `fsync`) before `pose.txt` is written. A `cloud.bin`
+    that doesn't match the count is refused, and z = 0 counts as no reading (the review's bug 4).
+  - `pose.txt` is rewritten atomically by X, and scan folders sort by number (bug 5).
+- **Format 1 is read mirrored back:** each cloud row is reversed with x → −x, each picture flipped,
+  turns become S R S, shifts get x → −x, and the camera's cx becomes width − cx. Features aren't
+  loaded (13z doesn't need them, and ORB descriptors don't survive a mirror). Legacy 13z refuses
+  format 2. New `.obj`s carry a `# spotter format 2` line: legacy Demos 4 and 6 expect mirrored
+  rooms, so they shouldn't be used with new rooms. Their ports (phase 6) will mirror format-1 rooms
+  on load.
+- **One sparse rule** (bug 3): `MakeScan` and `LoadScan` both use `SampleSurface`, so 13z's merge
+  box is 13e's. `check_room` and a synthetic 13e session both rebuild `points.ply` identically.
+- **13e:** its session (state plus one function per key) is `scan_state.hpp`, beside `main.cpp`.
+  It's the example's own code, not the library's.
+  - Bug 6: a try/catch around the loop finishes the folder on any error, as on Q or a lost Kinect,
+    before the Kinect is stopped.
+  - Bug 14: each landmark records its two scans, and placing a scan again leaves them out.
+  - Every change to `scans` now waits for the background readers, including the first scan.
+- **Library choices:**
+  - `FindFeatures` makes its ORB and CLAHE per call, so the live check and a new scan can run at
+    once without sharing one detector.
+  - `Shortlist` still stacks every scan's descriptors per call (fine for tens of scans). The
+    persistent descriptor index waits until sessions get that long.
+  - `BuildRoom` uses the library's `FindPlanes` (bug 8 fixed), and every projection uses
+    `PinholeCamera`'s −0.5 rule.
+  - Demo 6's `FindFloor` (bug 7) and locating the visitor wait for the demos.
+
+**Why:** D35's plan for phase 5. A crash or blue screen can't pass off a half-written scan as real,
+and old rooms stay usable, the right way round.
+
+### D39 — 2026-11-08 — No autosave: scans are kept in memory and saved once (supersedes half of D30)
+
+- **The user's call (2026-11-07):** autosave was a stopgap, chosen under time pressure and for the
+  blue-screen risk (D25), and it isn't needed any more. The design goal is now no heavy disk writes
+  while scanning: 13e wrote about 11 MB per scan.
+- **`examples/13e`, renamed `13e_Room_Scan` (it was `13e_Room_Scan_Autosave`), and the coming 13f:**
+  - the scans stay in memory, and U, X and P change only memory;
+  - the folder is asked for at the start, but written only on K, on Q, when the Kinect is lost (10 s
+    without a frame), or on any exception, in that order of likelihood;
+  - each save writes every scan (pose.txt last, flushed to disk; D38), landmarks, `points.ply` and
+    `room.txt` with `finished 1`, and removes scan folders left over from scans that U took back.
+- **The rescue half of D30 stays:** a lost Kinect or an error still saves everything, before the
+  Kinect is stopped.
+- **What it costs:** a crash that isn't an exception (a blue screen, killing the process) now loses
+  the whole session, not just the scan in progress.
+- **Step 3 of the ladder:** `13e_s3_Save_As_You_Go` became `13e_s3_Save_The_Folder` (saves once at
+  the end).
+- `legacy/13e` keeps its autosave.
+
+**Why:** the user's decision. A temporary synthetic harness confirmed nothing is written while
+scanning, that K and Q each write one complete folder, that a second save removes a scan taken back
+by U, and that 13z loads the result.

@@ -19,6 +19,9 @@
 
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE (hold)  hide the measurements     Q or Esc  quit";
+
 const double NoisePixels = 15, AccelerationPixels = 300, Dt = 1.0 / 30;
 
 cv::KalmanFilter NewFilter(cv::Point2f start)
@@ -64,7 +67,7 @@ int main()
         cv::circle(picture, filtered, (int)unsure, cv::Scalar(0, 120, 0), 1);
         cv::putText(picture, hidden ? "measurements hidden: coasting" : "hold SPACE to hide the measurements", cv::Point(10, 20),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(200, 200, 200), 1);
-        cv::imshow("05 step 2: coasting", picture);
+        cv::imshow("05 step 2: coasting", spotter::WithKeys(picture, Keys));
 
         int key = cv::waitKey(33);
         if (spotter::IsQuitKey(key)) break;

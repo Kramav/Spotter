@@ -25,6 +25,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "S  scan     Q or Esc  quit";
+
 const int Step = 4;
 const float MaxTiltDegrees = 25, MinWallHeightMeters = 0.8f, MinCeilingHeightMeters = 1.8f;
 
@@ -80,7 +83,7 @@ int main()
         cv::Mat display;
         cv::resize(frame.colour, display, frame.colour.size() / 2);
         for (const auto& [p, colour] : dots) cv::circle(display, p / 2, 2, colour, cv::FILLED);
-        cv::imshow("09c step 2: floor green, ceiling yellow, walls blue (S scans)", display);
+        cv::imshow("09c step 2: floor green, ceiling yellow, walls blue (S scans)", spotter::WithKeys(display, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == 's' && !averager.Running()) { averager.Start(); std::printf("Scanning: hold still...\n"); }

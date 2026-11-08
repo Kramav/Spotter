@@ -28,6 +28,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "S  scan and save     Q or Esc  quit";
+
 // The floor: the level plane with the most points (09), or nothing.
 bool FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& floor)
 {
@@ -72,7 +75,7 @@ int main()
             if (FindFloor(cloud, random, floor)) SaveLevelled(cloud, frame.registered, floor);
             else std::printf("No floor in view: tilt the Kinect down a little.\n");
         }
-        cv::imshow("09c step 3: S scans, levels and saves", frame.colour);
+        cv::imshow("09c step 3: S scans, levels and saves", spotter::WithKeys(frame.colour, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == 's' && !averager.Running()) { averager.Start(); std::printf("Scanning: hold still...\n"); }

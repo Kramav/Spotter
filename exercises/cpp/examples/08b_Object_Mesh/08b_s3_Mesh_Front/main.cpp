@@ -30,6 +30,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "click a box  capture and save     Q or Esc  quit";
+
 const float DepthBandMeters = 0.3f, MaxJumpMm = 20;
 
 void OnMouse(int event, int x, int y, int, void* click)
@@ -130,7 +133,7 @@ int main()
         cv::Mat display;
         cv::resize(frame.colour, display, frame.colour.size() / 2);
         if (averager.Running()) cv::putText(display, cv::format("HOLD STILL %d / 30", averager.Added()), cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
-        cv::imshow(window, display);
+        cv::imshow(window, spotter::WithKeys(display, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

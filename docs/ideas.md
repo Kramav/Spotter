@@ -434,3 +434,30 @@ should lie on the plane, evenly spread, without needing a long averaging time.
   sessions, since the coordinates are shared). It needs the saved scans loaded back the way 13z
   does, plus their features (`features.yml`) for placing.
 
+
+## Localising a scan: Continuous and Relocate (the study of 2026-11-08)
+
+The findings are in [structure-localization-findings.md](structure-localization-findings.md). Not
+built yet; each item says when it would pay off.
+
+- **Live frame-to-frame tracking for Continuous** (the user's ask). Today Continuous starts ICP
+  from the previous scan's pose (or the recommended next shot). `check_structure` shows that start
+  recovers moves up to about 30 cm and 20 deg when the view sees a corner, and fails along a bare
+  wall.
+  - The idea: track the camera with ICP between live frames while it moves (at 30 fps a step is
+    millimetres), so each scan starts from where the camera really is.
+  - It's roadmap example 16 (visual odometry) used inside the scanner.
+  - Pays off when users move further than 30 cm or turn more than 20 deg between scans, or face
+    bare walls.
+  - Needs the depth stream processed every frame while not scanning, which 13e's live check
+    already half does.
+- **Global registration without structure assumptions:**
+  - Go-ICP (Yang et al., TPAMI 2016: branch-and-bound, globally optimal).
+  - TEASER++ (Yang, Shi & Carlone, T-RO 2020: certifiable, robust to outliers), with FPFH
+    correspondences (Rusu et al., ICRA 2009).
+  - Both add a dependency and are heavy for a Pi.
+  - Worth trying if Relocate's structure candidates miss too often on real rooms (rooms without
+    two clear wall directions in view).
+- **Door and window gaps as landmarks** for Relocate's ties. A wall's holes are fixed and
+  asymmetric where the room's planes aren't. It would need wall extents (edge endpoints), which
+  the survey found unstable between scans so far.

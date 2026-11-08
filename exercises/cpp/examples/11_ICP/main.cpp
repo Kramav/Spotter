@@ -46,6 +46,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture A, then freeze B, then start over   P  run ICP (after B is frozen)   mouse drag / W A S D  turn the view   mouse wheel / Z X  zoom   R  reset view   nudge pose B:  J L  right   T G  up   I K  forward   U O  turn left   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -297,7 +300,7 @@ void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& ca
     cv::putText(image, status, cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 1);
     cv::putText(image, cv::format("pose B: right %+.2f  up %+.2f  forward %+.2f m  turned %.1f deg", pose.shift.x, -pose.shift.y,
                 pose.shift.z, pose.Degrees()), cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 1);
-    cv::imshow(Window, image);
+    cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
 // ---------------------------------------------------------------------

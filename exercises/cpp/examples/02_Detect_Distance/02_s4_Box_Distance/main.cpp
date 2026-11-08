@@ -23,6 +23,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const int MinDepthPixels = 20;   // fewer than this in the box's middle: "?" instead of a guess
 
 spotter::YoloDetector::Options YoloSettings()
@@ -70,7 +73,7 @@ int main()
     {
         for (const spotter::Detection& d : yolo.Detect(frame.colour))
             Draw(frame.colour, d, yolo.Classes().Name(d.classId), BoxMeters(d.box, frame));
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

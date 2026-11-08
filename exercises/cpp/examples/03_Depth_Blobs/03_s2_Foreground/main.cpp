@@ -17,6 +17,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "B  remember the room now     Q or Esc  quit";
+
 // Too small: the noise shows up green. Too big: a hand flat on a table disappears.
 const float NearerMm = 100;
 
@@ -40,7 +43,7 @@ int main()
     {
         cv::Mat picture = spotter::DepthPicture(frame.depthMm);
         picture.setTo(cv::Scalar(0, 255, 0), Foreground(frame.depthMm, backgroundMm));   // green where the mask is 255
-        cv::imshow("03 step 2: foreground (B remembers the room)", picture);
+        cv::imshow("03 step 2: foreground (B remembers the room)", spotter::WithKeys(picture, Keys));
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

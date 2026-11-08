@@ -41,6 +41,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture and average     W A S D  move the crosshair   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -189,14 +192,14 @@ void ShowLive(const cv::Mat& liveMm, const Averaged& last, const Capture& captur
     cv::drawMarker(picture, crosshair, cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 20, 1);
     cv::putText(picture, text, cv::Point(std::min(crosshair.x + 8, picture.cols - 230), std::max(crosshair.y - 8, 40)),
                 cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0), 1);
-    cv::imshow(LiveWindow, picture);
+    cv::imshow(LiveWindow, spotter::WithKeys(picture, Keys));
 }
 
 void ShowAverage(const Averaged& result)
 {
     cv::namedWindow(AverageWindow, cv::WINDOW_NORMAL);
     cv::resizeWindow(AverageWindow, 1024, 848);
-    cv::imshow(AverageWindow, spotter::DepthPicture(result.averageMm, NearMm, MaxDepthMeters * 1000));
+    cv::imshow(AverageWindow, spotter::WithKeys(spotter::DepthPicture(result.averageMm, NearMm, MaxDepthMeters * 1000), Keys));
 }
 
 void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture)

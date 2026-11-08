@@ -20,6 +20,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  forget and start over     Q or Esc  quit";
+
 const double PersonShare = 0.3;   // a blob is a person if this share of it is in person boxes
 const int MinBlobPixels = 500;
 const float BlendRate = 0.1f;
@@ -95,7 +98,7 @@ int main()
         cv::Mat remembered, picture = frame.registered.clone();
         memory.convertTo(remembered, CV_8UC3);
         remembered.copyTo(picture, PersonBlobs(foreground, inPerson));      // paint them out
-        cv::imshow(window, picture);
+        cv::imshow(window, spotter::WithKeys(picture, Keys));
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

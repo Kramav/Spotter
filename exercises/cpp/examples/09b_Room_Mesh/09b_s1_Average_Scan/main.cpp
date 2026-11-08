@@ -18,6 +18,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "S  scan     Q or Esc  quit";
+
 int main()
 {
     spotter::KinectSource::Options options;
@@ -33,9 +36,9 @@ int main()
         {
             cv::Mat averageMm = averager.Mean();   // 0 where a pixel read in under half the frames
             std::printf("Averaged %d frames: %d of %d pixels have depth.\n", averager.Frames(), cv::countNonZero(averageMm), (int)averageMm.total());
-            cv::imshow("09b step 1: the averaged scan", spotter::DepthPicture(averageMm));
+            cv::imshow("09b step 1: the averaged scan", spotter::WithKeys(spotter::DepthPicture(averageMm), Keys));
         }
-        cv::imshow("09b step 1: live (S scans)", spotter::DepthPicture(frame.depthMm));
+        cv::imshow("09b step 1: live (S scans)", spotter::WithKeys(spotter::DepthPicture(frame.depthMm), Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == 's' && !averager.Running()) { averager.Start(); std::printf("Scanning: hold still...\n"); }

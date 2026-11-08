@@ -33,4 +33,7 @@ Features FindFeatures(const cv::Mat& grey, const cv::Mat& mask, const FeatureOpt
 // nearer than the second nearest: distance <= ratio x second's (Lowe's ratio test). (from, to) rows.
 std::vector<std::pair<int, int>> MatchFeatures(const cv::Mat& from, const cv::Mat& to, float ratio = 0.8f);
 
+// Each `from` descriptor's nearest `to` descriptor, no ratio test (queryIdx, trainIdx, distance in bits).
+std::vector<cv::DMatch> NearestFeatures(const cv::Mat& from, const cv::Mat& to);
+
 }

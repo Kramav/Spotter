@@ -26,6 +26,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const float MinWallHeightMeters = 0.8f;
 
 spotter::PlaneSearch UprightPlanes()
@@ -75,7 +78,7 @@ int main()
             radar.DrawLine(a, b, wall ? cv::Scalar(190, 190, 190) : cv::Scalar(0, 80, 160), wall ? 3 : 1,
                            wall ? cv::format("wall %.2f m", piece.plane.distance) : "too short");
         }
-        cv::imshow("06b step 3: walls from above", radar.Image());
+        cv::imshow("06b step 3: walls from above", spotter::WithKeys(radar.Image(), Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

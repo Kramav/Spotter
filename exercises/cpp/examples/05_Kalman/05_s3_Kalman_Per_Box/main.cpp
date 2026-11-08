@@ -21,6 +21,9 @@
 #include "spotter/track.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const double MinOverlap = 0.3, NoisePixels = 15, AccelerationPixels = 500, Dt = 1.0 / 6;   // YOLO: ~6 frames a second
 const int MaxMissedFrames = 12;
 
@@ -109,7 +112,7 @@ int main()
             cv::putText(frame.colour, "#" + std::to_string(t.id) + " " + yolo.Classes().Name(t.classId), t.Box().tl() + cv::Point2d(4, 30),
                         cv::FONT_HERSHEY_SIMPLEX, 1.0, colour, coasting ? 1 : 2);
         }
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

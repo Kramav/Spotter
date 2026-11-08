@@ -19,6 +19,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "click a box  choose it     Q or Esc  quit";
+
 void OnMouse(int event, int x, int y, int, void* click)
 {
     if (event == cv::EVENT_LBUTTONDOWN) *(cv::Point2d*)click = cv::Point2d(x * 2, y * 2);   // half-size window -> colour pixels
@@ -56,7 +59,7 @@ int main()
             cv::rectangle(display, half, chosen ? cv::Scalar(0, 255, 255) : cv::Scalar(0, 255, 0), chosen ? 4 : 2);
         }
         click = cv::Point2d(-1, -1);   // a click counts once
-        cv::imshow(window, display);
+        cv::imshow(window, spotter::WithKeys(display, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

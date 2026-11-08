@@ -36,6 +36,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "V  explain view (red = removed, yellow = kept object, green = other foreground)   SPACE  forget both memories and start over      Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -170,7 +173,7 @@ void Show(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const cv::
     }
     std::string status = cv::format("%d person box(es), %d object box(es), %d px removed (%d never seen)", masks.people, masks.objects, removed, neverSeen);
     cv::putText(picture, status, cv::Point(8, 16), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0), 1);
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
     if (report.Due()) std::printf("%s\n", status.c_str());
 }
 

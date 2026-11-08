@@ -21,6 +21,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "B  remember the room now     Q or Esc  quit";
+
 const float NearerMm = 100;
 const int CleanupPixels = 5;     // the OPEN shape's size; 1 = no cleanup
 const int MinBlobPixels = 400;   // a person at 3 m covers a few thousand
@@ -60,7 +63,7 @@ int main()
         cv::Mat picture = spotter::DepthPicture(frame.depthMm);
         picture.setTo(cv::Scalar(0, 255, 0), foreground);
         for (const cv::Rect& box : Blobs(foreground)) cv::rectangle(picture, box, cv::Scalar(0, 255, 255), 1);
-        cv::imshow("03 step 3: blobs (B remembers the room)", picture);
+        cv::imshow("03 step 3: blobs (B remembers the room)", spotter::WithKeys(picture, Keys));
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

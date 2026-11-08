@@ -23,6 +23,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "S  scan and save     Q or Esc  quit";
+
 const int Step = 2;
 
 spotter::Mesh Triangles(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours)
@@ -67,7 +70,7 @@ int main()
             if (spotter::SaveObj(path, mesh, "Spotter 09b step 2: no jump rule"))
                 std::printf("Saved %zu triangles to %s (never commit it)\n", mesh.groups["seen_room"].size(), path.c_str());
         }
-        cv::imshow("09b step 2: S scans and saves", frame.colour);
+        cv::imshow("09b step 2: S scans and saves", spotter::WithKeys(frame.colour, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == 's' && !averager.Running()) { averager.Start(); std::printf("Scanning: hold still...\n"); }

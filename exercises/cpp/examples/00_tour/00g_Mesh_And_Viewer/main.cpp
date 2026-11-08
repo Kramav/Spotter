@@ -30,6 +30,9 @@
 #include "spotter/mesh.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "mouse drag / W A S D  turn    wheel / Z X  zoom    R  reset    Q or Esc  quit";
+
 const spotter::PinholeCamera DepthCamera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
 
 // A wall 2.5 m away, a box front 1.8 m away, and a dome bulging out of the wall.
@@ -106,7 +109,7 @@ int main()
     {
         renderer.Begin(view);
         renderer.Draw(mesh.points, mesh.colours);
-        cv::imshow(window, renderer.Image());
+        cv::imshow(window, spotter::WithKeys(renderer.Image(), Keys));
         int key = cv::waitKey(15);
         if (spotter::IsQuitKey(key) || cv::getWindowProperty(window, cv::WND_PROP_VISIBLE) < 1) break;
         view.HandleKey(key);
