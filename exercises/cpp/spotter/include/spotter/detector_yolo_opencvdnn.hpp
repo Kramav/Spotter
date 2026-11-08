@@ -13,7 +13,11 @@
 #include "spotter/detection.hpp"
 
 #include <opencv2/dnn.hpp>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace spotter
@@ -63,6 +67,34 @@ private:
     ClassList classes;
     cv::dnn::Net net;
     bool ready = false;
+};
+
+// Runs a YoloDetector on its own thread (example 05c), so the caller's loop keeps the camera's
+// 30 fps while YOLO runs a few times a second. Each frame: TryTake() a finished batch if there is
+// one, then Offer() the newest picture (taken only when the detector is idle).
+// A batch describes a picture ~one detector run old.
+class AsyncDetector
+{
+public:
+    explicit AsyncDetector(YoloDetector& detector);   // the detector must outlive this
+    ~AsyncDetector();                                 // stops and joins the thread
+    AsyncDetector(const AsyncDetector&) = delete;
+    AsyncDetector& operator=(const AsyncDetector&) = delete;
+
+    void Offer(const cv::Mat& bgr);                       // copies it, if the detector is idle
+    std::optional<std::vector<Detection>> TryTake();      // a finished batch, once
+    double LastMs() const;                                // how long the last batch took
+
+private:
+    void Run();
+    YoloDetector& detector;
+    mutable std::mutex shared;              // everything below is touched only under this lock
+    std::condition_variable handedOver;
+    cv::Mat picture;
+    bool pictureWaiting = false, busy = false, quit = false;
+    std::optional<std::vector<Detection>> result;
+    double lastMs = 0;
+    std::thread thread;                     // last: it starts after everything above exists
 };
 
 }

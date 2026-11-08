@@ -17,7 +17,8 @@ public:
     struct Options
     {
         bool colour = true;            // false = depth only (faster; no colour, registered or colourIndex)
-        float maxDepthMeters = 4.5f;   // libfreenect2 drops readings past this; the sensor reads to ~6 m (07b)
+        float maxDepthMeters = 6.0f;   // readings past this are dropped. libfreenect2's own default is 4.5;
+                                       // the sensor reads to ~6 m, past that almost nothing is right (07)
         bool depthFilters = true;      // bilateral + edge-aware filters: fewer flying pixels, half the fps (01)
         bool occlusionFilter = true;   // registered colour: black where the colour camera can't see that spot
         bool capExposure = false;      // cap the colour exposure at 16 ms: a steady frame rate in dim light (D15)

@@ -756,3 +756,36 @@ software team.
 **Why:** the user wants a launch point to hand to a software team. The originals stay untouched
 in `legacy/` for comparison.
 
+### D36 — 2026-11-07 — The library's default depth range is 6 m; the mirror fix is confirmed
+
+- **Mirror:** the user ran the new programs on the sensor and confirmed left and right are now
+  correct (D35's `Unmirror`). `legacy/` is still mirrored.
+- **6 m by default:** the new programs still stopped at 4.5 m, because the library had kept
+  libfreenect2's own defaults in two places. `KinectSource::Options::maxDepthMeters` was 4.5 (the
+  cut-off), and `DepthPicture`'s grey scale ended at 4500 mm. Both are now 6 m, the range 07b
+  found usable and that 07c, 08 and later already used. The examples' own grey scales (01, 03, the
+  01/03 steps) and 07's `MaxDepthMeters` follow. 07b's 8 m stays a setting in 07.
+
+
+### D37 — 2026-11-07 — The library's ICP is 13e's, with the turn measured in metres; 11b uses it
+
+- **`spotter::Icp` is 13e's point-to-plane ICP** (directions the shape can't pin keep the start's
+  value), not 11's point-to-point one. 11 keeps its point-to-point ICP inline, as its lesson.
+  11b's last step now calls the library's, so its result is 13e's quality, and it reports the
+  paired share, the gap and the weak directions.
+- **Bug 13 fixed by scaling:** the turn's three columns are divided by the pairs' rms distance
+  from their centre, so a turn is scored by how far it moves points (metres) like a shift. 13e
+  scored turns in metres squared, so a small or near patch (radius 0.1 m) had all three turns
+  called weak and left at the start: 19 mm off in `check_icp`, now 0.00 mm. On room-sized views
+  (radius 1–2 m) turns now count a little less than before; the 13e port's synthetic tests will
+  show whether `weakShare` (5%) needs to change.
+- **Bug 2 fixed twice:** `SampleSurface` skips a point whose neighbours give no facing, and `Icp`
+  writes its gate as `!(|gap| <= max)`, so a NaN gap is left out instead of let in.
+- **`SampleSurface` is the one sparse rule** (bug 3): 13e's (every `step` pixels, edges dropped).
+  The 13e and 13z ports will both call it.
+- **Not built yet:** `features_orb`, the library's feature pose and the descriptor index wait for
+  the 13e port, their first user (11b keeps its own inline). `Pose::Inverse` / text form wait for
+  the room folder.
+
+**Why:** one ICP for everything from 11b on, with two of the review's bugs closed and a check
+that fails without each fix.

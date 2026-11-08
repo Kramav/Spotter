@@ -18,8 +18,8 @@
 //    - the next capture: the difference between two averages, which is the
 //                        averaged result's REAL noise (times sqrt 2)
 //
-//  Far range (07b): the 4.5 m limit isn't the sensor, it's libfreenect2's
-//  default cut-off. Set MaxDepthMeters = 8 and capture down a hallway.
+//  Far range (07b): libfreenect2's own cut-off is 4.5 m, but the sensor
+//  reads further. This uses 6 m; set MaxDepthMeters = 8 down a hallway.
 //
 //  Windows: live depth (as in 01), and the latest averaged capture.
 //  Keys:    SPACE  capture and average     W A S D  move the crosshair
@@ -52,8 +52,8 @@ const int CaptureFrames = 30;
 // frames. Lower = fills more holes, but trusts pixels that are often wrong (edges, black things).
 const double MinValidFraction = 0.5;
 
-// libfreenect2's cut-off. 4.5 is its default; the sensor reads to about 6 m, worse with distance.
-const float MaxDepthMeters = 4.5f;
+// The cut-off. libfreenect2's own default is 4.5; the sensor reads to about 6 m, worse with distance.
+const float MaxDepthMeters = 6.0f;
 
 const float NearMm = 500;
 const int CrosshairStepPixels = 10;
@@ -265,7 +265,7 @@ int main()
 //     a hole at MinValidFraction = 0.5. Try 0.2. Is the filled-in value believable?
 //  5. Walk through the view during a capture. The average smears you into the background:
 //     averaging only works for things that stay still (docs/decisions.md D12).
-//  6. Far range (07b): set MaxDepthMeters = 8 and point it down a hallway. Past 4.5 m the
+//  6. Far range (07b): set MaxDepthMeters = 8 and point it down a hallway. Past 6 m the
 //     "never read" share drops, and past ~6 m almost nothing is reliable.
 //  7. Leave the Kinect running for 20 minutes, then capture again. Has the average shifted?
 //     (Time-of-flight sensors drift a few mm while warming up.)

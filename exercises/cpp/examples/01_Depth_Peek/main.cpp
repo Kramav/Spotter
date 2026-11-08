@@ -37,11 +37,11 @@
 // The grey scale. Depth at NearMm is drawn white, depth at FarMm (or beyond) is drawn black.
 // Try 1000 / 2000 to stretch the contrast over one metre of the room.
 const float NearMm = 500;
-const float FarMm = 4500;
+const float FarMm = 6000;
 
 // libfreenect2 cleans up depth with two filters: bilateral (smooths noise) and edge-aware
 // (removes "flying pixels" along object edges). On the CPU they roughly halve the frame rate.
-// false = faster, but noisier edges, AND no clipping to 0.5 .. 4.5 m: expect junk like 17 m.
+// false = faster, but noisier edges, AND no clipping to 0.5 .. 6 m: expect junk like 17 m.
 const bool UseDepthFilters = true;
 
 const int CrosshairStepPixels = 10;   // how far one key press moves the crosshair
