@@ -17,6 +17,10 @@ namespace spotter
 // Every reading inside the box is used, none are skipped.
 //
 // Only for boxes. Room scans and point clouds still use every depth pixel directly.
+// The depth picture as grey: near (nearMm) = white, far (farMm and beyond) = black, and red
+// where there's no reading (too close, too far, black, shiny or glass). Example 01's picture.
+cv::Mat DepthPicture(const cv::Mat& depthMm, float nearMm = 500, float farMm = 4500);
+
 class BoxDepthSampler
 {
 public:

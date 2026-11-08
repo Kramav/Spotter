@@ -34,7 +34,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); kept unchanged and still built (D34). `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (one synthetic self-check per module, e.g. `build\check_box_depth.exe`). So far: `depth` (`BoxDepthSampler`). `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); kept unchanged and still built (D34). `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (one synthetic self-check per module, e.g. `build\check_box_depth.exe`). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `view`, `mesh`. `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z and the demos, built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -69,8 +69,10 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   different YOLO model (or one the user trained) is a settings change: model path, input size,
   `.names` file, output layout. The originals in `legacy/` are never edited to fit the library.
 
-## Status (2026-11-05)
+## Status (2026-11-06)
 
+- 2026-11-06: re-writing the examples on the library in `exercises/cpp/examples/` (D35, plan: every example and demo except 13–13d; story `main()`s; mirror fixed by `Unmirror` in `KinectSource`). Phase 1 done: frame/source/stats/detection/YOLO/view modules, tours 00a–00d, ports 01, 02, 03, 07 (+07b as a setting), 07c, 08; all build, `ctest` 3/3 passes (`check_frame` matches libfreenect2's `getPointXYZ` with X negated). **Waiting on the user:** run `00a_Kinect_Source` (raise your right hand: it must show on the right), 01, 02, 08 on the sensor before phase 2 (track: 04–06, 07d).
+- 2026-11-07: the user asked for very simple examples that build up to each one. Ladders of 30–60-line steps, one new thing each, live in each example's folder (`02_Detect_Distance/02_s1_Show_Colour` … `02_s4_Box_Distance`, then the example). Done for 01 (3 steps), 02 (4), 03 (3), on the library. **Not compiled yet:** the user asked for no CPU-heavy tasks until they say so. Next: build them, then ladders for each example as it's ported.
 - 2026-11-05: adversarial review of every example and demo ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)). The originals moved to `exercises/cpp/legacy/` unchanged; all 34 targets still build. Next: the user re-implements them on a shared `spotter` CMake library (D34), starting with `source_freenect2`/`DepthCamera` (which also fixes the mirror). First module built: `spotter::BoxDepthSampler` (a box's median depth). Its check matches 05c's `SampleMeters` exactly on 4,000 synthetic boxes, in 2.0 ms instead of 5.1 ms per frame with 5 boxes. Not yet used by an example.
 
 - Python exercises: done.

@@ -725,3 +725,34 @@ signature, and the base class waits until an example needs to choose a backend a
 
 **Supersedes:** the one-file-per-example rule (Conventions, D29) for shared code only. Examples
 are still one file each, plus the library.
+
+### D35 — 2026-11-06 — The examples are re-written in `examples/`, on the library, with the mirror fixed
+
+The user asked for every example re-written on the `spotter` classes in a new folder, with tour
+programs showing what each class does, and a short, readable `main()`: the hand-off point for a
+software team.
+- **Where:** `exercises/cpp/examples/`. Folders drop `Kinect_` (the camera sits behind
+  `source_freenect2`). Targets are `ex_<folder>`, built as `build/examples/<folder>.exe`, so the
+  names never clash with `legacy/`. `00_tour/` holds one program per module, most with no Kinect.
+- **Scope (the user's choice):** every example and demo, except 13, 13b, 13c and 13d (13e contains
+  them). 07b is a setting of 07 (`MaxDepthMeters`).
+- **main() (the user's choice):** a "story main" of 15–40 lines. It sets up the library objects,
+  then loops over named steps. Each step is a function above `main` in the same file, and the
+  example's own idea lives in those functions. No globals.
+- **The mirror is fixed (the user's choice)**, in one place: `KinectSource` calls `Unmirror` on
+  every frame. It flips the pictures, remaps `colourIndex`, and sets cx to width − cx for both
+  cameras. `check_frame` compares this against libfreenect2's own `Registration` with no device:
+  every 3D point equals `getPointXYZ` with X negated. `KinectSource::Options::unmirror` stays as a
+  knob, in case the sensor check says otherwise. Room folders written by the new 13e will be
+  format 2, and old rooms are mirrored on load.
+- **The rule for duplicates:** the example that introduces an idea keeps it inline; later examples
+  call the library's copy.
+- **Changed on purpose:**
+  - The occlusion filter is on by default.
+  - Depth is always the undistorted picture (01 and 03 used the raw one).
+  - There is one median (it averages the two middle values).
+  - Class names come from `yolo26n.names`.
+
+**Why:** the user wants a launch point to hand to a software team. The originals stay untouched
+in `legacy/` for comparison.
+
