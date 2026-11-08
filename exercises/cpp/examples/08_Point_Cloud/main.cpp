@@ -37,6 +37,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "mouse drag / W A S D  turn      mouse wheel / Z X  zoom   R  reset view    SPACE  freeze/unfreeze    P  save as .ply   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -102,7 +105,7 @@ void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& 
     if (view.Project(cv::Point3f(0, 0, 0), kinectPixel, kinectDepth)) cv::circle(image, kinectPixel, 6, cv::Scalar(0, 255, 255), 2);
     cv::putText(image, cv::format("%s  turn %.0f, tilt %.0f deg", frozen ? "FROZEN" : "live", view.yawDegrees, view.pitchDegrees),
                 cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 1);
-    cv::imshow(Window, image);
+    cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
 // ---------------------------------------------------------------------

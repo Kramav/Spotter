@@ -40,6 +40,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "W A S D  move the crosshair (shows height above the floor)   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -155,7 +158,7 @@ void Show(const cv::Mat& depthMm, const std::vector<cv::Point3f>& cloud, const F
                                                                        : cv::format("%.2f m away", aimed.z);
     cv::drawMarker(picture, crosshair, yellow, cv::MARKER_CROSS, 20, 1);
     cv::putText(picture, text, cv::Point(std::min(crosshair.x + 8, 362), std::max(crosshair.y - 8, 40)), cv::FONT_HERSHEY_SIMPLEX, 0.4, yellow, 1);
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
 void MoveCrosshair(int key, cv::Point& crosshair)

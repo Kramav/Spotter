@@ -19,6 +19,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const double RangeMeters = 6.0;
 const int MapPixels = 700;
 const double PixelsPerMeter = (MapPixels - 40) / RangeMeters;
@@ -72,8 +75,8 @@ int main()
             cv::putText(map, yolo.Classes().Name(d.classId), ToMap(p.x, p.z) + cv::Point(10, 4), cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 255, 0), 1);
             cv::rectangle(frame.colour, d.box, cv::Scalar(0, 255, 0), 3);
         }
-        cv::imshow("06 step 2: camera", frame.colour);
-        cv::imshow("06 step 2: radar (camera at the bottom)", map);
+        cv::imshow("06 step 2: camera", spotter::WithKeys(frame.colour, Keys));
+        cv::imshow("06 step 2: radar (camera at the bottom)", spotter::WithKeys(map, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

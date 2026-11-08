@@ -21,6 +21,9 @@
 
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE (hold)  hide the measurements    F  fade on/off    Q or Esc  quit";
+
 const double NoisePixels = 15, AccelerationPixels = 300, Dt = 1.0 / 30;
 const double CoastSlowdownSeconds = 0.5;   // the speed halves about every 0.35 s while unseen
 
@@ -74,7 +77,7 @@ int main()
         cv::circle(picture, cv::Point2f(kalman.statePost.at<float>(0), kalman.statePost.at<float>(1)), 6, cv::Scalar(0, 255, 0), cv::FILLED);
         cv::putText(picture, cv::format("hold SPACE to hide | fade %s (F)", fade ? "ON" : "off"), cv::Point(10, 20),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(200, 200, 200), 1);
-        cv::imshow("05b step 2: a coasting object slows down", picture);
+        cv::imshow("05b step 2: a coasting object slows down", spotter::WithKeys(picture, Keys));
 
         int key = cv::waitKey(33);
         if (spotter::IsQuitKey(key)) break;

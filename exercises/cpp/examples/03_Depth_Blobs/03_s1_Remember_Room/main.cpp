@@ -18,6 +18,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "B  remember the room now (step out of view first)   Q or Esc  quit";
+
 int main()
 {
     spotter::KinectSource::Options options;
@@ -30,8 +33,8 @@ int main()
     std::printf("Step out of view and press B.\n");
     while (kinect.Next(frame))
     {
-        if (backgroundMm.empty()) cv::imshow("03 step 1: press B to remember the room", frame.depthMm / 6000);
-        else cv::imshow("03 step 1: press B to remember the room", (backgroundMm - frame.depthMm) / 1000);   // 1 m nearer = white
+        if (backgroundMm.empty()) cv::imshow("03 step 1: press B to remember the room", spotter::WithKeys(frame.depthMm / 6000, Keys));
+        else cv::imshow("03 step 1: press B to remember the room", spotter::WithKeys((backgroundMm - frame.depthMm) / 1000, Keys));   // 1 m nearer = white
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

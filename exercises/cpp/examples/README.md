@@ -62,18 +62,27 @@ There are no globals. A program's state lives in plain structs declared in that 
 | `detector_yolo_opencvdnn.hpp` | `YoloDetector`; `DecodeYolo` (both output layouts); `AsyncDetector` (YOLO on its own thread, 05c) | 00d |
 | `track.hpp` | `Tracker` (IDs, two confidence thresholds, coasting, fresh distances every frame); `BoxFilter` (a Kalman filter per box); `Overlap`, `ColourForId` | 00e |
 | `stats.hpp` | `Median`, `Percentile` | |
-| `view.hpp` | `FpsMeter`, `Every` (a periodic timer), `IsQuitKey`; `OrbitView` + `PointRenderer` (a small 3D viewer) | 00g |
+| `view.hpp` | `FpsMeter`, `Every` (a periodic timer), `IsQuitKey`; `WithKeys` (every window shows its keys in a strip below the picture); `OrbitView` (clicks too) + `PointRenderer` (a small 3D viewer); `DrawCamera` | 00g |
 | `geometry.hpp` | `Pose` (turn + shift, `Then`, `Degrees`), `Kabsch` (best pose for known pairs), `TurnAbout`; `Plane`, `PlaneThrough`, `FitPlane`; `PointGrid` + `ThinCloud`; `FindPlanes` (repeated RANSAC, biggest connected piece; upright / level / any) | 00f |
 | `register.hpp` | `SampleSurface` (sparse points + normals: one rule for every scan); `Icp` (13e's point-to-plane ICP; directions the shape can't pin keep the start's value) → `IcpResult` | 00f |
 | `walls.hpp` | `Wall`, `FindWalls` (06b: walls as lines on the floor plan) | |
 | `radar.hpp` | `RadarView` (06's bird's-eye map), `TrackTrails` (where each tracked object has been) | |
 | `mesh.hpp` | `Mesh` (named groups), `MeshFromGrid`, `AddQuad`, `AddBox`, `TurnToYUp`, `SaveObj`, `SavePly` | 00g |
+| `features_orb.hpp` | `FindFeatures` (ORB, optional contrast evening), `MatchFeatures` (ratio test), `NearestFeatures` | |
+| `room_scan.hpp` | `Scan` + `MakeScan`; `PlaceScan` (features against the earlier scans, ICP, a second opinion) → `Placement`; far features, `Landmark`, `AddLandmarks`; `CheckLive` (live anchors); `RecommendNext` (the next shot); `ScanOptions` = 13e's settings | 00h |
+| `room.hpp` | `FuseScans` (TSDF + surface net), `BuildRoom` (floor, ceiling, walls, furniture boxes, levelled) → `Room`; `SaveRoomObj`, `RoomPoints` | 00h |
+| `structure.hpp` | a prototype for the structure-localisation study: `ExtractStructure` (planes sorted into floor, ceiling, walls; area and density), `FindEdges`, `MergeStructures`, `Relocate` (a pose from structure alone, ranked by `ViewAgreement`, ambiguity flagged), `ColourVotes` / `OffPlaneShare` (tie-breakers), `PlaceAfter` (Continuous mode) | 13y |
+| `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScan`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; `Ask`, `AskRoomFolder` | 00h |
 
-Still to come, each with its own check and tour:
-- the wall filter (Demo 3);
-- `features_orb` (ORB built once, matching) and `register`'s feature pose and descriptor index,
-  when 13e needs them (11b keeps its own copy inline, as its lesson);
-- `room` / `room_folder` / `room_scan` (TSDF, the clean model, scan folders).
+Still to come, with the demos: the wall filter (Demo 3), `FindFloor` (Demo 6's floor rule, with the
+review's bug 7 fixed), `KeyBar` + `ToggleFullscreen`, and locating the visitor in a saved room (Demos 4, 6).
+
+**The room folder (format 2).** 13e writes it on K, Q, a lost Kinect or an error (no autosave, D39); 13z reads it. `room.txt` (format,
+cameras, scan count, `finished`), one `scan_NNN` folder per scan (`cloud.bin`, `colour.bmp`,
+`colour_full.bmp`, `colour_index.bin`, `features.yml`, then `pose.txt` last, holding the cloud's
+point count), `landmarks.txt`, and `points.ply` once finished. Format 2 is the right way round;
+format 1 (legacy 13c–13e) was mirrored and is read back unmirrored. Legacy 13z refuses format 2,
+and legacy Demos 4 and 6 expect mirrored rooms: use the new programs with new rooms.
 
 **External dependencies show in the file name.** Core headers use only OpenCV core types. Anything
 tied to a device, a model or a runtime is an *adapter* named `<role>_<dependency>`. To swap one,
@@ -131,6 +140,8 @@ folder's own `main.cpp`). Read a folder top to bottom as a lesson:
 | `10_Two_Views` | s1 two clouds at once → s2 move B into A's coordinates → **10** |
 | `11_ICP` | s1 the nearest point, fast: a k-d tree (no Kinect) → s2 the best move for known pairs (no Kinect) → s3 pair up, fit, repeat (no Kinect) → **11** |
 | `11b_Feature_Pose` | s1 ORB features → s2 match them between two views → s3 a camera move from the matches (RANSAC) → **11b** |
+| `13e_Room_Scan` | s1 place each scan among the earlier ones → s2 one mesh and a clean model from all → s3 save the scans as a room folder → s4 live anchors, checked in the background → **13e** |
+| `13z_Room_Rebuild` | s1 find the saved rooms (no Kinect) → s2 one room's scans in the viewer (no Kinect) → **13z** |
 
 More ladders are added as each example is ported.
 
@@ -145,6 +156,7 @@ More ladders are added as each example is ported.
 | `00_tour/00e_Tracker` | IDs, coasting, two thresholds on made-up boxes | no | runs (synthetic) |
 | `00_tour/00f_Pose_Planes_Icp` | a pose, Kabsch, the planes of a raycast room, ICP between two views, a bare wall's weak directions | no | runs (synthetic) |
 | `00_tour/00g_Mesh_And_Viewer` | a made-up depth picture → mesh → `tour_00g.obj`; the viewer's maths by hand | no (a window) | runs (synthetic) |
+| `00_tour/00h_Room_Folder` | 3 made-up scans written as a room folder, read back, a zeroed cloud refused, the room rebuilt | no | runs (synthetic) |
 | `01_Depth_Peek` | what a depth picture holds | yes | built, not run |
 | `02_Detect_Distance` | YOLO + depth: the four steps of late fusion | yes | built, not run |
 | `03_Depth_Blobs` | foreground from depth alone, real sizes | yes | built, not run |
@@ -166,9 +178,11 @@ More ladders are added as each example is ported.
 | `10_Two_Views` | two captures put together by a pose measured by hand | yes | built, not run |
 | `11_ICP` | ICP lines the two up by itself (point-to-point, written out) | yes | built, not run |
 | `11b_Feature_Pose` | a rough pose from colour features, polished by the library's ICP | yes | built, not run |
+| `13e_Room_Scan` | the room scanner: many spots, placed in the background, live anchors, next shot; saved on K / Q / a lost Kinect / an error | yes | run on the sensor by the user (a 21-scan room, with the autosave version); the save-once version run on synthetic frames |
+| `13y_Structure_Survey` | measurements for the structure-localisation study: coverage, edges, Relocate vs baselines, Continuous | no | runs (on the real room, numbers only) |
+| `13z_Room_Rebuild` | rooms rebuilt from their folders: view, exclude, `.obj`, `.ply` | no | runs (on a synthetic room) |
 
-Still to port: 13e, 13z and
-the six exhibition demos. 13–13d are left out: 13e contains them. The flowcharts in
+Still to port: the six exhibition demos. 13–13d are left out: 13e contains them. The flowcharts in
 [`../EXAMPLES.md`](../EXAMPLES.md) still describe each idea.
 
 ## What is tested, and how
@@ -185,6 +199,13 @@ the six exhibition demos. 13–13d are left out: 13e contains them. The flowchar
   - `check_icp`: `Kabsch` on exact pairs; `Icp` between two raycast views 12 cm and 5° apart
     (0.4 mm off); a NaN normal no longer spoils the pose (the review's bug 2); a small corner 0.8 m
     away still pins all six directions (bug 13). Both bug tests fail with 13e's code.
+  - `check_room`: a patterned room raycast from 5 spots. `PlaceScan` places scans 2–5 within
+    0.2 mm and 0.03°; the merged mesh lies 0.4 mm (median) off the true surfaces; floor, ceiling,
+    walls and the couch come out right; the room folder reads back unchanged, a zeroed `cloud.bin` is
+    refused (the review's bug 4), folders sort by number (bug 5), a format-1 scan loads unmirrored.
+  - `check_structure`: rooms from a floor plan (L-shape, rectangle, square, one with a couch and a
+    doorway). `Relocate` never gives a wrong answer as unique; symmetric rooms are flagged ambiguous
+    and colour votes pick the truth; Continuous recovers moves up to 30 cm / 20 deg from a corner view.
   - `check_mesh`: grid triangles (none across a depth jump), an outward-facing box, the OBJ writer,
     and `DepthAverager`'s hole rule.
   - `check_box_depth`: `BoxDepthSampler` gives exactly the same answers as the old per-box loop, on

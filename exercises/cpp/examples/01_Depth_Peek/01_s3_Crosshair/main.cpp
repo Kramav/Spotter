@@ -20,6 +20,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "W A S D  move the crosshair     Q or Esc  quit";
+
 const int StepPixels = 10;   // how far one key press moves the crosshair
 
 void MoveCrosshair(int key, cv::Point& crosshair)
@@ -39,7 +42,7 @@ void Show(const cv::Mat& depthMm, cv::Point crosshair)
     std::string text = mm > 0 ? std::to_string((int)mm) + " mm" : "no reading";
     cv::drawMarker(picture, crosshair, cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 20, 1);
     cv::putText(picture, text, crosshair + cv::Point(8, -8), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
-    cv::imshow("01 step 3: crosshair (WASD moves)", picture);
+    cv::imshow("01 step 3: crosshair (WASD moves)", spotter::WithKeys(picture, Keys));
 }
 
 int main()

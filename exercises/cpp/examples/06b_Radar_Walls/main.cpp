@@ -47,6 +47,9 @@
 #include "spotter/track.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "C  clear the trails      Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -195,7 +198,7 @@ void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter
                     cv::FONT_HERSHEY_SIMPLEX, 1.0, colour, 2);
     }
     fps.Draw(picture);
-    cv::imshow(CameraWindow, picture);
+    cv::imshow(CameraWindow, spotter::WithKeys(picture, Keys));
 }
 
 void ShowRadar(spotter::RadarView& radar, const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails,
@@ -206,7 +209,7 @@ void ShowRadar(spotter::RadarView& radar, const std::vector<Wall>& walls, const 
     for (const Wall& wall : walls) radar.DrawLine(wall.ends[0], wall.ends[1], cv::Scalar(160, 160, 160), 3);
     for (const spotter::Track& track : tracker.Tracks())
         radar.DrawTrail(trails.Of(track.id), spotter::ColourForId(track.id), track.Coasting(), "#" + std::to_string(track.id) + " " + classes.Name(track.classId));
-    cv::imshow(RadarWindow, radar.Image());
+    cv::imshow(RadarWindow, spotter::WithKeys(radar.Image(), Keys));
 }
 
 void Report(const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails, const spotter::ClassList& classes)

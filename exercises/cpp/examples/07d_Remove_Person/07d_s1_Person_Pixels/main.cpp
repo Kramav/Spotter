@@ -20,6 +20,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -61,7 +64,7 @@ int main()
         cv::Mat picture = frame.registered.clone();
         picture.setTo(cv::Scalar(0, 0, 255), inPerson);
         cv::addWeighted(picture, 0.5, frame.registered, 0.5, 0, picture);   // a see-through tint
-        cv::imshow(window, picture);
+        cv::imshow(window, spotter::WithKeys(picture, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

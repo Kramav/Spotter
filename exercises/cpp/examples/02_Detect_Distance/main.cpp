@@ -38,6 +38,9 @@
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -152,7 +155,7 @@ void Show(cv::Mat& picture, const std::vector<Measured>& objects, const spotter:
                     cv::FONT_HERSHEY_SIMPLEX, 1.0, green, 2);
     }
     fps.Draw(picture);
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
 struct StepTimes { double captureMs = 0, detectMs = 0, measureMs = 0; };

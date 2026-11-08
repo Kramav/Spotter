@@ -28,4 +28,11 @@ std::vector<std::pair<int, int>> MatchFeatures(const cv::Mat& from, const cv::Ma
     return pairs;
 }
 
+std::vector<cv::DMatch> NearestFeatures(const cv::Mat& from, const cv::Mat& to)
+{
+    std::vector<cv::DMatch> matches;
+    if (!from.empty() && !to.empty()) cv::BFMatcher(cv::NORM_HAMMING).match(from, to, matches);
+    return matches;
+}
+
 }

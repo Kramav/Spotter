@@ -22,6 +22,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const float ThicknessMeters = 0.02f;   // "on the plane" = within this distance
 const int NeighbourPixels = 40;        // the other two points come from this close in the picture
 
@@ -55,7 +58,7 @@ int main()
             for (int i = 0; i < (int)cloud.size(); i++)
                 if (!std::isnan(cloud[i].z) && std::abs(plane.DistanceTo(cloud[i])) < ThicknessMeters) { picture.at<cv::Vec3b>(i) = cv::Vec3b(0, 255, 0); on++; }
         cv::putText(picture, cv::format("%d points on this random plane", on), cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
-        cv::imshow("09 step 1: one random plane per frame", picture);
+        cv::imshow("09 step 1: one random plane per frame", spotter::WithKeys(picture, Keys));
         if (spotter::IsQuitKey(cv::waitKey(300))) break;   // slowed down so you can see each try
     }
     return 0;

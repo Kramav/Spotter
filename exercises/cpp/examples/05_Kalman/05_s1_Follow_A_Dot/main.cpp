@@ -21,6 +21,9 @@
 
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const double NoisePixels = 15;          // how much the measurements wobble
 const double AccelerationPixels = 300;  // how suddenly the filter thinks the dot can change speed
 const double Dt = 1.0 / 30;             // 30 frames a second
@@ -59,7 +62,7 @@ int main()
         cv::circle(picture, measured, 4, cv::Scalar(0, 0, 255), cv::FILLED);
         cv::circle(picture, filtered, 6, cv::Scalar(0, 255, 0), cv::FILLED);
         cv::putText(picture, "white = truth   red = measured   green = Kalman", cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(200, 200, 200), 1);
-        cv::imshow("05 step 1: a Kalman filter follows a noisy dot", picture);
+        cv::imshow("05 step 1: a Kalman filter follows a noisy dot", spotter::WithKeys(picture, Keys));
         if (spotter::IsQuitKey(cv::waitKey(33))) break;
     }
     return 0;

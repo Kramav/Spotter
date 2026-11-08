@@ -19,6 +19,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "D  YOLO on/off     Q or Esc  quit";
+
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -51,7 +54,7 @@ int main()
         }
         fps.Tick();
         fps.Draw(frame.colour, detecting ? cv::format(" | YOLO %.0f ms per frame", detectMs) : " | YOLO off (D)");
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

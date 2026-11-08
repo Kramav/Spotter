@@ -19,6 +19,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture A (again: let go of it)   mouse drag / W A S D  turn   wheel / Z X  zoom   R  reset   Q or Esc  quit";
+
 // How camera B moved from A, in A's directions. Turn = how far B is turned to the left.
 const float MoveRightMeters = 0.20f, MoveUpMeters = 0, MoveForwardMeters = 0, TurnLeftDegrees = 0;
 const cv::Vec3b Orange(0, 140, 255), Blue(255, 160, 0);
@@ -53,7 +56,7 @@ int main()
         renderer.Begin(view);
         renderer.Draw(a, Orange);
         renderer.Draw(live, Blue);
-        cv::imshow(window, renderer.Image());
+        cv::imshow(window, spotter::WithKeys(renderer.Image(), Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == ' ') a = a.empty() ? frame.depthCamera.Cloud(frame.depthMm) : std::vector<cv::Point3f>();

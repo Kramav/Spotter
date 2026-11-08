@@ -24,6 +24,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture A, then B (prints B's move), then start over    Q or Esc  quit";
+
 const float MatchRatio = 0.8f, InlierMeters = 0.05f;
 const int RansacTries = 1000;
 
@@ -88,7 +91,7 @@ int main()
     spotter::RgbdFrame frame;
     while (kinect.Next(frame))
     {
-        cv::imshow("11b step 3: SPACE captures A, then B", frame.registered);
+        cv::imshow("11b step 3: SPACE captures A, then B", spotter::WithKeys(frame.registered, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key != ' ') continue;
@@ -98,7 +101,7 @@ int main()
         spotter::Pose pose;
         cv::Mat shown;
         cv::drawMatches(b.picture, b.keypoints, a.picture, a.keypoints, RansacPose(b, a, random, pose), shown, cv::Scalar(0, 255, 0));
-        cv::imshow("agreeing matches", shown);
+        cv::imshow("agreeing matches", spotter::WithKeys(shown, Keys));
     }
     return 0;
 }

@@ -3,6 +3,9 @@
 // pinhole camera, nearest point wins (example 08 explains the maths).
 #pragma once
 
+#include "spotter/frame.hpp"
+#include "spotter/geometry.hpp"
+
 #include <opencv2/core.hpp>
 #include <string>
 #include <vector>
@@ -12,6 +15,12 @@ namespace spotter
 
 // q or Esc.
 inline bool IsQuitKey(int key) { return key == 'q' || key == 27; }
+
+// A copy of `image` with the program's keys in a strip added below it (the picture itself isn't
+// covered or changed). `keys` lists entries separated by 3 or more spaces, e.g.
+// "SPACE  scan   Q or Esc  quit"; a long list wraps between entries. Grey or float pictures are
+// shown as colour. Use it in every imshow: cv::imshow(window, spotter::WithKeys(image, Keys)).
+cv::Mat WithKeys(const cv::Mat& image, const std::string& keys);
 
 // True once every `milliseconds`: `if (report.Due()) Report(...)` prints about once a second.
 class Every
@@ -64,6 +73,9 @@ public:
     bool Project(const cv::Point3f& point, cv::Point& pixel, float& depth) const;
     void Update();   // after changing the angles by hand
 
+    // A click (pressed and released within 4 pixels, not a drag) since the last call: true once, with where.
+    bool TakeClick(cv::Point& where);
+
     Options options;
     cv::Point3f pivot;
     float yawDegrees = 0, pitchDegrees = 0, distance;
@@ -72,8 +84,9 @@ private:
     static void OnMouse(int event, int x, int y, int flags, void* view);
     float startDistance;
     float cosYaw = 1, sinYaw = 0, cosPitch = 1, sinPitch = 0;
-    bool dragging = false;
+    bool dragging = false, clicked = false;
     int lastX = 0, lastY = 0;
+    cv::Point pressedAt, clickedAt;
 };
 
 // Draws point clouds into one picture through an OrbitView. Where two points land on the same
@@ -82,9 +95,9 @@ class PointRenderer
 {
 public:
     cv::Mat& Begin(OrbitView& view, cv::Scalar background = cv::Scalar(30, 30, 30));   // clears; returns the picture
-    // Points with NaN are skipped. `colours` has one colour per point.
-    void Draw(const std::vector<cv::Point3f>& points, const std::vector<cv::Vec3b>& colours, int sizePixels = 2);
-    void Draw(const std::vector<cv::Point3f>& points, cv::Vec3b colour, int sizePixels = 2);
+    // Points with NaN are skipped. `colours` has one colour per point. every = 3 draws every 3rd point.
+    void Draw(const std::vector<cv::Point3f>& points, const std::vector<cv::Vec3b>& colours, int sizePixels = 2, size_t every = 1);
+    void Draw(const std::vector<cv::Point3f>& points, cv::Vec3b colour, int sizePixels = 2, size_t every = 1);
     cv::Mat& Image() { return image; }
 
 private:
@@ -92,5 +105,10 @@ private:
     OrbitView* view = nullptr;
     cv::Mat image, nearest;
 };
+
+// Where a camera stood, in a 3D view: a circle, four arrows to the corners of what it saw
+// (arrowMeters ahead), and a label. pose = that camera -> the view's coordinates.
+void DrawCamera(cv::Mat& image, const OrbitView& view, const Pose& pose, const PinholeCamera& camera, const cv::Scalar& colour,
+                int thickness, const std::string& label, float arrowMeters = 0.6f);
 
 }

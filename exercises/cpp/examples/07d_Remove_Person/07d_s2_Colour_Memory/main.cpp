@@ -18,6 +18,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  forget and start over     Q or Esc  quit";
+
 const float BlendRate = 0.1f;   // per frame, how fast the memory follows the room
 
 void Learn(cv::Mat& memory, const cv::Mat& registered, const cv::Mat& foreground)
@@ -46,8 +49,8 @@ int main()
         Learn(memory, frame.registered, foreground);
         cv::Mat shown;
         memory.convertTo(shown, CV_8UC3);
-        cv::imshow("07d step 2: live", frame.registered);
-        cv::imshow("07d step 2: colour memory (the room without you)", shown);
+        cv::imshow("07d step 2: live", spotter::WithKeys(frame.registered, Keys));
+        cv::imshow("07d step 2: colour memory (the room without you)", spotter::WithKeys(shown, Keys));
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;

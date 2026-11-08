@@ -21,6 +21,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "S  scan     Q or Esc  quit";
+
 const int Step = 4;   // planes are searched on every 4th pixel each way
 
 int main()
@@ -54,7 +57,7 @@ int main()
         cv::Mat display;
         cv::resize(frame.colour, display, frame.colour.size() / 2);
         for (const auto& [p, colour] : dots) cv::circle(display, p / 2, 2, colour, cv::FILLED);
-        cv::imshow("09c step 1: S scans, then each plane in its own colour", display);
+        cv::imshow("09c step 1: S scans, then each plane in its own colour", spotter::WithKeys(display, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == 's' && !averager.Running()) { averager.Start(); std::printf("Scanning: hold still...\n"); }

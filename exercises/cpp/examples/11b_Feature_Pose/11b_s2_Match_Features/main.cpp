@@ -21,6 +21,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture A (again: capture a new A)    Q or Esc  quit";
+
 const int FeatureCount = 1000;
 const float MatchRatio = 0.8f;   // best must differ by under 80% of the second best's difference
 
@@ -71,7 +74,7 @@ int main()
             cv::drawMatches(live.picture, live.keypoints, a.picture, a.keypoints, matches, display, cv::Scalar(0, 255, 0));
             if (report.Due()) std::printf("%zu live features, %zu in A, %zu matched\n", live.keypoints.size(), a.keypoints.size(), matches.size());
         }
-        cv::imshow("11b step 2: live (left) matched to A (right); SPACE captures A", display);
+        cv::imshow("11b step 2: live (left) matched to A (right); SPACE captures A", spotter::WithKeys(display, Keys));
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
         if (key == ' ') a = live;

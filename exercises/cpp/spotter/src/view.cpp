@@ -53,8 +53,12 @@ void OrbitView::Attach(const std::string& window) { cv::setMouseCallback(window,
 void OrbitView::OnMouse(int event, int x, int y, int flags, void* userdata)
 {
     OrbitView& view = *(OrbitView*)userdata;
-    if (event == cv::EVENT_LBUTTONDOWN) { view.dragging = true; view.lastX = x; view.lastY = y; }
-    if (event == cv::EVENT_LBUTTONUP) view.dragging = false;
+    if (event == cv::EVENT_LBUTTONDOWN) { view.dragging = true; view.lastX = x; view.lastY = y; view.pressedAt = cv::Point(x, y); }
+    if (event == cv::EVENT_LBUTTONUP)
+    {
+        view.dragging = false;
+        if (cv::norm(cv::Point(x, y) - view.pressedAt) <= 4) { view.clicked = true; view.clickedAt = cv::Point(x, y); }
+    }
     if (event == cv::EVENT_MOUSEMOVE && view.dragging)
     {
         view.yawDegrees += (x - view.lastX) * 0.3f;
@@ -63,6 +67,51 @@ void OrbitView::OnMouse(int event, int x, int y, int flags, void* userdata)
         view.lastY = y;
     }
     if (event == cv::EVENT_MOUSEWHEEL) view.distance -= cv::getMouseWheelDelta(flags) / 120.0f * view.options.zoomStepMeters;
+}
+
+cv::Mat WithKeys(const cv::Mat& image, const std::string& keys)
+{
+    cv::Mat picture = image;
+    // As imshow shows them: floats 0-1 -> 0-255, 16-bit / 256.
+    if (picture.depth() == CV_32F || picture.depth() == CV_64F) picture.convertTo(picture, CV_8U, 255);
+    else if (picture.depth() == CV_16U || picture.depth() == CV_16S) picture.convertTo(picture, CV_8U, 1.0 / 256);
+    else if (picture.depth() != CV_8U) picture.convertTo(picture, CV_8U);
+    if (picture.channels() == 1) cv::cvtColor(picture, picture, cv::COLOR_GRAY2BGR);
+    else if (picture.channels() == 4) cv::cvtColor(picture, picture, cv::COLOR_BGRA2BGR);
+    // The entries, split at runs of 3+ spaces, laid out in lines that fit the picture's width.
+    std::vector<std::string> entries;
+    for (size_t start = 0; start < keys.size(); )
+    {
+        size_t gap = keys.find("   ", start);
+        std::string entry = keys.substr(start, gap == std::string::npos ? std::string::npos : gap - start);
+        if (!entry.empty()) entries.push_back(entry);
+        if (gap == std::string::npos) break;
+        start = keys.find_first_not_of(' ', gap);
+    }
+    const double scale = 0.5;
+    const int lineHeight = 20, margin = 8;
+    std::vector<std::string> lines(1);
+    for (const std::string& entry : entries)
+    {
+        std::string longer = lines.back().empty() ? entry : lines.back() + "    " + entry;
+        if (!lines.back().empty() && cv::getTextSize(longer, cv::FONT_HERSHEY_SIMPLEX, scale, 1, nullptr).width > picture.cols - 2 * margin)
+            lines.push_back(entry);
+        else lines.back() = longer;
+    }
+    cv::Mat shown(picture.rows + (int)lines.size() * lineHeight + 6, picture.cols, CV_8UC3, cv::Scalar(40, 40, 40));
+    picture.copyTo(shown(cv::Rect(0, 0, picture.cols, picture.rows)));
+    for (size_t i = 0; i < lines.size(); i++)
+        cv::putText(shown, lines[i], cv::Point(margin, picture.rows + (int)(i + 1) * lineHeight - 4), cv::FONT_HERSHEY_SIMPLEX, scale,
+                    cv::Scalar(230, 230, 230), 1, cv::LINE_AA);
+    return shown;
+}
+
+bool OrbitView::TakeClick(cv::Point& where)
+{
+    if (!clicked) return false;
+    clicked = false;
+    where = clickedAt;
+    return true;
 }
 
 bool OrbitView::HandleKey(int key)
@@ -140,14 +189,28 @@ void PointRenderer::Splat(const cv::Point3f& point, const cv::Vec3b& colour, int
         }
 }
 
-void PointRenderer::Draw(const std::vector<cv::Point3f>& points, const std::vector<cv::Vec3b>& colours, int sizePixels)
+void PointRenderer::Draw(const std::vector<cv::Point3f>& points, const std::vector<cv::Vec3b>& colours, int sizePixels, size_t every)
 {
-    for (size_t i = 0; i < points.size() && i < colours.size(); i++) Splat(points[i], colours[i], sizePixels);
+    for (size_t i = 0; i < points.size() && i < colours.size(); i += std::max<size_t>(every, 1)) Splat(points[i], colours[i], sizePixels);
 }
 
-void PointRenderer::Draw(const std::vector<cv::Point3f>& points, cv::Vec3b colour, int sizePixels)
+void PointRenderer::Draw(const std::vector<cv::Point3f>& points, cv::Vec3b colour, int sizePixels, size_t every)
 {
-    for (const cv::Point3f& point : points) Splat(point, colour, sizePixels);
+    for (size_t i = 0; i < points.size(); i += std::max<size_t>(every, 1)) Splat(points[i], colour, sizePixels);
+}
+
+void DrawCamera(cv::Mat& image, const OrbitView& view, const Pose& pose, const PinholeCamera& camera, const cv::Scalar& colour,
+                int thickness, const std::string& label, float arrowMeters)
+{
+    cv::Point pixel, tip;
+    float depth;
+    if (!view.Project(pose.shift, pixel, depth)) return;
+    cv::circle(image, pixel, 6, colour, thickness + 1);
+    for (cv::Point2f corner : { cv::Point2f(0, 0), cv::Point2f((float)camera.width, 0), cv::Point2f(0, (float)camera.height),
+                                cv::Point2f((float)camera.width, (float)camera.height) })
+        if (view.Project(pose(camera.Unproject(corner - cv::Point2f(0.5f, 0.5f), arrowMeters)), tip, depth))
+            cv::arrowedLine(image, pixel, tip, colour, thickness, cv::LINE_AA, 0, 0.15);
+    cv::putText(image, label, pixel + cv::Point(8, -8), cv::FONT_HERSHEY_SIMPLEX, 0.5, colour, 1);
 }
 
 }

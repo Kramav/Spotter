@@ -53,6 +53,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "SPACE  capture A, then B (it lines up by itself), then start over   C  true colours on/off   mouse drag / W A S D  turn the view   mouse wheel / Z X  zoom   R  reset view   Q or Esc  quit";
+
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
@@ -211,7 +214,7 @@ spotter::Pose LineUp(const View& b, const View& a, std::mt19937& random)
     }
     cv::Mat matchPicture;
     cv::drawMatches(b.picture, b.keypoints, a.picture, a.keypoints, agreeing, matchPicture, cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255));
-    cv::imshow(MatchWindow, matchPicture);
+    cv::imshow(MatchWindow, spotter::WithKeys(matchPicture, Keys));
     return pose;
 }
 
@@ -273,7 +276,7 @@ void Show(const Session& session, const spotter::RgbdFrame& frame, spotter::Orbi
     if (session.haveB)
         cv::putText(image, cv::format("pose B: right %+.2f  up %+.2f  forward %+.2f m  turned %.1f deg", session.pose.shift.x,
                     -session.pose.shift.y, session.pose.shift.z, session.pose.Degrees()), cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 1);
-    cv::imshow(Window, image);
+    cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
 // ---------------------------------------------------------------------

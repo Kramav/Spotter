@@ -37,6 +37,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const std::string Window = "00a KinectSource: colour | depth | registered  (raise your RIGHT hand: it shows on the right)";
 
 void PrintFirstFrame(const spotter::RgbdFrame& frame, const spotter::KinectSource& kinect)
@@ -85,7 +88,7 @@ int main()
         if (first) PrintFirstFrame(frame, kinect);
         if (first || report.Due()) PrintCentre(frame);
         first = false;
-        cv::imshow(Window, SideBySide(frame));
+        cv::imshow(Window, spotter::WithKeys(SideBySide(frame), Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

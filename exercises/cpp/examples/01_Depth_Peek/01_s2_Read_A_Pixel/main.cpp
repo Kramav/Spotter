@@ -16,6 +16,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 void PrintCentre(const cv::Mat& depthMm)
 {
     int row = depthMm.rows / 2, column = depthMm.cols / 2;   // 212, 256
@@ -36,7 +39,7 @@ int main()
     while (kinect.Next(frame))
     {
         if (second.Due()) PrintCentre(frame.depthMm);
-        cv::imshow("01 step 2: depth", frame.depthMm / 6000);
+        cv::imshow("01 step 2: depth", spotter::WithKeys(frame.depthMm / 6000, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

@@ -18,6 +18,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const float StartConfidence = 0.40f;   // sure: may start a new ID (05b)
 const float KeepConfidence = 0.15f;    // unsure: may only continue one
 
@@ -50,7 +53,7 @@ int main()
             cv::putText(frame.colour, cv::format("%s %.2f", yolo.Classes().Name(d.classId).c_str(), d.confidence), d.box.tl() + cv::Point2d(4, 30),
                         cv::FONT_HERSHEY_SIMPLEX, 1.0, colour, 2);
         }
-        cv::imshow(window, frame.colour);
+        cv::imshow(window, spotter::WithKeys(frame.colour, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;

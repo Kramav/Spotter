@@ -39,6 +39,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const std::string Window = "00d YoloDetector  (Q quits)";
 
 spotter::YoloDetector::Options YoloSettings()
@@ -66,7 +69,7 @@ void DetectAndShow(spotter::YoloDetector& yolo, cv::Mat& picture, bool print)
         cv::rectangle(picture, d.box, cv::Scalar(0, 255, 0), 3);
         cv::putText(picture, label, d.box.tl() + cv::Point2d(4, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
     }
-    cv::imshow(Window, picture);
+    cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
 int main(int argc, char** argv)

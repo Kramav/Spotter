@@ -25,6 +25,9 @@
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
 
+// The keys, shown in a strip below each window (spotter::WithKeys).
+const std::string Keys = "Q or Esc  quit";
+
 const int Tries = 200, Reach = 10, MaxPlanes = 4, MinCells = 300;
 const float ThicknessMeters = 0.03f, MaxTiltDegrees = 20;
 
@@ -93,7 +96,7 @@ int main()
         cv::Mat picture = spotter::DepthPicture(frame.depthMm);
         for (int i = 0; i < (int)pieceOf.size(); i++)   // each grid cell stands for a 4 x 4 square of pixels
             if (pieceOf[i]) picture(cv::Rect((i % grid.columns) * 4, (i / grid.columns) * 4, 4, 4)).setTo(colours[pieceOf[i]]);
-        cv::imshow("06b step 2: upright planes, one colour each", picture);
+        cv::imshow("06b step 2: upright planes, one colour each", spotter::WithKeys(picture, Keys));
         if (spotter::IsQuitKey(cv::waitKey(1))) break;
     }
     return 0;
