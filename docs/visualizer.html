@@ -2735,6 +2735,62 @@ EX.push({
   ],
 });
 
+EX.push({
+  id: '13w', name: 'Room Shell', group: 'scan', from: '13e',
+  idea: 'No Kinect needed: just the room itself as a textured .obj. Every wall from the floor to the ceiling, the floor and the ceiling, each with a picture from the scans\' full colour pictures. A couch in front of a wall or a fan under the ceiling is left out, and the surface behind it is filled in with its own pattern.',
+  uses: ['xyz', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'A synthetic room (a plank floor, a couch, a poster, a fan 35 cm under the ceiling), 10 scans: ceiling 2.500 m above the floor (the fan would be 2.15), seen texels median 0-3 per channel off the true colours, the floor under the couch the floor\'s colour with 0.78 of its pattern\'s spread (0.21 without the quilting), the ceiling above the fan white.',
+  setup(st) { st.S = scans(); st.use = [0, 1, 2, 3, 5]; st.all = asCloud(st.use.map(k => [st.S[k].P, null, 2])); },
+  steps: [
+    {
+      name: 'The surfaces', a: 'The scans, merged', b: 'Walls, floor, ceiling',
+      text: 'The walls are BuildRoom\'s, now full height. The floor is FindTwinFloor\'s. The ceiling is the highest height where level readings cover half a square metre: a ceiling fan hangs lower and covers less, so it never wins.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Floor: seen at -1.20 m', 'Ceiling: seen, 2.50 m above the floor', '4 walls, joined all round']); },
+    },
+    {
+      name: 'Texture each 1 cm', a: 'From above', b: 'Which scan colours each texel',
+      text: 'Every 1 cm of every surface asks each scan: did you see this spot? Yes if its depth there agrees with the surface (not the couch in front, not the fan below) and its colour camera saw the same spot. The most head-on, nearest scan gives the colour, from its full 1920x1080 picture; a colour unlike the others\' (a fan blade) is dropped first.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { consoleLines(ctx, R, ['  floor     14.1 m^2: 93% seen', '  ceiling   14.1 m^2: 88% seen', '  wall_01   10.0 m^2: 99% seen', '  wall_03   10.0 m^2: 80% seen (the couch)']); },
+    },
+    {
+      name: 'Fill with its own pattern', a: 'The room', b: 'What nobody saw',
+      text: 'Behind the couch, under the table, above the fan: the slow changes of colour (light and shadow) are inpainted from around, and the surface\'s own pattern is copied in blocks from its plainest seen square, each block picked to continue its neighbours (image quilting). K saves an .obj, an .mtl and a .bmp per surface.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.9, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['the rest filled from a 96 cm square of its own pattern', 'K:', { t: 'Saved room_scans\\room_...\\shell_2026-11-09_001259', c: SCR.green }]); },
+    },
+  ],
+});
+
+EX.push({
+  id: '13x', name: 'Room Fill', group: 'scan', from: '13e',
+  idea: 'No Kinect needed: a 13e room folder with its holes filled in. Walls (paths along the floor), cabinet fronts, level surfaces and table legs are found, and what nobody saw on them is painted in from the seen cells around, marked with blue stripes. K saves a .ply with the fill. Legacy Demo 6\'s filling, unchanged.',
+  uses: ['xyz', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'check_room_twin\'s synthetic room folder (3 scans): floor −1.20 m, the couch top 0.60 m above it, 2.9 m² filled in 0.2 s. Not yet run on a real room.',
+  setup(st) { st.S = scans(); st.use = [0, 1, 2, 3, 5]; st.all = asCloud(st.use.map(k => [st.S[k].P, null, 2])); },
+  steps: [
+    {
+      name: 'Load the room', a: 'Every included scan, merged at 3 cm', b: 'The floor, from its own readings',
+      text: 'The newest room under room_scans\ (or the one named on the command line): every included scan merged at 3 cm and levelled. The floor is the lowest level piece of 0.25 m² near the walls\' foot (D33).',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Floor: seen at -1.20 m (6.62 m^2 of level readings in one piece)', 'The room: 3 scans, 3 cm cubes, 28809 points, about 4.1 m across']); },
+    },
+    {
+      name: 'Fill the flat surfaces', a: 'The room (the fill shows in blue stripes in 13x)', b: 'What was filled',
+      text: 'Walls seen from above become paths along the floor, unrolled and filled up to the cut; upright planes (cabinet fronts) and crowded heights of level points (floor, table tops) are filled too. A cell is seen if a real point is near it or just behind it; the rest gets colour from cv::inpaint.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.9, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Filled 2.9 m^2 in 0.2 s: floor 2.2 m^2, 1 walls 0.5 m^2,', '  6 other surfaces 0.1 m^2, 0 legs, 0 dark shadows', '  wall 1: 8.2 m long, 100% of it seen, filled 0.54 m^2', '  floor (seen) at -1.20 m: filled 2.24 m^2', '  level surface 0.60 m above the floor: filled 0.02 m^2']); },
+    },
+    {
+      name: 'Look, then save', a: 'From above', b: 'K writes into the room\'s folder',
+      text: 'G switches marked / unmarked / off (off is the scan as it was). K saves every real point plus the fill as shown, as room_filled_<date>_<time>.ply beside the scans.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { consoleLines(ctx, R, ['G: marked -> unmarked -> off', 'K:', { t: 'Saved room_scans\room_2026-11-08_1400\room_filled_2026-11-08_141502.ply', c: SCR.green }]); },
+    },
+  ],
+});
+
 // =====================================================================
 //  Setup: the page around the stage
 // =====================================================================

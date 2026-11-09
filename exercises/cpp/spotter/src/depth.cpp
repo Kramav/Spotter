@@ -2,6 +2,8 @@
 #include "spotter/stats.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cmath>
 #include <opencv2/imgproc.hpp>
 
@@ -102,6 +104,38 @@ cv::Mat AdaptiveBackground::Update(const cv::Mat& liveMm, const cv::Mat& neverAb
 }
 
 void AdaptiveBackground::Forget() { rememberedMm.release(); }
+
+static double NowSeconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+
+StillBackground::StillBackground(double countdownSeconds) : countdownSeconds(countdownSeconds) { Restart(); }
+
+void StillBackground::Restart()
+{
+    depthMm.release();
+    startSeconds = NowSeconds();
+    std::printf("Recording the empty view in %.0f s: step out of view.\n", countdownSeconds);
+}
+
+double StillBackground::SecondsLeft() const { return countdownSeconds - (NowSeconds() - startSeconds); }
+
+bool StillBackground::RecordWhenDue(const cv::Mat& liveMm)
+{
+    if (Recorded() || SecondsLeft() > 0) return false;
+    depthMm = liveMm.clone();
+    std::printf("Empty view recorded. Walk in!\n");
+    return true;
+}
+
+cv::Mat StillBackground::Foreground(const cv::Mat& liveMm, float nearerMm, int cleanupPixels, int minPixels, std::vector<cv::Rect>& boxes) const
+{
+    boxes.clear();
+    if (!Recorded()) return cv::Mat(liveMm.size(), CV_8U, cv::Scalar(0));
+    // Where the empty view had no reading (0), it minus live is negative: never foreground.
+    cv::Mat mask = (depthMm - liveMm > nearerMm) & (liveMm > 0);
+    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(cleanupPixels, cleanupPixels)));
+    boxes = KeepBigBlobs(mask, minPixels);
+    return mask;
+}
 
 std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask, int minPixels)
 {

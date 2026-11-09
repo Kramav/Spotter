@@ -23,15 +23,25 @@
 //  truth: agreement means "consistent", not "accurate".
 //
 //  Run:  13y_Structure_Survey [folder]   (default: room_scans where it runs)
+//        13y_Structure_Survey room_scans view 12   one scan's Relocate answers in 3D: green = its
+//            stored pose, red = Relocate's (N steps through the candidates), grey = the other scans
+//        13y_Structure_Survey room_scans 11        sections 4 then 3, from scan 11 (resumes a long run)
 // =====================================================================
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <unordered_set>
+
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "spotter/room_folder.hpp"
 #include "spotter/stats.hpp"
 #include "spotter/structure.hpp"
+#include "spotter/view.hpp"
 
 // ---------------------------------------------------------------------
 //  Settings
@@ -218,7 +228,7 @@ spotter::Pose MultiStart(const spotter::Scan& scan, const spotter::RoomMap& map,
     return spotter::Icp(half, map.surface.points, map.surface.normals, best.pose, wide).pose;
 }
 
-void RelocateAll(const Room& room)
+void RelocateAll(const Room& room, int firstNumber)
 {
     std::printf("\n3. Relocate each scan in a map of the others (agrees = within %.0f cm and %.0f deg of its stored pose)\n", AgreeMeters * 100, AgreeDegrees);
     const cv::Point3f up = room.up, across = cv::norm(up.cross(cv::Point3f(0, 0, 1))) > 0.1 ? up.cross(cv::Point3f(0, 0, 1)) : up.cross(cv::Point3f(1, 0, 0));
@@ -228,6 +238,7 @@ void RelocateAll(const Room& room)
     double seconds[3] = {};
     for (size_t k = 0; k < room.scans.size(); k++)
     {
+        if (room.numbers[k] < firstNumber) continue;   // resuming a long run: the totals below count only these
         spotter::RoomMap map = MapWithout(room, k);
         const spotter::Scan& scan = room.scans[k];
         std::mt19937 random(2);
@@ -262,7 +273,7 @@ void RelocateAll(const Room& room)
                     outcome == 0 ? "agrees, unique" : outcome == 1 ? "AMBIGUOUS, truth among rivals" : outcome == 2 ? "ambiguous / none, no truth" : "WRONG, unique",
                     tried[0], demoOk ? "agree" : "off", tried[1], wideOk ? "agree" : "off");
     }
-    const int n = (int)room.scans.size();
+    const int n = counts[0][0] + counts[0][1] + counts[0][2] + counts[0][3];   // the scans run (fewer when resumed)
     const char* names[3] = { "structure Relocate", "Demo 4 multi-start", "wide multi-start" };
     for (int m = 0; m < 3; m++)
         std::printf("  %-19s agrees+unique %2d, ambiguous with truth %2d, ambiguous without %2d, wrong %2d  (of %d; %.1f s per scan)\n", names[m], counts[m][0],
@@ -300,6 +311,62 @@ void ContinuousAll(const Room& room)
 }
 
 // ---------------------------------------------------------------------
+//  View: one scan's Relocate answers, in 3D, against where 13e put it
+// ---------------------------------------------------------------------
+
+// The map of the other scans (grey), the scan at its stored pose (green), and at one Relocate
+// candidate (red; N steps through them). No colour pictures: points and cameras only.
+void ViewScan(const Room& room, int number)
+{
+    size_t k = std::find(room.numbers.begin(), room.numbers.end(), number) - room.numbers.begin();
+    if (k == room.numbers.size()) { std::printf("  no included scan %d\n", number); return; }
+    const spotter::Scan& scan = room.scans[k];
+    spotter::RoomMap map = MapWithout(room, k);
+    std::mt19937 random(2);
+    spotter::ScanStructure s = spotter::ExtractStructure(scan.cloud, room.info.depthCamera, cv::Point3f(), Structure, random);
+    spotter::RelocateResult r = spotter::Relocate(scan, s, map, room.info.depthCamera, spotter::RelocateOptions());
+    std::printf("  scan %d: %zu candidates kept of %d%s. %s\n", number, r.candidates.size(), r.generated, r.ambiguous ? ", ambiguous" : "", r.note.c_str());
+    if (r.candidates.empty()) return;
+
+    std::vector<cv::Point3f> grey, stored, placed;
+    std::unordered_set<long long> taken;
+    cv::Point3f middle(0, 0, 0);
+    for (const cv::Point3f& p : map.surface.points)
+        if (taken.insert(spotter::CubeKey(p, 0.03f)).second) { grey.push_back(p); middle += p; }
+    middle *= 1.0f / grey.size();
+    for (const cv::Point3f& p : scan.surface.points) stored.push_back(scan.pose(p));
+    const std::string window = "13y view: scan " + std::to_string(number);
+    const std::string keys = "N  next candidate   drag / W A S D  turn   wheel / Z X  zoom   R  reset   Q or Esc  quit";
+    spotter::OrbitView view(spotter::OrbitView::Options(), middle, 5);
+    cv::namedWindow(window, cv::WINDOW_AUTOSIZE);
+    view.Attach(window);
+    spotter::PointRenderer renderer;
+    size_t shown = 0;
+    for (int key = 0; !spotter::IsQuitKey(key); key = cv::waitKey(30))
+    {
+        if (key == 'n') shown = (shown + 1) % r.candidates.size();
+        view.HandleKey(key);
+        const spotter::RelocateCandidate& c = r.candidates[shown];
+        placed.clear();
+        for (const cv::Point3f& p : scan.surface.points) placed.push_back(c.pose(p));
+        cv::Mat& image = renderer.Begin(view);
+        renderer.Draw(grey, cv::Vec3b(110, 110, 110), 2);
+        renderer.Draw(stored, cv::Vec3b(0, 200, 0), 2, 2);
+        renderer.Draw(placed, cv::Vec3b(0, 0, 255), 2, 2);
+        spotter::DrawCamera(image, view, scan.pose, room.info.depthCamera, cv::Scalar(0, 200, 0), 2, "13e");
+        spotter::DrawCamera(image, view, c.pose, room.info.depthCamera, cv::Scalar(0, 0, 255), 2, "Relocate #" + std::to_string(shown + 1));
+        double off = cv::norm(c.pose.shift - scan.pose.shift), turned = spotter::Pose{ c.pose.turn.t() * scan.pose.turn, cv::Point3f() }.Degrees();
+        cv::putText(image, "green = where 13e placed it, red = Relocate's answer, grey = the other scans", cv::Point(10, 22), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(255, 255, 255), 1);
+        cv::putText(image, cv::format("#%zu of %zu: agreement %.2f, paired %.0f%%, %.2f m / %.0f deg from green%s%s", shown + 1, r.candidates.size(), c.agreement,
+                                      c.share * 100, off, turned, c.underConstrained ? ", under-constrained" : "", r.ambiguous ? " (ambiguous)" : ""),
+                    cv::Point(10, 44), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
+        cv::imshow(window, spotter::WithKeys(image, keys));
+    }
+    cv::destroyWindow(window);
+}
+
+// ---------------------------------------------------------------------
 //  Main operation
 // ---------------------------------------------------------------------
 
@@ -314,9 +381,12 @@ int main(int argc, char** argv)
         std::printf("\n=== %s (format %d, %s, saved %s) ===\n", saved.folder.filename().string().c_str(), saved.format, saved.program.c_str(), saved.saved.c_str());
         Room room;
         if (!Load(saved.folder, room)) continue;
+        if (argc > 3 && std::string(argv[2]) == "view") { ViewScan(room, std::atoi(argv[3])); continue; }
+        // A second argument resumes section 3 from that scan number, after section 4 (Relocate takes minutes per scan).
+        if (argc > 2) { ContinuousAll(room); RelocateAll(room, std::atoi(argv[2])); continue; }
         Coverage(room);
         EdgeStability(room);
-        RelocateAll(room);
+        RelocateAll(room, 1);
         ContinuousAll(room);
     }
     return 0;
