@@ -34,7 +34,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); kept unchanged and still built (D34). `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (one synthetic self-check per module, e.g. `build\check_box_depth.exe`). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`. `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z and the demos, built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); an archive: unchanged, still built into `build\legacy\` (D34, D41), and the docs point to `examples/` instead. `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (one synthetic self-check per module, e.g. `build\check_box_depth.exe`). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`, `structure` (a prototype for the localisation study), `room_twin` (Demos 4 and 6). `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z, and the six demos in `examples/demos/` (D40), built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -68,8 +68,32 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   different YOLO model (or one the user trained) is a settings change: model path, input size,
   `.names` file, output layout. The originals in `legacy/` are never edited to fit the library.
 
-## Status (2026-11-06)
+## Status (2026-11-08)
 
+- 2026-11-09: 13w's floor came out too high on the user's room (D43). `FindTwinFloor` now takes a patch under the walls' foot when it's the biggest level piece (new `check_room_twin` case: lower walls hidden, a couch seat); 13w thins to 3 cm cubes first; the `Floor:` line prints the walls' foot. Cause not confirmed on the real room: waiting for the user's console lines.
+- 2026-11-09: **13w Room Shell** (the user's ask; D42): only the room itself as a textured `.obj`. Full-height walls (BuildRoom's), FindTwinFloor's floor, the ceiling as the highest level readings over 0.5 m^2 (a fan never wins), each surface textured per 1 cm from the scans' full colour pictures (depth agreement + colour-camera check + odd colours dropped), unseen parts filled with inpainted slow colour + the surface's own pattern quilted in; K saves `.obj` + `.mtl` + `.bmp`s. A temporary harness (synthetic room: plank floor, couch, poster, fan) passed every check, and the pattern check failed with the quilting off. Not run on a real room, the view not checked by eye. `main()` 36 lines.
+- 2026-11-08: **13x Room Fill** (the user's ask): legacy Demo 6's filling as an example of its own, no Kinect. It reads a 13e room folder, fills and marks the flat surfaces' holes, G marked / unmarked / off, K saves `room_filled_<time>.ply` into the room folder. Runs on `check_room_twin`'s synthetic folder (floor -1.20 m, couch top 0.60 m, 2.9 m^2 filled in 0.2 s); K and the view not checked by eye, not run on a real room. Also: legacy builds into `build\legacy\` and the docs point to `examples/` (D41).
+- 2026-11-08: phase 6 done (D40), plus the structure-localisation study and two of the user's asks.
+  - **The six demos** on the library in `examples/demos/`:
+    - Demos 4 and 6 read 13e room folders (new module `room_twin`; `FindTwinFloor` fixes bug 7);
+    - Demo 5 fixes bug 12;
+    - Demo 6's fill is legacy's, unchanged;
+    - `check_room_twin` passes, and a temporary harness filled a synthetic room;
+    - `ctest` 10/10, all `main()`s <= 40 lines;
+    - none run on the sensor.
+  - **Every `examples/` window shows its keys** (`WithKeys`).
+  - **Autosave removed from 13e** (renamed `13e_Room_Scan`, D39).
+  - **The study:**
+    - `structure` module, `check_structure`, `13y_Structure_Survey`; report
+      [docs/structure-localization-findings.md](docs/structure-localization-findings.md), awaiting the
+      user's review.
+    - On the user's real 21-scan room: Relocate from structure was right and unique on 8 and
+      confidently wrong on 6. Continuous from the last pose agreed on 0 of 20 pairs (turns between
+      shots were about 40°). Ceilings are useful for "up".
+    - `13y ... view N` shows a scan's Relocate answer in 3D.
+  - **Next:**
+    - the user reviews the report and decides which Continuous to build (13f is not started);
+    - the demos need a run on the sensor.
 - 2026-11-06: re-writing the examples on the library in `exercises/cpp/examples/` (D35, plan: every example and demo except 13–13d; story `main()`s; mirror fixed by `Unmirror` in `KinectSource`). Phase 1 done: frame/source/stats/detection/YOLO/view modules, tours 00a–00d, ports 01, 02, 03, 07 (+07b as a setting), 07c, 08; all build, `ctest` 3/3 passes (`check_frame` matches libfreenect2's `getPointXYZ` with X negated). The user confirmed left/right on the sensor (2026-11-07). The default range is now 6 m (D36). Next: phase 2 (track: 04–06, 07d), each with a ladder.
 - 2026-11-07: phase 2 done. Library: `track` (`Tracker` = 05c's tracking: Kalman `BoxFilter` per box, two thresholds, fading coast, fresh distances every frame), `AsyncDetector` (05c's thread, joins in its destructor), `AdaptiveBackground` + `KeepBigBlobs` (07c), `FrameTimer`. `check_track` agrees with 05c's own code every frame on a synthetic sequence (556 object-frames); `ctest` 4/4. Ports 04, 05, 05b, 05c, 06, 07d with ladders (19 steps; 05_s1/s2 and 05b_s2 need no Kinect), tour 00e (runs). All `main()`s ≤ 40 lines, no warnings. 06 now uses the full tracker and background YOLO (legacy 06 forked from 05). None of the Kinect programs run on the sensor yet. Next: phase 3 (planes and meshes: 06b, 06c, 08b, 09, 09b, 09c).
 - 2026-11-07: phase 3 done. Library: `geometry` (`Plane`, `FitPlane`, `ThinCloud`, `FindPlanes` with bug 8 fixed), `walls` (`FindWalls`), `radar` (`RadarView`, `TrackTrails`), `mesh` (`Mesh`, `MeshFromGrid`, `AddQuad`, `AddBox`, `TurnToYUp`, `SaveObj`), `DepthAverager`. Checks `check_planes` (raycast room; the bug-8 test fails on the old code) and `check_mesh`; `ctest` 6/6. Ports 06b, 06c (bug 9 fixed: zero-length guard, Joseph form), 08b, 09, 09b, 09c with ladders (17 steps; 06c_s2 needs no Kinect and runs: settles on the true 3.162 m). All `main()`s ≤ 40 lines, no warnings. None run on the sensor. Next: phase 4 (registration: 10, 11, 11b; tours 00f/00g).
@@ -316,20 +340,20 @@ example, each building on the one before. Numbers are the planned example folder
 
 - [ ] **Adversarial review 2026-11-05 ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)).**
       Open bugs in `legacy/`; fix each while porting it to the `spotter` library (D34):
-  - [ ] ICP: a zero cross product gives a NaN normal that ruins the solve (13e:535, also 13–13d and Demos 4/6). Fixed in `spotter::Icp`/`SampleSurface` (`check_icp`); 13e ported (D38); Demos 4/6 when ported.
+  - [x] ICP: a zero cross product gives a NaN normal that ruins the solve (13e:535, also 13–13d and Demos 4/6). Fixed in `spotter::Icp`/`SampleSurface` (`check_icp`); 13e ported (D38); Demos 4/6 ported on it (D40).
   - [ ] ICP's weak-direction test mixes units (13e:446): small or near patches get their turn called weak. Fixed in `spotter::Icp` by scaling the turn (D37, `check_icp`); 13e when ported.
   - [x] 13z builds `sparse` differently from 13e, so its 3D grid differs and a rebuild ≠ a live E (breaks D29). Fixed in the new 13e/13z: `MakeScan` and `LoadScan` both use `SampleSurface` (D38).
   - [x] Autosave doesn't flush before writing pose.txt; a zeroed `cloud.bin` after a blue screen loads as real points. Fixed in `room_folder` (flush + point count; `check_room`, tour 00h).
   - [x] 13z: `SaveExcluded` isn't atomic; `scan_1000` sorts before `scan_101`. Fixed in `room_folder` (`check_room`).
   - [x] 13c/13d: Q quits without saving; an exception skips the rescue (13e too). The new 13e finishes the folder on Q, a lost Kinect and any exception (13c/13d aren't ported: 13e replaces them).
-  - [ ] Demo 4's floor is still the lowest 2% (D33's fix is only in Demo 6). Demo 6's `FindFloor` accepts a patch too far below.
+  - [x] Demo 4's floor is still the lowest 2% (D33's fix is only in Demo 6). Demo 6's `FindFloor` accepts a patch too far below. Fixed: one `FindTwinFloor` for both new demos, refusing a patch 25 cm under the walls' foot (D40, `check_room_twin`).
   - [x] Plane search re-finds a plane whose biggest piece is too small (06b:320, 06c:344, 09c:252). Fixed in `FindPlanes` and the new 06b; `check_planes` proves it.
-  - [ ] Wall length 0 → NaN in the EKF (06c:401, Demo 3). Fixed in the new 06c (plus the Joseph form); Demo 3 when ported.
+  - [x] Wall length 0 → NaN in the EKF (06c:401, Demo 3). Fixed in the new 06c (plus the Joseph form); the new Demo 3 copies it (D40).
   - [ ] Occlusion filter off where the registered colour is used (07d, 08b, 09b, 09c). On by default in `examples/` (07d, 08b, 09b, 09c ported).
   - [x] No RAII: an exception leaves the Kinect streaming or terminates a joinable thread. Fixed in the library: `KinectSource` and `AsyncDetector` stop in their destructors (05c keeps its own thread inline, as its lesson, with a note).
-  - [ ] `ClassNames[classId]` unchecked (fixed: `ClassList::Name` is bounds-checked); Demo 5 with no bottom row draws the distance to the camera as the height.
+  - [x] `ClassNames[classId]` unchecked (fixed: `ClassList::Name` is bounds-checked); Demo 5 with no bottom row draws the distance to the camera as the height (fixed in the new Demo 5: no height without both rows, D40).
 
-- [x] **Mirror fixed in `examples/` (D35; confirmed on the sensor by the user 2026-11-07, D36).** `legacy/` keeps the mirror. Room format 2 and mirroring old rooms on load: done in the new 13e/13z (D38); still to do in Demos 4 and 6 when ported. The original note:
+- [x] **Mirror fixed in `examples/` (D35; confirmed on the sensor by the user 2026-11-07, D36).** `legacy/` keeps the mirror. Room format 2 and mirroring old rooms on load: done in the new 13e/13z (D38); the new Demos 4 and 6 read room folders (D40). The original note:
       **FIX SOON: everything is mirrored left-right (found 2026-11-04; the user: "very important
       for room scans", left as is for that day's demos).** The Kinect sends mirror-image colour and
       depth (like a selfie camera), and libfreenect2's `getPointXYZ` keeps the mirror in 3D

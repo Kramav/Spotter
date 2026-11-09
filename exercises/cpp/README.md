@@ -9,10 +9,15 @@ Microsoft driver, and the same code builds on Windows and Linux. For the reasons
 Each example's pipeline, and what it adds to the one before, is drawn in
 [EXAMPLES.md](EXAMPLES.md).
 
-The examples and demos below live in [legacy/](legacy/), unchanged (D34). They still build, with
-the same `.exe` names, and 13e is still the scanner for real rooms. New and re-implemented
-examples will use a shared `spotter` library; the plan is in
-[docs/review-2026-11-05.md](../../docs/review-2026-11-05.md).
+**The current examples are in [examples/](examples/README.md)**, re-written on the shared `spotter`
+library (D34, D35). Each builds as `build\examples\<folder name>.exe`; the six demos are in
+`examples/demos/`. 13e is the scanner for real rooms. Their README is the hand-off page.
+
+**The table below is the archive: the original programs in [legacy/](legacy/), unchanged and no
+longer developed.** They still build, into `build\legacy\` under their old `.exe` names, and the
+Status column records what was measured on the sensor. The re-written versions have the same
+numbers (except 13–13d, which 13e replaces, and 07b, which is a setting of 07). Legacy 13z and Demos
+4 and 6 don't read the new room folders (format 2); the new ones do.
 
 | Example | Teaches | Status |
 |---|---|---|
@@ -70,7 +75,7 @@ In short, from an **"x64 Native Tools Command Prompt"** in `exercises\cpp`:
 
     cmake --preset default
     cmake --build --preset default
-    build\01_Kinect_Depth_Peek
+    build\examples\01_Depth_Peek
 
 ## Setup and build: Linux / Raspberry Pi
 
@@ -90,7 +95,7 @@ a Pi (hours), and possibly a few more `apt` packages that vcpkg asks for.
 
 Run the examples from a terminal rather than by double-clicking, so error messages stay visible.
 Example 02 finds `yolo26n.onnx` in the repo root by itself. On Linux, run
-`./build/01_Kinect_Depth_Peek`.
+`./build/examples/01_Depth_Peek`.
 
 Differences from the C# versions:
 

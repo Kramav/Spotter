@@ -846,3 +846,119 @@ and old rooms stay usable, the right way round.
 **Why:** the user's decision. A temporary synthetic harness confirmed nothing is written while
 scanning, that K and Q each write one complete folder, that a second save removes a scan taken back
 by U, and that 13z loads the result.
+
+### D40 — 2026-11-08 — The six demos on the library; Demos 4 and 6 read room folders
+
+The user asked for the demos to be rebuilt (phase 6 of D35's plan), in `examples/demos/`.
+- **Demos 1, 2, 3, 5:** the legacy demos on the library, with the same settings and behaviour.
+  Demo 2 copies 07d's code and Demo 3 copies 06c's: a demo stands on its own, and the example that
+  introduces an idea keeps it inline (D35). Demo 5 refuses a height when its top or bottom row has
+  too few readings (the review's bug 12; legacy measured to the camera).
+- **Demos 4 and 6 read a 13e room folder,** not 13's `room_scan_*.obj`. Every included scan is
+  merged by `FuseScans` at 3 cm (13's export size) and levelled by `room.txt`'s first camera turn.
+  With no folder they take the Kinect's own empty view, as legacy's `OneViewRoom.h` did. The folder
+  is the one 13e writes on K anyway, so there's no separate export step, and its rooms are the right
+  way round (format 2).
+- **New library module `room_twin`** (both demos use it): `LoadTwinRoom`, `NewestRoomFolder`,
+  `OneViewRoom`, `FindTwinFloor` and `LocateKinect`.
+  - `FindTwinFloor` is Demo 6's D33 floor rule. It now also refuses a level patch more than 25 cm
+    *under* the walls' foot (the review's bug 7). Demo 4 used the lowest 2% of points; it uses this too.
+  - `LocateKinect` is D33's multi-start ICP on the library's `Icp`. Each start rebuilds the k-d tree,
+    which is fine at 3 cm.
+- **Also added to the library:** `StillBackground` in `depth`, 03's empty view after a countdown (for
+  Demos 4 and 5), and `OpenExhibitWindow` / `ToggleFullscreen` in `view`.
+- **Kept from legacy:** Demo 6's fill (about 950 lines, D31–D33) is copied unchanged, apart from using
+  the library's `Percentile` and `FindTwinFloor`. Splitting it into free functions (the review's
+  suggestion) is left for when it changes.
+- **Not adopted:** Relocate from the structure study. It stays out of the demos until the findings
+  report is reviewed.
+- **Ladders:** none for the demos; the examples they're built from have them.
+- **Point sizes:** legacy drew each point as big as the patch it stands for. The ports use
+  `PointRenderer`'s fixed sizes (3 px for the room). Change them if the room looks gappy on the big
+  screen.
+
+**Why:** the user's ask. Room folders remove the extra E-export step and the mirrored `.obj`. One
+floor rule fixes bug 7 in both demos. `check_room_twin` covers the shared part on a synthetic room
+folder. A temporary harness ran Demo 6's fill on one (floor −1.20 m, couch top 0.60 m) and then
+was deleted. None of the six has run on the sensor.
+
+## D41: the docs move to `examples/`; legacy becomes an archive (2026-11-08)
+
+The user's ask, after phase 6 and the build-folder move.
+
+- **Build output:** the `legacy/` programs and presentation demos now build into `build\legacy\`
+  (`CMakeLists.txt`); the library's programs stay in `build\examples\`. `build\` itself holds only
+  the `check_*` programs.
+- **Docs:**
+  - The main README, `exercises/cpp/README.md` and `EXAMPLES.md` point to `examples/` and the new
+    names (`01_Depth_Peek`, `13e_Room_Scan`, `13z_Room_Rebuild`, `examples/demos/`).
+  - 13–13d and 07b are no longer listed there: 13e contains 13–13d, and 07b is a setting of 07.
+  - The old per-example Status table in `exercises/cpp/README.md` stays, labelled as the archive of
+    what the legacy programs measured on the sensor.
+  - 13e's guide no longer says "autosave" (D39).
+- **Still built:** `legacy/` is not deleted and keeps building (D34), so old results can be reproduced.
+
+## D42: 13w Room Shell, textured walls, floor and ceiling (2026-11-09)
+
+The user's ask: an example that makes only the room's walls (full height, not cut off), floor and
+ceiling, textured as they should be: the floor's texture taken from the floor pixels that were
+found, and the ceiling right despite a ceiling fan.
+
+- **Number 13w, not 14.** 14 (textured room, the whole seen mesh) stays planned and unstarted. 13w
+  textures only the flat shell, and its texturing (per texel, from the full colour pictures) is the
+  first half of 14's plan.
+- **Geometry:** walls from `BuildRoom` (09c across every scan) at full height; the floor from
+  `FindTwinFloor` (D33); the floor and ceiling follow the walls' outline (a closed chain of wall
+  ends, else their convex hull), as squares of 10 cm in the `.obj`, so any outline works.
+- **The ceiling: the highest height where level readings cover 0.5 m².** A fan, a lamp or a beam
+  hangs lower and covers less, so it never wins. "The most crowded level height" could pick a big
+  fan; "the highest reading" picks noise.
+- **Texture: pulled, not pushed.** For each 1 cm texel and each scan: the scan's depth at that spot
+  must agree with the surface (within 4 cm + 1%), so a couch in front of a wall or the fan under
+  the ceiling never paints it. The colour camera must have seen the same spot (the scan's colour
+  index), so nothing nearer it does either. The view must not be too slanted (cos 0.25). The colour
+  comes from `colour_full.bmp` through `FitColourModel`, about 4x sharper than the depth grid's
+  colour. With 3+ scans, a colour more than 60 from their median (a fan blade) is dropped. Then the
+  most head-on, nearest scan wins (one scan per texel, not an average, so no blur from small
+  misplacements). Exposure isn't evened between scans; that's 14's job.
+- **Filling unseen texels:** the slow changes of colour (light, shadow) on 25 cm cells, inpainted
+  (Telea), plus the surface's own pattern: what's left of the seen colour after the slow changes,
+  copied in 32-texel blocks from its plainest fully seen square (colour nearest the surface's usual
+  colour, least busy, so not a poster). Each block is the best of 80 tries at matching what's already
+  there where it overlaps by 8 texels (Efros & Freeman 2001's image quilting, without the seam
+  cut). The cells are 25 cm so a plank's width counts as pattern, not as slow change.
+- **Doors and windows are filled shut** ("full walls"). Cut-outs would need 13x's "points far behind
+  a wall".
+- **Format 1 (mirrored) rooms are refused:** their full pictures and colour indexes would need
+  flipping too.
+
+**Why:** the user's ask. A temporary harness made a synthetic room (a plank floor, a couch, a
+poster, a fan 35 cm under a plain ceiling, 10 scans with depth and full colour pictures). Results:
+- the ceiling came out 2.500 m above the floor, where the fan would be 2.15 m;
+- the seen texels came out 0–3 per channel off the true colours;
+- the floor under the couch (never seen) had the floor's colour, within 14 per channel, and 0.78 of
+  its pattern's spread. With the quilting switched off, the spread was 0.21 and the check failed;
+- the ceiling above the fan came out white, at 235;
+- the walls were full height, and K saved an `.obj` with 2956 faces.
+
+It has not run on a real room.
+
+## D43: the floor when the walls' foot is measured too high (2026-11-09)
+
+The user ran 13w on their room: the floor came out well above where it should be.
+
+- **Likely cause:** `FindTwinFloor` refuses a level patch more than 25 cm under the walls' foot (the
+  review's bug 7, against a reflection under the floor). If the foot is measured too high, the real
+  floor is refused, and a seat or table top wins, or the floor is guessed at the foot. 13w also fed
+  the rule raw ICP points, where Demos 4 and 6 give it a room merged at 3 cm: with raw points, walls
+  seen up close or by many scans (the scans tilted up for the ceiling) outweigh the walls' lower part.
+- **Fixes:**
+  - `FindTwinFloor` accepts a patch under the foot after all when it's the biggest level piece that
+    isn't too high. A reflection is never bigger than the floor it mirrors, so bug 7's test still
+    passes. A new case in `check_room_twin` has the walls' lower 0.6 m hidden and a couch seat; the
+    old rule took the seat.
+  - 13w thins its points to one per 3 cm cube before the floor and ceiling searches.
+  - The `Floor:` console line now prints the walls' foot too.
+- **Not confirmed on the user's room.** A synthetic room scanned mostly tilted up, with cabinets
+  along the walls, found the floor right with or without the thinning, so the density cause is
+  unproven. The user's console lines (`Floor:`, `level readings at …`) will tell which case it was.

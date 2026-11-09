@@ -70,6 +70,26 @@ private:
     cv::Mat rememberedMm, nearerFrames, fartherFrames;   // CV_32F, CV_32S, CV_32S
 };
 
+// The empty view's depth, recorded once after a countdown to step out of view (example 03's idea;
+// Demos 4 and 5 use this copy). Foreground = clearly nearer than it, cleaned and only big blobs kept.
+class StillBackground
+{
+public:
+    explicit StillBackground(double countdownSeconds);
+    void Restart();                                   // count down again, then record (prints what to do)
+    bool RecordWhenDue(const cv::Mat& liveMm);        // true on the frame it records
+    bool Recorded() const { return !depthMm.empty(); }
+    double SecondsLeft() const;
+    const cv::Mat& DepthMm() const { return depthMm; }
+    // 255 where liveMm reads at least nearerMm nearer, after an opening of cleanupPixels, in
+    // blobs of minPixels or more (their boxes in `boxes`). All zero before it is recorded.
+    cv::Mat Foreground(const cv::Mat& liveMm, float nearerMm, int cleanupPixels, int minPixels, std::vector<cv::Rect>& boxes) const;
+
+private:
+    double countdownSeconds, startSeconds = 0;
+    cv::Mat depthMm;
+};
+
 // Drops blobs (groups of touching 255 pixels) smaller than minPixels from the mask.
 // Returns the boxes of the ones left.
 std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask, int minPixels);

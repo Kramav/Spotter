@@ -36,10 +36,12 @@ flowchart LR
     E05 -.->|Kalman filter, matching| E06c
 
     E13 --> E13b["13b Room Scan HQ"] --> E13c["13c Room Scan Assist"] --> E13d["13d Room Scan Far"]
-    E13d --> E13e["13e Room Scan Autosave<br/>(most advanced)"]
+    E13d --> E13e["13e Room Scan<br/>(most advanced)"]
     E13c --> E13z["13z Room Rebuild"] --> E14["14 Textured Room"]
     E13d -.->|far landmarks| E13z
     E13e -.->|saved folders| E13z
+    E13e -->|saved folders| E13x["13x Room Fill"]
+    E13e -->|saved folders| E13w["13w Room Shell"]
     E13 --> E15["15 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
@@ -635,64 +637,79 @@ flowchart LR
     class L,P,K,S new
 ```
 
-## 13e Room Scan Autosave
+## 13e Room Scan
 
-Starts from 13d. **Our most advanced scanner.** Every scan is saved the moment it's placed, so a
-crash, a blue screen or an unplugged Kinect costs at most the scan in progress. From here on,
-every multi-scan example has this and the rescue (D30).
-
-```mermaid
-flowchart LR
-    ASK["Folder + name,<br/>asked at the start"] --> RT["room.txt<br/>(finished 0)"]
-    SP["SPACE: scan, placed (13d)"] --> WS["scan_NNN folder written<br/>pose.txt last"]
-    WS --> RT
-    X["X / P"] --> PO["That scan's pose.txt<br/>replaced in one go"]
-    U["U"] --> RM["That scan's folder deleted"]
-    PO --> RT
-    RM --> RT
-    KQ["K, Q or Kinect lost"] --> FIN["points.ply + levelled turn<br/>(finished 1)"]
-    RT --> Z["13z reads it as it is"]
-    FIN --> Z
-
-    classDef new stroke-width:3px
-    class ASK,RT,WS,PO,RM,FIN new
-```
-
-**What to compare:** close the console window mid-scan (the hard way), then open the folder in
-13z: every placed scan is there.
-
-## 13z Room Rebuild
-
-Starts from 13c's export and viewer, with no Kinect. In 13c and 13d, **K** keeps the scans in a
-folder (and the rescue does, if the Kinect is lost); 13e writes the same folder as it scans. 13z
-reads such folders back, so a room can be looked at and rebuilt any time later.
+Starts from 13d. **Our room scanner.** The scans stay in memory and nothing is written while
+scanning (D39). K, Q, a lost Kinect or an error writes the whole folder at once, with no questions,
+before the Kinect is touched again, so a lost Kinect or an error costs nothing. From here on, every
+multi-scan example has this rescue (D30, D39).
 
 ```mermaid
 flowchart LR
-    SC["Scans in 13c / 13d"] -->|K or the rescue| FO["A folder per room:<br/>points, pictures, poses,<br/>points.ply"]
-    SE["Scans in 13e"] -->|each as it's placed| FO
-    FO --> FIND["Find saved rooms<br/>(room.txt), list them"]
-    FIND --> PICK["Pick rooms, then<br/>which scans to load"]
-    PICK --> LOAD["Read cloud, picture, pose<br/>(no placing: poses are saved)"]
-    LOAD --> VIEW["13c's viewer<br/>X excludes, saved to pose.txt"]
-    LOAD --> OBJ["13c's E: TSDF + surface net<br/>+ clean model, .obj"]
-    LOAD --> PLY["Every scan's own points<br/>and colours, .ply"]
-    VIEW --> OBJ
-    VIEW --> PLY
+    ASK["Folder + name,<br/>asked at the start"] --> MEM
+    SP["SPACE: scan, placed (13d)"] --> MEM["Scans in memory<br/>(U, X, P change them)"]
+    KQ["K, Q, Kinect lost<br/>or an error"] --> SAVE["Every scan_NNN folder, room.txt,<br/>points.ply, levelled turn"]
+    MEM --> SAVE
+    SAVE --> Z["13z reads it"]
 
     classDef new stroke-width:3px
-    class FO,FIND,PICK,LOAD,PLY new
+    class ASK,SAVE new
 ```
 
-**What to compare:** the same room's `points.ply` and `.obj` in MeshLab (a poster's text, a book
-spine), and the `.obj` at `VoxelMeters` 0.02 and 0.01.
+## 13w Room Shell
+
+Starts from 13e's room folder; no Kinect. Only the room itself: every wall from the floor to the
+ceiling, the floor and the ceiling, each textured from the scans' full colour pictures. What stood
+in front of a surface (a couch, a ceiling fan) is left out and the surface behind it filled in with
+its own pattern (D42).
+
+```mermaid
+flowchart LR
+    FOLD["13e room folder<br/>+ full colour pictures"] --> BR["BuildRoom: walls,<br/>levelled"]
+    FOLD --> FL["Floor (FindTwinFloor)"]
+    FOLD --> CE["Ceiling: the HIGHEST level<br/>readings over 0.5 m²<br/>(a fan hangs lower)"]
+    BR --> SURF["Full-height walls;<br/>floor + ceiling on the walls' outline"]
+    FL --> SURF
+    CE --> SURF
+    SURF --> TEX["Per 1 cm texel: each scan whose depth agrees<br/>and whose colour camera saw it;<br/>odd colours dropped; most head-on wins"]
+    TEX --> FILL["Unseen: slow colour changes inpainted<br/>+ the surface's own pattern quilted in"]
+    FILL --> VIEW["Doll's house view<br/>G: filled parts tinted"]
+    FILL --> OBJ["K: .obj + .mtl + .bmp per surface"]
+
+    classDef new stroke-width:3px
+    class CE,SURF,TEX,FILL,OBJ new
+```
+
+## 13x Room Fill
+
+Starts from 13e's room folder; no Kinect. Legacy Demo 6's filling (D31-D33), unchanged, as an
+example of its own: the holes in the flat surfaces filled and marked, then saved as a `.ply`.
+
+```mermaid
+flowchart LR
+    FOLD["13e room folder"] --> LOAD["Merged at 3 cm, levelled;<br/>floor (FindTwinFloor)"]
+    LOAD --> WALL["Walls: paths along the floor,<br/>unrolled, filled to the cut"]
+    LOAD --> UP["Upright planes<br/>(cabinet fronts)"]
+    LOAD --> LV["Level surfaces + legs"]
+    WALL --> SEEN["Seen or not, per cell;<br/>the rest inpainted, marked blue"]
+    UP --> SEEN
+    LV --> SEEN
+    SEEN --> SHOW["Doll's house view<br/>G: marked / unmarked / off"]
+    SHOW --> PLY["K: room_filled_*.ply"]
+
+    classDef new stroke-width:3px
+    class WALL,UP,LV,SEEN,PLY new
+```
 
 ## Presentation demos
 
-Six fullscreen remixes for an exhibition, in [legacy/presentation/](legacy/presentation/README.md) (yellow in
-the family tree). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
+Six fullscreen remixes for an exhibition, in [examples/demos/](examples/README.md) (yellow in
+the family tree; the originals are in [legacy/presentation/](legacy/presentation/README.md)). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
 save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
-15, for people. Demo 6 is Demo 4 with the holes in flat surfaces filled (below).
+15, for people. Demo 6 is Demo 4 with the holes in flat surfaces filled (below). The library ports
+are in [examples/demos/](examples/README.md). Their Demos 4 and 6 read a 13e room folder instead of
+13's `.obj` (every scan merged by `FuseScans`, levelled by `room.txt`'s first camera turn); the
+steps are otherwise the same.
 
 ```mermaid
 flowchart LR

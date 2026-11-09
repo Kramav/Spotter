@@ -5,11 +5,16 @@ place a new scan in the room's map? Continuous mode places a scan against the pr
 Relocate places it from an unknown spot. Should ceilings be used?
 
 **The short answer:**
-- **Continuous works from a first guess,** when the view sees a corner.
-- **Relocate from structure alone is often ambiguous.** It needs a tie-breaker, and colour
-  features were the one that worked in the tests.
-- **Edges add nothing beyond their planes.**
-- **Ceilings:** keep them as a source of "up" and height, but don't build on ceiling edges.
+- **Not yet as the main source of truth.**
+  - Synthetic rooms: Relocate never gave a wrong unique answer.
+  - The real room: it was right and unique on 8 of 21 scans, and **confidently wrong on 6**.
+  - It needs a verification step; colour features are the one that worked in the tests.
+- **Continuous (ICP from the last scan's pose) failed on all 20 real pairs.** The Kinect was turned
+  about 40° between shots, twice ICP's capture range. It needs small steps, live tracking, or
+  features first (section 8).
+- **Edges add nothing beyond their planes,** and on real data they disagreed by 8–15 cm between scans.
+- **Ceilings:** use them for "up" and height (they gave up on 10 of 21 real scans, more than the
+  floor), but don't build on ceiling edges.
 
 Labels: **(a)** a published method; **(b)** our own inference or design. Nothing here has been
 tested beyond what each section says.
@@ -132,7 +137,36 @@ depend on occlusion, and the numbers above suggest they're not yet reliable here
 
 ## 6. Relocate on the real room, and the baselines
 
-_Filled in from 13y when the run finishes._
+Leave-one-out: each of the 21 scans is relocated in a map built from the other 20. "Agrees" means
+within 5 cm and 2° of 13e's stored pose.
+
+| Method | Agrees, unique | Ambiguous, truth among rivals | No answer / ambiguous without truth | **Wrong, unique** |
+|---|---|---|---|---|
+| Structure Relocate | 8 | 1 | 6 | **6** |
+| Demo 4 multi-start (63 starts around scan 1's spot) | 4 | – | – | 17 off |
+| Wide multi-start (240 starts: every other scan's spot × 12 turns) | 8 | – | – | 13 off |
+
+- **The synthetic safety property does not hold on real data.** Relocate gave 6 wrong answers
+  presented as unique (scans 5, 8, 12, 14, 16, 18):
+  - In 4 of them (5, 8, 12, 14) the wide baseline agrees with the stored pose, so the stored pose is
+    consistent and Relocate is the one that's wrong.
+  - For 16 and 18 nothing agrees, so either method could be wrong, or the stored pose could be.
+  - **Likely causes (b), not yet checked:**
+    - a real room has many more wall-like planes (cabinets, furniture faces), giving 19–391
+      candidates per scan;
+    - `ViewAgreement` can't see past furniture the map lacks;
+    - the 0.05 ambiguity margin was tuned on clean synthetic rooms.
+  - `13y_Structure_Survey room_scans view N` shows any of them in 3D, against where 13e placed it.
+- **No answer at all on 6 scans:** 3 saw no wall (scans 6, 9, 15), 1 saw ceiling only (11). Scans
+  10 and 13 were ambiguous without the truth.
+- **The baselines are worse:**
+  - Demo 4's search (±30°, ±0.4 m) finds only 4 scans: real shots are rarely near scan 1's spot.
+  - The wide search finds 8, at several times the cost.
+  - Structure or the wide search agrees on 14 of 21 between them.
+- **Time per scan** (measured while other builds and tests ran, so only rough): structure about
+  30 s, Demo 4 about 85 s, wide about 300 s, for scans 11–21.
+- **The stored poses aren't ground truth:** each was placed by 13e with colour features, which the
+  colour-free methods here don't use.
 
 ## 7. Continuous mode
 
@@ -144,11 +178,62 @@ _Filled in from 13y when the run finishes._
 - **A view of one wall** fails almost everywhere, by the along-wall part of the move. ICP flags those
   directions as weak, so the failure can be *detected* and turned into "this scan needs Relocate".
 
-_Real pairs: filled in from 13y when the run finishes._
+**On the real room** (20 consecutive pairs; "agrees" = within 5 cm and 2° of 13e's stored pose):
+
+| First guess | Agrees |
+|---|---|
+| The previous scan's pose | **0 of 20** |
+| The recommended next shot (`RecommendNext`, as it stood before that scan) | 5 of 20 |
+
+- **Between shots the Kinect was mostly turned, not moved:**
+  - median move about 5 cm;
+  - turns of 16–176°, with a median of about 40°.
+
+  The synthetic capture range is about 20°, so every pair started outside it. 13e never needed
+  small steps, because colour features place a scan from any turn.
+- **Following the advice helps when it was followed:**
+  - the 5 that agreed started 1–8 cm and 7–15° from the advice;
+  - where the user turned 30–50° away from the advice, it failed;
+  - so did some pairs that started within 15° of it (scans 2, 4–7, 18).
+- **Weak directions:** ICP flagged 1–3 weak directions on most failed pairs, so Continuous can say
+  "lost" rather than return a wrong pose (b). This needs a threshold test before relying on it.
+- **Conclusion (b):** Continuous as specified (ICP from the last pose) does not fit how this user
+  scans. It needs one of three things:
+  - steps under about 20° and 30 cm, enforced by the UI;
+  - live frame-to-frame tracking between shots (ideas.md), so the guess is always close;
+  - 13e's colour features as the first guess (what 13e already does), with structure ICP as the polish.
 
 ## 8. Recommendations
 
-_Filled in from sections 6–7._
+All (b), from the numbers above.
+
+1. **Don't make structure the main source of truth yet.**
+   - On the real room it was right and unique on 8 of 21 scans, and confidently wrong on 6.
+   - Keep colour features (13e's placement) as the main method.
+   - Use structure for **checking** a placement (does the view agree with the map's planes?) and
+     for **up and height**.
+2. **Relocate needs a verification step before it can be trusted:**
+   - colour votes (`ColourVotes`), which picked the truth in every synthetic tie;
+   - or ICP's weak directions plus `ViewAgreement` thresholds tuned on real scans.
+
+   Next experiment: re-run section 3 with colour votes as a tie-breaker on every answer, not only on
+   ambiguous ones (this reads `features.yml`, which needs your OK). Also look at the 6 wrong scans
+   in 3D.
+3. **Continuous (13f) as specified won't work for how the room was scanned:**
+   - 0 of 20 pairs from the last pose, because turns between shots were typically 40°;
+   - choose one: (a) the UI asks for small steps (under 20° and 30 cm) and refuses bigger ones,
+     (b) live frame-to-frame tracking between shots (ideas.md; roadmap 16), or (c) features first,
+     ICP second, which is 13e today;
+   - my recommendation is (c) now, and (b) when 16 is built.
+   - The recommended-shot guess helped (5 of 20). It's worth keeping as an option, but not on its own.
+4. **Ceilings: use them for up and height, not for edges.**
+   - In this room the ceiling gave up on 10 of the 21 Relocate attempts, more than the floor
+     (9), because the Kinect sees it in big pieces when tilted up.
+   - It adds no new direction beyond the floor (section 4).
+   - Ceiling-wall edges were re-seen in only 3 of 15 cases, 8 cm apart: don't build on them.
+5. **Don't build on edges in general** until the 8–15 cm disagreement between consecutive scans
+   (section 3) is explained.
+6. **Before building 13f:** decide 3 (which Continuous), then 2 (which verification).
 
 ## 9. Doubtful assumptions, and what's untested
 

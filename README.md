@@ -43,7 +43,7 @@ flowchart TB
         V11["ICP alignment (11)"]
         V12["ArUco marker pose (12)"]
         V13["Room scan: many spots merged (13)<br/>TSDF mesh + clean model"]
-        SAFE["Scans saved as you go (13e)<br/>+ a rescue if the Kinect is lost"]
+        SAFE["Scans saved on K / Q (13e)<br/>+ a rescue if the Kinect is lost"]
         KEEP["Kept scans, rebuilt later<br/>K folders + 13z"]
         TEX["Textured room (14)"]
         AV -.->|6 m cut-off| PC
@@ -119,7 +119,7 @@ How each example works, and what it adds to the one before, is drawn in
 - A **Kinect v2** (the Xbox One Kinect) plus the **Kinect Adapter for Windows**, which provides
   power and the USB connection.
 - A **USB 3.0** port. These are often blue, or marked "SS". USB 2.0 will not work.
-- For room scans (example 13): a **camera tripod with a ball head**. Without one the floor is
+- For room scans (example 13e): a **camera tripod with a ball head**. Without one the floor is
   barely scanned. See [A stand for room scans](#a-stand-for-room-scans).
 
 **Software** (all free)
@@ -174,50 +174,48 @@ vcpkg keeps a cache.
 
 Still in `exercises\cpp`:
 
-    build\01_Kinect_Depth_Peek.exe
+    build\examples\01_Depth_Peek.exe
 
 You should see a grey picture of the room. Near things are bright, far things dark, and red
 marks places with no depth reading. A green crosshair (moved with **W A S D**) shows the distance
 under it. The console prints the frame rate, about 30 fps. Press **Q** to quit.
 
-Then work through the other examples in this order:
+Every example is built as `build\examples\<folder name>.exe`. Then work through the others in this order:
 
 | Order | Program | What it teaches |
 |---|---|---|
-| 1 | `01_Kinect_Depth_Peek` | What the depth camera measures, and where it fails |
-| 2 | `03_Kinect_Depth_Blobs` | Find people or objects from depth alone, and measure their size (no AI) |
-| 3 | `02_Kinect_Detect_Distance` | YOLO finds objects in colour, then depth tells you how far away each one is |
-| 4 | `04_Kinect_Track_Smooth` | Follow each object over time (ID numbers), and smooth its distance |
-| 5 | `05_Kinect_Kalman` | A Kalman filter: predict where each object will be, then correct. Keeps IDs better, and gives speed |
-| 5b | `05b_Kinect_Two_Thresholds` | Two confidence levels plus a longer memory: objects that flicker in and out keep their ID |
-| 5c | `05c_Kinect_Background_Detect` | Run YOLO on a second thread so the picture, tracking and distances keep the camera's pace |
-| 6 | `06_Kinect_Radar` | Turn each tracked object into a floor position in metres, on a bird's-eye "radar" map with trails |
-| 6b | `06b_Kinect_Radar_Walls` | 06's radar plus the walls, found in the depth alone: the biggest upright flat surfaces, drawn as lines |
-| 6c | `06c_Kinect_Wall_Filter` | Steady the walls: each one gets an extended Kalman filter, because walls don't move but each frame's measurement wobbles |
-| 7 | `07_Kinect_Capture_Average` | Average many still frames to cut depth noise, and measure how much it helps (first step toward a 3D map) |
-| 7b | `07b_Kinect_Far_Range` | Raise the depth cut-off from 4.5 m to 8 m, and see how much noisier the far readings are |
-| 7c | `07c_Kinect_Depth_Background` | Remember the room's depth; anything clearly nearer is new (a person, a moved cup). No neural network |
-| 7d | `07d_Kinect_Remove_Person` | Paint people out with the remembered room behind them; anything they carry stays visible |
-| 8 | `08_Kinect_Point_Cloud` | Turn every depth pixel into a coloured 3D point, and turn the room around with the mouse. P saves a `.ply` (never commit it) |
-| 8b | `08b_Kinect_Object_Mesh` | Click a detected object: its depth pixels become a triangle mesh with a guessed (grey) back, saved as `.obj` for Blender or MeshLab (never commit it) |
-| 9 | `09_Kinect_Find_Floor` | Find the floor with RANSAC: the camera's height, tilt and roll, and any point's height above the floor |
-| 9b | `09b_Kinect_Room_Mesh` | Press S: the whole view becomes a coloured mesh, saved as `.obj`. The first recreation of the room, holes and all (never commit it) |
-| 9c | `09c_Kinect_Room_Model` | The same scan, plus a clean model next to it: flat walls, floor and ceiling, furniture as boxes, stood straight. Both in one `.obj`, in separate groups |
-| 10 | `10_Kinect_Two_Views` | Two captures merged by a hand-measured pose: see the walls show double, nudge the pose until they meet |
-| 11 | `11_Kinect_ICP` | ICP lines the two captures up by itself: pair each point with its nearest neighbour, fit, repeat. Needs a roughly right start |
-| 11b | `11b_Kinect_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
-| 13 | `13_Kinect_Room_Scan` | **Scan a whole room** from several spots and save one model (merged mesh + clean walls, floor, ceiling and furniture boxes). Step by step: [below](#recreate-a-room-example-13) |
-| 13b | `13b_Kinect_Room_Scan_HQ` | 13 for the best model: finds far more details in a dim colour picture (contrast evened out first), and trades time for quality everywhere |
-| 13c | `13c_Kinect_Room_Scan_Assist` | 13b with help: live green "anchors" show what the next scan will be placed by, a suggested next shot, suspicious scans flagged red, click a scan to exclude (X) or re-place (P) it, and no slowdown at 30+ scans. Saves a rescue folder if the Kinect is unplugged |
-| 13d | `13d_Kinect_Room_Scan_Far` | 13c plus details too far for depth (a hallway's far doorway): they still give a direction, which helps place scans, and seen from two spots they become "far landmarks" in the model. Saves a rescue folder if the Kinect is unplugged |
-| 13e | `13e_Kinect_Room_Scan_Autosave` | **Our most advanced scanner: use this one for a real scan.** 13d, plus every scan saved to disk the moment it's placed (the folder is asked at the start), so a crash, a blue screen or an unplugged Kinect costs at most the scan in progress |
-| 13z | `13z_Kinect_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves, or that 13c/13d's **K** key keeps. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
+| 1 | `01_Depth_Peek` | What the depth camera measures, and where it fails |
+| 2 | `03_Depth_Blobs` | Find people or objects from depth alone, and measure their size (no AI) |
+| 3 | `02_Detect_Distance` | YOLO finds objects in colour, then depth tells you how far away each one is |
+| 4 | `04_Track_Smooth` | Follow each object over time (ID numbers), and smooth its distance |
+| 5 | `05_Kalman` | A Kalman filter: predict where each object will be, then correct. Keeps IDs better, and gives speed |
+| 5b | `05b_Two_Thresholds` | Two confidence levels plus a longer memory: objects that flicker in and out keep their ID |
+| 5c | `05c_Background_Detect` | Run YOLO on a second thread so the picture, tracking and distances keep the camera's pace |
+| 6 | `06_Radar` | Turn each tracked object into a floor position in metres, on a bird's-eye "radar" map with trails |
+| 6b | `06b_Radar_Walls` | 06's radar plus the walls, found in the depth alone: the biggest upright flat surfaces, drawn as lines |
+| 6c | `06c_Wall_Filter` | Steady the walls: each one gets an extended Kalman filter, because walls don't move but each frame's measurement wobbles |
+| 7 | `07_Capture_Average` | Average many still frames to cut depth noise, and measure how much it helps (first step toward a 3D map). Set `MaxDepthMeters` to 8 to see how much noisier the far readings are |
+| 7c | `07c_Depth_Background` | Remember the room's depth; anything clearly nearer is new (a person, a moved cup). No neural network |
+| 7d | `07d_Remove_Person` | Paint people out with the remembered room behind them; anything they carry stays visible |
+| 8 | `08_Point_Cloud` | Turn every depth pixel into a coloured 3D point, and turn the room around with the mouse. P saves a `.ply` (never commit it) |
+| 8b | `08b_Object_Mesh` | Click a detected object: its depth pixels become a triangle mesh with a guessed (grey) back, saved as `.obj` for Blender or MeshLab (never commit it) |
+| 9 | `09_Find_Floor` | Find the floor with RANSAC: the camera's height, tilt and roll, and any point's height above the floor |
+| 9b | `09b_Room_Mesh` | Press S: the whole view becomes a coloured mesh, saved as `.obj`. The first recreation of the room, holes and all (never commit it) |
+| 9c | `09c_Room_Model` | The same scan, plus a clean model next to it: flat walls, floor and ceiling, furniture as boxes, stood straight. Both in one `.obj`, in separate groups |
+| 10 | `10_Two_Views` | Two captures merged by a hand-measured pose: see the walls show double, nudge the pose until they meet |
+| 11 | `11_ICP` | ICP lines the two captures up by itself: pair each point with its nearest neighbour, fit, repeat. Needs a roughly right start |
+| 11b | `11b_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
+| 13e | `13e_Room_Scan` | **Scan a whole room** from several spots and save one model. Each scan is placed by colour details plus ICP, with live "anchors", a suggested next shot, flags for suspicious scans, and far details for hallways. The scans stay in memory and are written to a folder when you press **K** or **Q**, or if the Kinect is lost (a rescue). Guide: [below](#recreate-a-room-example-13e) |
+| 13w | `13w_Room_Shell` | No Kinect: just the room itself, as a textured `.obj`: every wall full height, the floor and the ceiling, each with a picture taken from the scans' full colour pictures. Behind the couch, under the table and above a ceiling fan, the surface's own pattern is continued. K saves it |
+| 13x | `13x_Room_Fill` | No Kinect: a 13e room with the holes in its flat surfaces (walls, floor, table tops) filled in and marked with blue stripes, so guessed and seen stay apart. K saves a `.ply` with the fill |
+| 13y | `13y_Structure_Survey` | No Kinect: a study of placing scans by the room's structure (floor, walls, ceiling) instead of colour. Prints numbers about a saved room. Findings: [docs/structure-localization-findings.md](docs/structure-localization-findings.md) |
+| 13z | `13z_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
 **Showing it at an exhibition:** six fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, the scanned room with visitors live inside it, "how tall are you", and the scanned
 room with its holes filled in by software, marked as guesses) are in
-[exercises/cpp/legacy/presentation/](exercises/cpp/legacy/presentation/README.md), with a set-up checklist.
-They build with the examples.
+[exercises/cpp/examples/demos/](exercises/cpp/examples/README.md) (built as `build\examples\Demo1_You_In_3D.exe` and so on).
+Demos 4 and 6 read a room folder saved by 13e.
 
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
 [exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
@@ -235,64 +233,48 @@ Change a setting and rebuild with `cmake --build --preset default` to see what i
 | Build fails with very long paths | Clone to a short path such as `E:\Spotter` (step 1). |
 | The window opens and closes immediately | Run it from the command prompt instead of double-clicking, so you can read the error. |
 | Program exits silently, code `C0000135` | A DLL is missing next to the `.exe`. Delete the `build` folder and rebuild. |
-| **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. Scan with 13e, which saves every scan as it's placed (in 13c and 13d, press K often: their scans live only in memory). |
+| **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. 13e keeps the scans in memory until K or Q (or a lost Kinect), so press K now and then in a long scan. |
 
 More detail (Linux and Raspberry Pi setup, how the build stays reproducible, known limits) is in
 [exercises/cpp/README.md](exercises/cpp/README.md).
 
 ---
 
-## Recreate a room (example 13)
+## Recreate a room (example 13e)
 
 Scan the room from several spots; each scan is placed automatically, and E saves one 3D model of
-the whole room. It takes about 10 minutes for a first try.
+the whole room. It takes about 10 minutes for a first try. Use `13e_Room_Scan`; it is our room
+scanner.
 
-**Use 13e (`13e_Kinect_Room_Scan_Autosave`) for a real scan.** It's our most advanced scanner: what
-13c and 13d add (both below), plus **every scan saved the moment it's placed**.
 - **Before the windows open,** it asks in the console where to save: `Folder` (Enter =
   `room_scans\`) and `Name` (Enter = `room_<date>_<time>`).
-- **A crash, a blue screen or an unplugged Kinect** then costs at most the scan in progress.
-- **K** writes the folder's `points.ply` now; Q does it on the way out.
-- **U** also deletes the last scan's saved folder.
-- 13z rebuilds 13e's folders just as it does K's ([below](#keep-the-scans-and-rebuild-later-k-and-13z)).
-
-**What 13c (`13c_Kinect_Room_Scan_Assist`) added** (13d and 13e have it too). It works like 13,
-keys and all, plus:
-
+- **Nothing is written while you scan.** The scans stay in memory. **K** (or **Q** on the way out)
+  writes the folder. If the Kinect is lost or the program fails, it writes the folder by itself first,
+  with no questions, so a lost Kinect or an error costs nothing already scanned. A crash or a blue
+  screen does cost the unsaved scans, so press **K** now and then in a long scan.
 - **Live anchors.** Green dots in the camera window are the details the next scan will be placed
-  by: things already scanned. The counter reads `anchors: N (need 20)`. **This replaces the
-  "move 0.5–1 m" rule below.** Distance was never the real limit; sharing enough of what's been
-  seen is. Move as far as you like while the counter stays green. It drops when you face a scanned
-  surface from more than about 30–45° to the side, or from 3× further away, because the details
-  stop looking alike.
+  by: things already scanned. The counter reads `anchors: N (need 20)`. Distance was never the
+  real limit; sharing enough of what's been seen is. Move as far as you like while the counter
+  stays green. It drops when you face a scanned surface from more than about 30-45 degrees to
+  the side, or from 3x further away, because the details stop looking alike.
 - **Next shot.** A line like `Next: at spot 12, turn 60 deg right (about 45% new)`, and a green
   field of view in "the room so far".
 - **Bad scans.** A scan that looks misplaced gets a **red** circle. Click any camera circle to
   select it (Esc deselects): **X** excludes it from placing, the advice and E (X again puts it
-  back), **P** places it again.
-- **Zoom** is now `+` / `-` (and the wheel), because X excludes. Esc no longer quits; Q does.
-- **No slowdown** at 30+ scans: about 3 s per scan at any count, and the windows keep working
-  while it places.
+  back), **P** places it again. **U** removes the last scan.
+- **Dim rooms.** It evens out the colour picture's contrast before looking for details, and finds
+  far more of them than a plain picture would (about 1250 against about 50 in one dim test room).
+  Hold still about **4 s** per scan.
+- **Long hallways or big rooms.** Plain colour details too far for the depth camera (a hallway's far
+  doorway past about 6 m) are used too: magenta dots in the camera window. They pin which way the
+  Kinect faces, but not how far down the hallway it is, because a direction has no distance. For that:
+  1. At the hallway's start, scan, then **step about 0.5 m sideways** and scan again. The far details
+     seen from both spots become **far landmarks** (magenta dots in "the room so far").
+  2. Then walk down the hallway as usual. Each scan's directions to the landmarks pin its position.
 
-It finds far more details in a dim picture than 13 (as 13b does): on the sensor, in the same
-room and light, 13 found 48–67 (it refuses a scan under 100), 13b and 13c about 1250. It's
-slower and finer everywhere: hold still about **4 s** per scan instead of 2, and E takes longer.
-The steps below say 13; use `13e_Kinect_Room_Scan_Autosave` in step 4, and the counter in step 6
-runs to 60. **In 13c and 13d, press K now and then during a long scan:** their scans live only in
-memory, and the PC blue-screened once mid-scan (see the troubleshooting table). If the Kinect is
-unplugged, they write a `room_scans\rescue_<date>_<time>` folder by themselves after 10 seconds.
-
-**Long hallways or big rooms: what 13d (`13d_Kinect_Room_Scan_Far`) added** (13e has it too). 13c needs details with a
-depth reading, so a plain hallway with its doorway past about 6 m gets refused. 13d also uses
-details the depth camera can't reach: magenta dots in the camera window. They pin which way the
-Kinect faces. They can't say how far down the hallway it is, because a direction has no distance.
-For that:
-1. At the hallway's start, scan, then **step about 0.5 m sideways** and scan again. The far details
-   seen from both spots become **far landmarks** (magenta dots in "the room so far").
-2. Then walk down the hallway as usual. Each scan's directions to the landmarks pin its position.
-
-A scan placed by far details with nothing to pin its distance is flagged **red**: its position
-along the hallway was kept from the scan it matched. Step sideways for landmarks, then P it.
+  A scan placed by far details with nothing to pin its distance is flagged **red**: its position
+  along the hallway was kept from the scan it matched. Step sideways for landmarks, then press P.
+- **13z** rebuilds a saved folder later, without the Kinect ([below](#keep-the-scans-and-rebuild-later-13z)).
 
 ### Before you start
 
@@ -309,10 +291,10 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 4. **Build and start it** from the x64 Native Tools Command Prompt:
 
        cd /d E:\Spotter\exercises\cpp
-       cmake --build --preset default --target 13_Kinect_Room_Scan
-       build\13_Kinect_Room_Scan.exe
+       cmake --build --preset default --target 13e_Room_Scan
+       build\examples\13e_Room_Scan.exe
 
-   The model is saved in the folder you run it from.
+   The scans and the model go into the folder you name at the start (Enter = `room_scans\` in the folder you run it from).
 
 ### Scan
 
@@ -344,8 +326,7 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 
 11. Press **E**. After a few seconds the console prints the file name (`room_scan_<number>.obj`),
     the room's height, its walls and furniture boxes. You can keep scanning and press E again:
-    each export is a new file. **Q** quits. 13e has saved every scan all along. In 13–13d the
-    scans are thrown away, unless you pressed **K** first (below).
+    each export is a new file. **K** saves the scans (below); **Q** saves them too, then quits.
 12. **Open it in Blender** (free): File > Import > Wavefront (.obj). In the import options tick
     **Split by Group**. To see the colours: in the viewport's Solid shading menu, set Color to
     **Attribute**. Or in **MeshLab**: File > Import Mesh; colours show by themselves.
@@ -360,28 +341,24 @@ along the hallway was kept from the scan it matched. Step sideways for landmarks
 14. **Never commit the `.obj`** (it's a capture of your room; `*.obj` is gitignored). Delete it
     when you're done if it shows anything private.
 
-### Keep the scans and rebuild later (K and 13z)
+### Keep the scans and rebuild later (13z)
 
 E's `.obj` keeps one colour per 2 cm corner, averaged over every scan, so posters and small details
-blur. **13e keeps the scans by itself**, in the folder it asked for at the start (the same layout
-as K's), so for 13e skip to step 3. In 13–13d the scans are gone once you quit. In **13c and 13d,
-press K** before quitting. (If the Kinect is unplugged, they write a `rescue_<date>_<time>` folder in
-`room_scans\` by themselves, with no questions.)
+blur. The folder 13e writes (on **K**, on **Q**, or by itself when the Kinect is lost) keeps every
+scan, so you can rebuild with 13z later.
 
-1. **Answer in the console window** (the program's windows wait meanwhile):
-   - `Folder`: Enter saves into `room_scans\` in the folder you ran from, or type or paste any
-     folder.
-   - `Name`: Enter gives `room_<date>_<time>`. A saved room of the same name is overwritten only if
-     you answer `y`. Type `cancel` at either question to stop.
-2. K writes one folder: every scan's points, pictures and placement, plus **`points.ply`**. That's
+1. **At the start,** 13e asks in its console window for the folder (Enter = `room_scans\` where you
+   run it, or type or paste any folder) and the name (Enter = `room_<date>_<time>`). A room folder
+   of the same name is overwritten only if you answer `y`; type `cancel` at either question to stop.
+2. The folder holds every scan's points, pictures and placement, plus **`points.ply`**. That's
    every scan's own points with their own colours, what the viewer shows, with no averaging. Open
    it in MeshLab (File > Import Mesh) or Blender (File > Import > Stanford PLY). It's about 11 MB
    per scan.
 3. **Rebuild any time, without the Kinect:**
 
-       build\13z_Kinect_Room_Rebuild.exe
+       build\examples\13z_Room_Rebuild.exe
 
-   It lists every saved room in `room_scans\` (or give a folder: `13z_Kinect_Room_Rebuild D:\scans`).
+   It lists every saved room in `room_scans\` (or give a folder: `13z_Room_Rebuild D:\scans`).
    Then you choose:
    - **Which rooms:** `2`, `1,3`, or Enter for all.
    - **What to do:** view, build `.obj`, build `.ply`, or both.
@@ -389,8 +366,8 @@ press K** before quitting. (If the Kinect is unplugged, they write a `rescue_<da
 
    In the viewer, click a camera circle and press **X** to exclude a bad scan (13z remembers it).
    Then **E** builds the `.obj` and **K** the `.ply`, into the room's own folder. For a finer mesh,
-   set `VoxelMeters` to 0.01 at the top of `13z_Kinect_Room_Rebuild/main.cpp` and rebuild it.
-4. **Privacy:** the folder holds colour pictures of your room. `room_scans/` is gitignored, and K
+   set `voxelMeters` to 0.01 in `RoomSettings` at the top of `exercises/cpp/examples/13z_Room_Rebuild/main.cpp` and rebuild it.
+4. **Privacy:** the folder holds colour pictures of your room. `room_scans/` is gitignored, and 13e
    puts a `.gitignore` into every folder it writes, wherever that is. Never commit one, and scan
    with nobody in view.
 
@@ -402,7 +379,7 @@ press K** before quitting. (If the Kinect is unplugged, they write a `rescue_<da
 | Double walls in the saved model | One scan was placed slightly wrong. Rescan: watch the viewer with C on and press U as soon as a scan shows as a copy |
 | "nothing level found" in the export | No scan saw the floor or ceiling well. Tilt the Kinect so some scans include them |
 | No floor in `seen_room` (holes underfoot) | The scans were level or tilted up. Rescan with the Kinect 30–45° down, ideally on a tripod: see [A stand for room scans](#a-stand-for-room-scans). `clean_floor` is still drawn, as a guess |
-| Export is slow or the file is huge | Set `VoxelMeters` to 0.04 at the top of `13_Kinect_Room_Scan/main.cpp` and rebuild |
+| Export is slow or the file is huge | Set `voxelMeters` to 0.04 in `RoomSettings` at the top of `exercises/cpp/examples/13e_Room_Scan/main.cpp` and rebuild |
 | The room drifts: the last scan doesn't meet the first | Small errors add up over many scans. Scan in a loop with plenty of overlap; see experiment 5 in the file |
 
 ### A stand for room scans

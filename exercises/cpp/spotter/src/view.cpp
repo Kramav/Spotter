@@ -106,6 +106,19 @@ cv::Mat WithKeys(const cv::Mat& image, const std::string& keys)
     return shown;
 }
 
+void OpenExhibitWindow(const std::string& window, cv::Size size, bool fullscreen)
+{
+    cv::namedWindow(window, cv::WINDOW_NORMAL);
+    cv::resizeWindow(window, size.width, size.height);
+    if (fullscreen) ToggleFullscreen(window);
+}
+
+void ToggleFullscreen(const std::string& window)
+{
+    bool full = cv::getWindowProperty(window, cv::WND_PROP_FULLSCREEN) == cv::WINDOW_FULLSCREEN;
+    cv::setWindowProperty(window, cv::WND_PROP_FULLSCREEN, full ? cv::WINDOW_NORMAL : cv::WINDOW_FULLSCREEN);
+}
+
 bool OrbitView::TakeClick(cv::Point& where)
 {
     if (!clicked) return false;

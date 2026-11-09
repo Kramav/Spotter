@@ -17,6 +17,7 @@ foreach(example 01_Kinect_Depth_Peek 02_Kinect_Detect_Distance 03_Kinect_Depth_B
     target_include_directories(${example} PRIVATE ${freenect2_INCLUDE_DIRS})
     target_link_libraries(${example} PRIVATE ${freenect2_LIBRARIES} ${OpenCV_LIBS})
     target_compile_definitions(${example} PRIVATE SPOTTER_REPO_ROOT="${repo_root}")
+    set_target_properties(${example} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/legacy)
 endforeach()
 
 # The presentation demos (legacy/presentation/README.md): fullscreen remixes of the examples above, for an exhibition.
@@ -25,6 +26,7 @@ foreach(demo Demo1_You_In_3D Demo2_Invisibility_Cloak Demo3_Booth_Radar Demo4_Ro
     target_include_directories(${demo} PRIVATE ${freenect2_INCLUDE_DIRS})
     target_link_libraries(${demo} PRIVATE ${freenect2_LIBRARIES} ${OpenCV_LIBS})
     target_compile_definitions(${demo} PRIVATE SPOTTER_REPO_ROOT="${repo_root}")
+    set_target_properties(${demo} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/legacy)
 endforeach()
 
 # The shared library (D34): new and re-implemented examples link it.

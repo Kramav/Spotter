@@ -22,6 +22,10 @@ inline bool IsQuitKey(int key) { return key == 'q' || key == 27; }
 // shown as colour. Use it in every imshow: cv::imshow(window, spotter::WithKeys(image, Keys)).
 cv::Mat WithKeys(const cv::Mat& image, const std::string& keys);
 
+// The demos' window: resizable (the picture scales to fit), fullscreen at the start if asked.
+void OpenExhibitWindow(const std::string& window, cv::Size size, bool fullscreen);
+void ToggleFullscreen(const std::string& window);   // F in the demos
+
 // True once every `milliseconds`: `if (report.Due()) Report(...)` prints about once a second.
 class Every
 {
