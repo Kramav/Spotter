@@ -66,7 +66,13 @@ const std::string Window = "09b room mesh  (S scan, C clear, Q quit)";
 //  The new idea: the whole view as one triangle mesh
 // ---------------------------------------------------------------------
 
-// Step 4: every MeshStep-th point, two triangles per square, none across a depth jump.
+//spotter::Mesh MeshFromCloud(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours){
+//
+//@param1 - cloud: a depth cloud, 512 wide (NaN = no reading)
+//@param2 - colours: one colour per cloud point
+//
+//@brief - step 4: every MeshStep-th point, two triangles per square, none across a depth jump (the nearest and
+//         farthest corner differ by more than the jump share). Group seen_room. O(pixels / MeshStep^2).
 spotter::Mesh MeshFromCloud(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours)
 {
     const int width = 512, columns = (width + MeshStep - 1) / MeshStep, rows = ((int)cloud.size() / width + MeshStep - 1) / MeshStep;
@@ -100,8 +106,14 @@ spotter::Mesh MeshFromCloud(const std::vector<cv::Point3f>& cloud, const std::ve
     return mesh;
 }
 
-// Steps 3-5. The colour comes from the last frame (black where the colour camera doesn't reach).
-// Returns the colour pixels that had depth, for the tint.
+//std::vector<cv::Point> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame){
+//
+//@param1 - averageMm: the averaged depth, mm
+//@param2 - frame: the last frame, for its colour
+//
+//@brief - steps 3-5: the colour comes from the last frame (black where the colour camera doesn't reach); builds
+//         the mesh, turns it to Y up, writes room_<time>.obj and prints its size and the share of the view with no
+//         depth. Returns the colour pixels that had depth, for the tint. O(pixels).
 std::vector<cv::Point> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame)
 {
     std::vector<cv::Vec3b> colours = frame.registered.reshape(0, 1);   // one colour per depth pixel
@@ -124,6 +136,15 @@ std::vector<cv::Point> ScanAndSave(const cv::Mat& averageMm, const spotter::Rgbd
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const cv::Mat& colour, const std::vector<cv::Point>& tint, const spotter::DepthAverager& averager, const spotter::FpsMeter& fps){
+//
+//@param1 - colour: the colour picture
+//@param2 - tint: the colour pixels that had depth in the last scan, tinted green
+//@param3 - averager: for the hold-still count
+//@param4 - fps: the frame-rate meter
+//
+//@brief - the half-size colour picture with the last scan's pixels tinted green, "HOLD STILL n / N" or "S to scan
+//         the room", and the fps; shown with the key strip. O(pixels).
 void Show(const cv::Mat& colour, const std::vector<cv::Point>& tint, const spotter::DepthAverager& averager, const spotter::FpsMeter& fps)
 {
     cv::Mat display;
@@ -143,6 +164,11 @@ void Show(const cv::Mat& colour, const std::vector<cv::Point>& tint, const spott
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 09b · Room Mesh. Example 08b turned ONE object into a 3D model. This one does the same for
+//         EVERYTHING the Kinect sees: the first recreation of the room, from a single view. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

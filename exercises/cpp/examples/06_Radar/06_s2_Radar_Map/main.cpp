@@ -27,9 +27,18 @@ const int MapPixels = 700;
 const double PixelsPerMeter = (MapPixels - 40) / RangeMeters;
 const cv::Point Camera(MapPixels / 2, MapPixels - 20);   // bottom centre
 
-// x metres to the side, z metres ahead -> a map pixel (z up the screen).
+//cv::Point ToMap(double x, double z){
+//
+//@param1 - x: metres to the right of the camera
+//@param2 - z: metres ahead of it
+//
+//@brief - the map pixel for that spot on the floor: the camera is at the bottom centre, Z runs up the map. O(1).
 cv::Point ToMap(double x, double z) { return { (int)std::lround(Camera.x + x * PixelsPerMeter), (int)std::lround(Camera.y - z * PixelsPerMeter) }; }
 
+//cv::Mat EmptyMap(){
+//
+//@brief - a dark square map with a half-circle ring every metre (labelled) and a yellow triangle for the camera at
+//         the bottom centre. O(pixels).
 cv::Mat EmptyMap()
 {
     cv::Mat map(MapPixels, MapPixels, CV_8UC3, cv::Scalar(25, 25, 25));
@@ -43,6 +52,9 @@ cv::Mat EmptyMap()
     return map;
 }
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -52,6 +64,12 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//int main(){
+//
+//@brief - the program: 06 · step 2 of 2 · Draw them from above. Step 1's floor spots on a bird's-eye map: the
+//         camera at the bottom centre, looking up the screen, a ring every metre. One dot per detection, this
+//         frame only (no tracking yet). Setup, main loop and clean-up are laid out in the file's sections. Returns
+//         0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

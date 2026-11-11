@@ -20,6 +20,12 @@
 
 double MsSince(int64 tick) { return (cv::getTickCount() - tick) * 1000.0 / cv::getTickFrequency(); }
 
+//int main(){
+//
+//@brief - the program: 11 · step 1 of 3 · The nearest point, fast (no Kinect needed). ICP pairs every point of
+//         view B with the NEAREST point of view A. 13e pairs 13,000 against 50,000: checking every pair is 650
+//         million distances, every round. Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit.
 int main()
 {
     cv::RNG random(1);

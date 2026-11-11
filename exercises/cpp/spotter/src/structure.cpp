@@ -24,8 +24,21 @@ const char* SurfaceName(Surface surface)
 
 static const float Radians = (float)CV_PI / 180;
 
+//cv::Point3f Unit(const cv::Point3f& v){
+//
+//@param1 - v: a vector
+//
+//@brief - the vector scaled to length 1 (a zero vector stays near zero instead of dividing by 0). O(1).
 static cv::Point3f Unit(const cv::Point3f& v) { return v * (1.0f / std::max((float)cv::norm(v), 1e-9f)); }
 
+//Surface Classify(const StructurePlane& p, const cv::Point3f& up, const StructureOptions& options){
+//
+//@param1 - p: a plane with its points
+//@param2 - up: the room's up, unit
+//@param3 - options: levelDegrees and minWallHeightMeters
+//
+//@brief - floor if it faces up (within levelDegrees), ceiling if down, other if it's slanted; an upright plane is a wall only
+//         if its points span minWallHeightMeters of height (2nd to 98th percentile), else other (a cupboard side). O(k log k).
 static Surface Classify(const StructurePlane& p, const cv::Point3f& up, const StructureOptions& options)
 {
     float upness = p.plane.normal.dot(up);
@@ -212,7 +225,12 @@ RoomMap MakeRoomMap(const std::vector<const Scan*>& scans, const PinholeCamera& 
     return map;
 }
 
-// The biggest plane of a kind, or -1.
+//int Biggest(const ScanStructure& s, Surface surface){
+//
+//@param1 - s: a structure
+//@param2 - surface: the kind to look for
+//
+//@brief - the index of the plane of that kind with the most cells, or -1 if there's none. O(planes).
 static int Biggest(const ScanStructure& s, Surface surface)
 {
     int best = -1;
@@ -221,7 +239,14 @@ static int Biggest(const ScanStructure& s, Surface surface)
     return best;
 }
 
-// The turn about `up` that takes the horizontal part of a onto b.
+//cv::Matx33f YawOnto(const cv::Point3f& a, const cv::Point3f& b, const cv::Point3f& up){
+//
+//@param1 - a: a direction
+//@param2 - b: the direction to turn it onto
+//@param3 - up: the axis to turn about, unit
+//
+//@brief - the turn about `up` that takes the horizontal part of a onto the horizontal part of b (their signed angle seen
+//         from above). O(1).
 static cv::Matx33f YawOnto(const cv::Point3f& a, const cv::Point3f& b, const cv::Point3f& up)
 {
     cv::Point3f ha = Unit(a - up * up.dot(a)), hb = Unit(b - up * up.dot(b));
@@ -229,6 +254,14 @@ static cv::Matx33f YawOnto(const cv::Point3f& a, const cv::Point3f& b, const cv:
     return TurnAbout(cv::Vec3d(up.x, up.y, up.z) * angle);
 }
 
+//bool Distinct(const Pose& a, const Pose& b, float meters, float degrees){
+//
+//@param1 - a: one pose
+//@param2 - b: another pose
+//@param3 - meters: how far apart their shifts must be...
+//@param4 - degrees: ...or how far apart their turns
+//
+//@brief - true if the poses differ by more than meters or more than degrees, i.e. they are two different fits and not one. O(1).
 static bool Distinct(const Pose& a, const Pose& b, float meters, float degrees)
 {
     return cv::norm(a.shift - b.shift) > meters || Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees() > degrees;
@@ -389,6 +422,12 @@ RelocateResult Relocate(const Scan& scan, const ScanStructure& s, const RoomMap&
     return result;
 }
 
+//cv::Point3f CloudAt(const Scan& scan, const cv::Point2f& pixel){
+//
+//@param1 - scan: a scan with its cloud and picture
+//@param2 - pixel: a position on the depth grid, e.g. a keypoint
+//
+//@brief - the scan's 3D point at that pixel (rounded, kept inside the picture); NaN where depth read nothing. O(1).
 static cv::Point3f CloudAt(const Scan& scan, const cv::Point2f& pixel)
 {
     int column = std::clamp((int)std::lround(pixel.x), 0, scan.picture.cols - 1), row = std::clamp((int)std::lround(pixel.y), 0, scan.picture.rows - 1);

@@ -21,6 +21,10 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4 (lower =
+//         more boxes, more mistakes). O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -30,6 +34,13 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//void Draw(cv::Mat& picture, const std::vector<spotter::Detection>& detections, const spotter::ClassList& classes){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - detections: what the detector found
+//@param3 - classes: the class names
+//
+//@brief - a green box on each detection with its class name and confidence. O(detections).
 void Draw(cv::Mat& picture, const std::vector<spotter::Detection>& detections, const spotter::ClassList& classes)
 {
     for (const spotter::Detection& d : detections)
@@ -40,6 +51,12 @@ void Draw(cv::Mat& picture, const std::vector<spotter::Detection>& detections, c
     }
 }
 
+//int main(){
+//
+//@brief - the program: 02 · step 2 of 4 · Find objects with YOLO. Run the detector on each colour picture and draw
+//         what it finds: a box, the class name, and how sure it is (0..1). The detector never sees depth; it only
+//         looks at colour. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

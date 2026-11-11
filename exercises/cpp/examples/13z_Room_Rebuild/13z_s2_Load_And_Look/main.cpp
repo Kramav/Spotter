@@ -22,7 +22,15 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "mouse drag / W A S D turn   wheel / Z X zoom   R reset   Q quit";
 
-// Every scan that loads, and every 2nd pixel of each moved into the room (excluded ones grey).
+//std::vector<spotter::Scan> LoadAll(const std::filesystem::path& room, const spotter::RoomInfo& info, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours){
+//
+//@param1 - room: the room folder
+//@param2 - info: its room.txt
+//@param3 - points: filled with every 2nd pixel of each scan, moved into the room
+//@param4 - colours: filled with their colours (excluded scans grey)
+//
+//@brief - every scan that loads (a scan that doesn't is skipped with the reason), and every 2nd pixel of each
+//         moved into the room by its pose (new). Prints the scan and point counts. O(scans x pixels).
 std::vector<spotter::Scan> LoadAll(const std::filesystem::path& room, const spotter::RoomInfo& info, std::vector<cv::Point3f>& points,
                                    std::vector<cv::Vec3b>& colours)
 {
@@ -45,6 +53,16 @@ std::vector<spotter::Scan> LoadAll(const std::filesystem::path& room, const spot
     return scans;
 }
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13z · step 2 of 2 · One room's scans in the viewer (no Kinect needed). Step 1 checked that
+//         each scan loads. Now load them all (the room given as the argument, or the first under room_scans) and
+//         put every scan's points where its pose says, in 08's viewer, with a circle and 4 arrows where each
+//         camera stood. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal
+//         exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
     std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(std::filesystem::absolute(argc > 1 ? argv[1] : "room_scans"));

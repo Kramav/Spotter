@@ -63,6 +63,15 @@ struct Room
     std::vector<spotter::ScanStructure> inRoom;       // each scan's structure, moved into the room
 };
 
+//bool Load(const std::filesystem::path& folder, Room& room){
+//
+//@param1 - folder: a room folder
+//@param2 - room: filled with its included scans and their structures
+//
+//@brief - reads room.txt and every scan's numbers only (colour pictures are never opened); skips excluded and
+//         unreadable scans. Up is from room.txt's first camera turn when the room is finished, else the camera's
+//         -Y. Each scan's structure (ExtractStructure) is moved into the room. False if nothing loaded. O(scans x
+//         ExtractStructure).
 bool Load(const std::filesystem::path& folder, Room& room)
 {
     std::string problem;
@@ -89,6 +98,12 @@ bool Load(const std::filesystem::path& folder, Room& room)
 //  1. Coverage
 // ---------------------------------------------------------------------
 
+//int NonParallelWalls(const spotter::ScanStructure& s){
+//
+//@param1 - s: one scan's structure
+//
+//@brief - how many wall directions it sees: wall planes whose normals are more than 30 degrees apart count
+//         separately. O(walls^2).
 int NonParallelWalls(const spotter::ScanStructure& s)
 {
     std::vector<cv::Point3f> directions;
@@ -102,6 +117,14 @@ int NonParallelWalls(const spotter::ScanStructure& s)
     return (int)directions.size();
 }
 
+//void Coverage(const Room& room){
+//
+//@param1 - room: the loaded room
+//
+//@brief - section 1: per scan, the area of floor, ceiling and walls seen, the wall directions, the ceiling's
+//         density and whether a ceiling-wall edge is seen; then per surface in how many scans it is seen, the
+//         average area and density, and in how many scans two or more wall directions, a corner with the floor
+//         (all 6 directions pinned) and a ceiling-wall edge appear. O(scans x planes).
 void Coverage(const Room& room)
 {
     std::printf("\n1. Coverage (per scan: m2 of floor / ceiling / walls seen; wall directions; points per m2 on the ceiling)\n");
@@ -142,6 +165,14 @@ void Coverage(const Room& room)
 //  2. Edges between consecutive scans
 // ---------------------------------------------------------------------
 
+//void EdgeStability(const Room& room){
+//
+//@param1 - room: the loaded room
+//
+//@brief - section 2: the edges (FindEdges) of each pair of consecutive scans, in the room; each edge is matched to
+//         the nearest edge of the same kind within 30 cm and 10 degrees in the next scan. Prints per kind how many
+//         were found and seen again, and the median and 95th-percentile offset and the median angle. O(scans x
+//         edges^2).
 void EdgeStability(const Room& room)
 {
     std::printf("\n2. Edges seen by consecutive scans, in the room (matched by kind, nearest within 30 cm and 10 deg)\n");
@@ -177,6 +208,13 @@ void EdgeStability(const Room& room)
 //  3. Relocate (leave one out) and the baselines
 // ---------------------------------------------------------------------
 
+//spotter::RoomMap MapWithout(const Room& room, size_t skip){
+//
+//@param1 - room: the loaded room
+//@param2 - skip: the scan to leave out
+//
+//@brief - the map of all the other scans: their structures merged (MergeStructures) and their ICP points and
+//         normals in the room, one per 1 cm cube. O(scans x points).
 spotter::RoomMap MapWithout(const Room& room, size_t skip)
 {
     spotter::RoomMap map;
@@ -200,12 +238,27 @@ spotter::RoomMap MapWithout(const Room& room, size_t skip)
     return map;
 }
 
+//bool Agrees(const spotter::Pose& a, const spotter::Pose& b){
+//
+//@param1 - a: one pose
+//@param2 - b: the other pose
+//
+//@brief - true if the poses are within AgreeMeters and AgreeDegrees of each other. O(1).
 bool Agrees(const spotter::Pose& a, const spotter::Pose& b)
 {
     return cv::norm(a.shift - b.shift) < AgreeMeters && spotter::Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees() < AgreeDegrees;
 }
 
-// Multi-start ICP (legacy Demo 4's Locate): ICP from each start on part of the view, stop at 95%, refine the best.
+//spotter::Pose MultiStart(const spotter::Scan& scan, const spotter::RoomMap& map, const std::vector<spotter::Pose>& starts, int& tried){
+//
+//@param1 - scan: the scan to place
+//@param2 - map: the map of the other scans
+//@param3 - starts: the poses to try, nearest first
+//@param4 - tried: set to how many starts were run
+//
+//@brief - multi-start ICP (legacy Demo 4's Locate): ICP from each start on an eighth of the scan against the map
+//         thinned to 3 cm (each ICP rebuilds its tree), stop at 95% paired, then refine the best on half of it
+//         against the whole map. Returns its pose. O(starts x rounds x n log m).
 spotter::Pose MultiStart(const spotter::Scan& scan, const spotter::RoomMap& map, const std::vector<spotter::Pose>& starts, int& tried)
 {
     std::vector<cv::Point3f> part, half;
@@ -228,6 +281,15 @@ spotter::Pose MultiStart(const spotter::Scan& scan, const spotter::RoomMap& map,
     return spotter::Icp(half, map.surface.points, map.surface.normals, best.pose, wide).pose;
 }
 
+//void RelocateAll(const Room& room, int firstNumber){
+//
+//@param1 - room: the loaded room
+//@param2 - firstNumber: start from this scan number (resuming a long run); the totals count only these
+//
+//@brief - section 3: each scan against a map of the others: structure Relocate, legacy Demo 4's multi-start (63
+//         starts around scan 1's spot) and a wide multi-start (every other scan's spot, every 30 degrees). Each is
+//         compared with the stored pose (agrees and unique, ambiguous with the truth among the rivals, ambiguous
+//         without, or wrong) and timed; prints per scan and the totals. Minutes per scan.
 void RelocateAll(const Room& room, int firstNumber)
 {
     std::printf("\n3. Relocate each scan in a map of the others (agrees = within %.0f cm and %.0f deg of its stored pose)\n", AgreeMeters * 100, AgreeDegrees);
@@ -284,6 +346,13 @@ void RelocateAll(const Room& room, int firstNumber)
 //  4. Continuous
 // ---------------------------------------------------------------------
 
+//void ContinuousAll(const Room& room){
+//
+//@param1 - room: the loaded room
+//
+//@brief - section 4: each scan placed against the previous one only (PlaceAfter), from the previous pose and from
+//         the recommended next shot (RecommendNext); prints how far it moved and turned, how far it was from the
+//         advice, and whether each start agrees with the stored pose, with the totals. O(scans x Icp).
 void ContinuousAll(const Room& room)
 {
     std::printf("\n4. Continuous: each scan against the previous one, from the previous pose / the recommended next shot\n");
@@ -314,8 +383,14 @@ void ContinuousAll(const Room& room)
 //  View: one scan's Relocate answers, in 3D, against where 13e put it
 // ---------------------------------------------------------------------
 
-// The map of the other scans (grey), the scan at its stored pose (green), and at one Relocate
-// candidate (red; N steps through them). No colour pictures: points and cameras only.
+//void ViewScan(const Room& room, int number){
+//
+//@param1 - room: the loaded room
+//@param2 - number: the scan number to look at
+//
+//@brief - the map of the other scans (grey), the scan at its stored pose (green) and at one Relocate candidate
+//         (red; N steps through them), as points and cameras only, no colour pictures. Prints the candidates kept.
+//         Runs until Q or Esc. O(Relocate) plus the drawing.
 void ViewScan(const Room& room, int number)
 {
     size_t k = std::find(room.numbers.begin(), room.numbers.end(), number) - room.numbers.begin();
@@ -370,6 +445,15 @@ void ViewScan(const Room& room, int number)
 //  Main operation
 // ---------------------------------------------------------------------
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13y · Structure Survey (no Kinect needed). Measures, on saved rooms, what the structure-
+//         localisation study needs (docs/structure-localization-findings.md). Numbers only: it reads each scan's
+//         cloud.bin and pose.txt and the room's room.txt, never the colour pictures or features. Setup, main loop
+//         and clean-up are laid out in the file's sections. Returns 0 on a normal exit.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

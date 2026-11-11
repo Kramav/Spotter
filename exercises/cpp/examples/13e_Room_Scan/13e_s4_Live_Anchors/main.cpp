@@ -29,7 +29,17 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "SPACE scan here   Q quit";
 
-// New: start a check when the last one is done and half a second has passed.
+//void StartCheck(std::future<spotter::LiveCheck>& checking, const spotter::RgbdFrame& frame, const std::vector<spotter::Scan>& scans, const spotter::ScanOptions& options, std::chrono::steady_clock::time_point& last){
+//
+//@param1 - checking: the background check; started here
+//@param2 - frame: this frame
+//@param3 - scans: the scans placed so far
+//@param4 - options: the scan settings
+//@param5 - last: when the last check started; updated
+//
+//@brief - new: starts a live check (MakeScan + CheckLive on a background thread) when the last one is done and
+//         half a second has passed, so the green anchors can show without slowing the frame rate. Does nothing
+//         with no scans yet. O(MakeScan) on this thread.
 void StartCheck(std::future<spotter::LiveCheck>& checking, const spotter::RgbdFrame& frame, const std::vector<spotter::Scan>& scans,
                 const spotter::ScanOptions& options, std::chrono::steady_clock::time_point& last)
 {
@@ -43,6 +53,11 @@ void StartCheck(std::future<spotter::LiveCheck>& checking, const spotter::RgbdFr
     }, std::move(live));
 }
 
+//int main(){
+//
+//@brief - the program: 13e · step 4 of 4 · Live anchors: will the next scan be placed?. In step 1 you only learn a
+//         scan can't be placed after holding still for it. Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

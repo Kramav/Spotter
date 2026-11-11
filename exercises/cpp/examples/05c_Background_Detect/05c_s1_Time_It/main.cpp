@@ -22,6 +22,9 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "D  YOLO on/off     Q or Esc  quit";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -31,6 +34,12 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//int main(){
+//
+//@brief - the program: 05c · step 1 of 2 · What does YOLO cost?. Show the colour camera with the frame rate in the
+//         corner. Press D to run YOLO on every frame, and again to stop. Without YOLO the Kinect gives ~30 frames
+//         a second; with it, everything waits ~150 ms per frame and drops to ~6. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

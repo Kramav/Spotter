@@ -65,16 +65,29 @@ struct Background
     cv::Mat depthMm;   // empty until recorded
     std::chrono::steady_clock::time_point countdownStart = std::chrono::steady_clock::now();
 
+    //double SecondsLeft(){
+    //
+    //@brief - the seconds left on the countdown to recording the background (negative once it's over). O(1).
     double SecondsLeft() const
     {
         return SecondsBeforeBackground - std::chrono::duration<double>(std::chrono::steady_clock::now() - countdownStart).count();
     }
+    //void Restart(){
+    //
+    //@brief - forgets the recorded background and starts the countdown again; prints what to do (step out of view).
+    //         O(1).
     void Restart()
     {
         depthMm.release();
         countdownStart = std::chrono::steady_clock::now();
         std::printf("Recording the background in %.0f s: step out of view.\n", SecondsBeforeBackground);
     }
+    //void RecordWhenDue(const cv::Mat& liveMm){
+    //
+    //@param1 - liveMm: this frame's depth, mm
+    //
+    //@brief - once the countdown is over and nothing is recorded yet, keeps a copy of this frame as the empty room.
+    //         Otherwise does nothing. O(pixels) on the frame it records.
     void RecordWhenDue(const cv::Mat& liveMm)
     {
         if (!depthMm.empty() || SecondsLeft() > 0) return;
@@ -87,9 +100,14 @@ struct Background
 //  Steps 2-4: foreground, blobs, measurements
 // ---------------------------------------------------------------------
 
-// Step 2, the guide's rule: (background - depth) > threshold AND depth has a reading.
-// Where the background had no reading (0), background - depth is negative, so those pixels
-// never count as foreground (experiment idea 3).
+//cv::Mat Foreground(const cv::Mat& liveMm, const Background& background){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - background: the recorded empty room
+//
+//@brief - step 2, the guide's rule: (background - depth) > ForegroundThresholdMm AND depth has a reading. Where
+//         the background had none (0) the difference is negative, so those pixels never count (experiment idea 3).
+//         All zero before it is recorded. O(pixels).
 cv::Mat Foreground(const cv::Mat& liveMm, const Background& background)
 {
     cv::Mat mask(liveMm.size(), CV_8U, cv::Scalar(0));
@@ -106,9 +124,16 @@ struct Blob
     cv::Point3f centre;
 };
 
-// Step 3: "opening" = shrink every foreground region a little, then grow it back. Specks smaller
-// than the shape vanish in the shrink and never come back. Then label touching pixels 1, 2, 3...
-// Step 4: measure each group that's big enough.
+//std::vector<Blob> FindBlobs(const cv::Mat& foreground, const cv::Mat& liveMm, const spotter::PinholeCamera& camera, cv::Mat& cleaned){
+//
+//@param1 - foreground: a 255/0 foreground mask
+//@param2 - liveMm: this frame's depth, mm
+//@param3 - camera: the depth camera, for real sizes
+//@param4 - cleaned: set to the mask after cleaning
+//
+//@brief - steps 3 and 4: opens the mask to drop specks, labels touching pixels, and for each group of at least
+//         MinBlobPixels measures the median depth of its own pixels, its real width and height (pixels x distance
+//         / focal length) and its 3D centre. O(pixels).
 std::vector<Blob> FindBlobs(const cv::Mat& foreground, const cv::Mat& liveMm, const spotter::PinholeCamera& camera, cv::Mat& cleaned)
 {
     cv::Mat shape = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(CleanupSizePixels, CleanupSizePixels));
@@ -147,8 +172,23 @@ std::vector<Blob> FindBlobs(const cv::Mat& foreground, const cv::Mat& liveMm, co
 //  Output
 // ---------------------------------------------------------------------
 
+//std::string Label(const Blob& blob){
+//
+//@param1 - blob: a measured blob
+//
+//@brief - "1.23m  0.45 x 1.70m": its distance, width and height. O(1).
 std::string Label(const Blob& blob) { return cv::format("%.2fm  %.2f x %.2fm", blob.meters, blob.widthMeters, blob.heightMeters); }
 
+//void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<Blob>& blobs, const Background& background, const spotter::FpsMeter& fps){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - foreground: the foreground mask
+//@param3 - blobs: the blobs found
+//@param4 - background: the recorded background, for the countdown
+//@param5 - fps: the frame-rate meter
+//
+//@brief - the depth picture in grey by distance, foreground pixels green, a yellow box and label per blob, a red
+//         countdown until the background is recorded, and the fps; shown with the key strip. O(pixels).
 void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<Blob>& blobs, const Background& background,
           const spotter::FpsMeter& fps)
 {
@@ -170,6 +210,14 @@ void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<Bl
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(const cv::Mat& foreground, const cv::Mat& cleaned, const std::vector<Blob>& blobs){
+//
+//@param1 - foreground: the raw mask
+//@param2 - cleaned: the mask after cleaning
+//@param3 - blobs: the blobs found
+//
+//@brief - console lines: foreground pixels before and after cleanup, then each blob's pixels, label and centre.
+//         O(pixels + blobs).
 void Report(const cv::Mat& foreground, const cv::Mat& cleaned, const std::vector<Blob>& blobs)
 {
     std::printf("foreground pixels: %d raw, %d after cleanup | %zu blobs big enough\n",
@@ -182,6 +230,12 @@ void Report(const cv::Mat& foreground, const cv::Mat& cleaned, const std::vector
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 03 · Depth Blobs (no AI). Find "something new in the room" from depth alone, and measure
+//         its distance and real size in metres. This is the guide's no-AI rung (§5.6), the classic Kinect people-
+//         counter. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit,
+//         1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

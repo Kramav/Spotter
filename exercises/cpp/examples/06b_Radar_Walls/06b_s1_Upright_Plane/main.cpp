@@ -28,6 +28,15 @@ const std::string Keys = "Q or Esc  quit";
 const int Tries = 200, Reach = 10;
 const float ThicknessMeters = 0.03f, MaxTiltDegrees = 20;
 
+//spotter::Plane BestUprightPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - random: the random number generator
+//@param3 - bestCount: set to how many points lie on the best plane
+//
+//@brief - RANSAC as in 09 with one change: planes that aren't upright (tilted more than MaxTiltDegrees from
+//         vertical) are skipped. Tries Tries random planes through three neighbouring cells and keeps the one with
+//         most points within ThicknessMeters. O(Tries x cells).
 spotter::Plane BestUprightPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount)
 {
     const float maxUpness = std::sin(MaxTiltDegrees * (float)CV_PI / 180);
@@ -50,6 +59,12 @@ spotter::Plane BestUprightPlane(const spotter::PointGrid& grid, std::mt19937& ra
     return best;
 }
 
+//int main(){
+//
+//@brief - the program: 06b · step 1 of 3 · The biggest upright plane. 09_s3 kept only LEVEL planes to find the
+//         floor. Turn the test round: keep only planes whose normal is nearly horizontal (|normal . up| small) and
+//         RANSAC finds the biggest UPRIGHT plane: usually a wall. It's painted green. Setup, main loop and clean-
+//         up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

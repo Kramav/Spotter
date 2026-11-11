@@ -28,12 +28,25 @@ const float NearerMm = 100;
 const int CleanupPixels = 5;     // the OPEN shape's size; 1 = no cleanup
 const int MinBlobPixels = 400;   // a person at 3 m covers a few thousand
 
+//cv::Mat Foreground(const cv::Mat& liveMm, const cv::Mat& backgroundMm){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - backgroundMm: the empty room's depth, mm (empty = not recorded)
+//
+//@brief - a 255/0 mask of pixels clearly nearer than the background (background - live > NearerMm) that have a
+//         reading. All zero before the background exists. O(pixels).
 cv::Mat Foreground(const cv::Mat& liveMm, const cv::Mat& backgroundMm)
 {
     if (backgroundMm.empty()) return cv::Mat::zeros(liveMm.size(), CV_8U);
     return (backgroundMm - liveMm > NearerMm) & (liveMm > 0);
 }
 
+//std::vector<cv::Rect> Blobs(const cv::Mat& foreground){
+//
+//@param1 - foreground: a 255/0 foreground mask
+//
+//@brief - opens the mask (shrink then grow, CleanupPixels) to drop specks, labels the touching groups, and returns
+//         the box of each of at least MinBlobPixels. O(pixels).
 std::vector<cv::Rect> Blobs(const cv::Mat& foreground)
 {
     cv::Mat cleaned, labels, stats, centroids;
@@ -47,6 +60,12 @@ std::vector<cv::Rect> Blobs(const cv::Mat& foreground)
     return boxes;
 }
 
+//int main(){
+//
+//@brief - the program: 03 · step 3 of 3 · Group the pixels into blobs. Two OpenCV calls turn green pixels into
+//         objects. 1. morphologyEx OPEN: shrink every green region a little, then grow it back. Specks smaller
+//         than the shape vanish and never come back. Setup, main loop and clean-up are laid out in the file's
+//         sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

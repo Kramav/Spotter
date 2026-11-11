@@ -35,7 +35,17 @@ struct Room
     std::vector<cv::Vec3b> colours;
 };
 
-// New: the first scan is the origin; every later one is placed among the earlier ones.
+//void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options){
+//
+//@param1 - room: the scans so far; one is added
+//@param2 - scan: the new scan
+//@param3 - camera: the depth camera
+//@param4 - random: the random number generator
+//@param5 - options: the scan settings
+//
+//@brief - new: the first scan is the origin; every later one is placed among the earlier ones (PlaceScan:
+//         features, then ICP) and refused if it can't be. A placed scan's points (every 2nd pixel) join the room's
+//         cloud with their colours. O(PlaceScan).
 void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options)
 {
     if (!room.scans.empty())
@@ -51,6 +61,13 @@ void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camer
     room.scans.push_back(std::move(scan));
 }
 
+//int main(){
+//
+//@brief - the program: 13e · step 1 of 4 · Place each scan among the earlier ones. SPACE: hold still while 30
+//         frames are averaged (07), then the averaged cloud and its colour become a Scan (spotter::MakeScan: the
+//         points, the ICP points with their facing, the colour features). The first scan is the room's origin.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

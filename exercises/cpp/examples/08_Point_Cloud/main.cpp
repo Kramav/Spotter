@@ -64,6 +64,12 @@ struct Cloud
     std::vector<cv::Vec3b> colours;    // the colour camera's view of the same spot (black if it can't see it)
 };
 
+//Cloud MakeCloud(const spotter::RgbdFrame& frame){
+//
+//@param1 - frame: a frame with depth and registered colour
+//
+//@brief - a coloured 3D point per depth pixel (Unproject at its depth; NaN where there's no reading) with its
+//         registered colour. O(pixels).
 Cloud MakeCloud(const spotter::RgbdFrame& frame)
 {
     Cloud cloud;
@@ -81,7 +87,12 @@ Cloud MakeCloud(const spotter::RgbdFrame& frame)
     return cloud;
 }
 
-// PLY files are usually Y up and Z towards the viewer (the camera's frame turned 180° about X).
+//void Save(const Cloud& cloud){
+//
+//@param1 - cloud: the cloud to write
+//
+//@brief - writes a cloud_<time>.ply in the current folder with Y up and Z towards the viewer (the camera's frame
+//         turned 180 degrees about X, as PLY files usually are); prints the path or the failure. O(points).
 void Save(const Cloud& cloud)
 {
     std::vector<cv::Point3f> yUp;
@@ -95,6 +106,15 @@ void Save(const Cloud& cloud)
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& renderer, bool frozen){
+//
+//@param1 - cloud: the points and colours
+//@param2 - view: the viewer's angles and distance
+//@param3 - renderer: draws the points
+//@param4 - frozen: true = the cloud is a held frame, not live
+//
+//@brief - draws the cloud through the viewer, a yellow circle where the Kinect is, and "live" or "FROZEN" with the
+//         view's turn and tilt; shown with the key strip. O(points).
 void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& renderer, bool frozen)
 {
     cv::Mat& image = renderer.Begin(view);
@@ -112,6 +132,11 @@ void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& 
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 08 · Point Cloud. Every depth pixel is a point in 3D. Example 03 already did the maths for
+//         one pixel. X = (u + 0.5 - cx) * Z / fx, Y = (v + 0.5 - cy) * Z / fy. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

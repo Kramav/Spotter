@@ -53,6 +53,10 @@ const std::string Window = "Demo 2 - invisibility cloak";
 const bool StartFullscreen = true;
 const cv::Vec3b Magenta(255, 0, 255);
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo; minimum confidence is the lower
+//         of PersonConfidence and ObjectConfidence. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -62,6 +66,10 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//spotter::KinectSource::Options KinectSettings(){
+//
+//@brief - the Kinect's options: the defaults with the colour exposure capped (a steady 30 fps in dim light, 05c).
+//         O(1).
 spotter::KinectSource::Options KinectSettings()
 {
     spotter::KinectSource::Options options;
@@ -80,6 +88,15 @@ struct BoxMasks
     int people = 0, objects = 0;
 };
 
+//BoxMasks MaskBoxes(const std::vector<spotter::Detection>& detections, const spotter::RgbdFrame& frame, int personClass){
+//
+//@param1 - detections: what the detector found
+//@param2 - frame: a frame with depth and colourIndex
+//@param3 - personClass: the class number of "person"
+//
+//@brief - two masks over the depth picture: pixels inside a person box (confidence at least PersonConfidence) and
+//         inside any other object's box (at least ObjectConfidence, grown by ObjectBoxGrow), with the box counts.
+//         Pixels the colour camera can't see are in neither. O(depth pixels x boxes).
 BoxMasks MaskBoxes(const std::vector<spotter::Detection>& detections, const spotter::RgbdFrame& frame, int personClass)
 {
     std::vector<cv::Rect2d> personBoxes, objectBoxes;
@@ -103,8 +120,14 @@ BoxMasks MaskBoxes(const std::vector<spotter::Detection>& detections, const spot
     return masks;
 }
 
-// Steps 3-4: a big blob with at least PersonShare of it inside person boxes is a person. Widen
-// it by GrowPixels (the edge halo), then give back whatever lies in an object's box (the cup).
+//cv::Mat WhatToRemove(const cv::Mat& foreground, const BoxMasks& masks){
+//
+//@param1 - foreground: the foreground mask
+//@param2 - masks: the person and object box masks
+//
+//@brief - steps 3-4: a blob of at least MinBlobPixels with at least PersonShare of it inside person boxes is a
+//         person; widen it by GrowPixels (the edge halo), then give back whatever lies in an object's box (the cup
+//         stays). Returns the mask to paint out. O(pixels).
 cv::Mat WhatToRemove(const cv::Mat& foreground, const BoxMasks& masks)
 {
     cv::Mat labels, stats, centroids;
@@ -129,6 +152,15 @@ struct ColourMemory
     cv::Mat colour;   // CV_32FC3
     cv::Mat seen;     // CV_8U, 1 = learnt at least once
 
+    //void Learn(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const BoxMasks& masks){
+    //
+    //@param1 - frame: this frame, for its registered colour
+    //@param2 - foreground: the foreground mask
+    //@param3 - masks: the person and object box masks
+    //
+    //@brief - remembers the room's colour: skips black pixels (the colour camera can't see them), the foreground and
+    //         anything in a person box; the first sighting is taken as is, later ones blend in by ColourBlendRate.
+    //         O(pixels).
     void Learn(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const BoxMasks& masks)
     {
         if (colour.empty()) Forget(frame.registered.size());
@@ -141,6 +173,11 @@ struct ColourMemory
             else remembered += ColourBlendRate * (cv::Vec3f(live) - remembered);
         }
     }
+    //void Forget(cv::Size size){
+    //
+    //@param1 - size: the depth picture's size
+    //
+    //@brief - drops the memory: no remembered colour, nothing seen. O(pixels).
     void Forget(cv::Size size)
     {
         colour = cv::Mat::zeros(size, CV_32FC3);
@@ -152,6 +189,19 @@ struct ColourMemory
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const cv::Mat& remove, const BoxMasks& masks, const ColourMemory& memory, bool explain, spotter::Every& report){
+//
+//@param1 - frame: this frame
+//@param2 - foreground: the foreground mask
+//@param3 - remove: the mask to paint out
+//@param4 - masks: the person and object box masks
+//@param5 - memory: the remembered room colour
+//@param6 - explain: true = tint what each pixel is
+//@param7 - report: prints the status line about once a second
+//
+//@brief - the registered colour with the removed pixels painted from the memory (magenta where it has never seen
+//         that spot), or with the explaining tints (red removed, yellow object kept, green other foreground); a
+//         status line of box counts and pixels removed; shown with the key strip. O(pixels).
 void Show(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const cv::Mat& remove, const BoxMasks& masks,
           const ColourMemory& memory, bool explain, spotter::Every& report)
 {
@@ -186,6 +236,12 @@ void Show(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const cv::
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: Demo 2 · Invisibility Cloak (presentation; built from 07d). Two pictures side by side: the
+//         camera on the left, and on the right the same view with every PERSON painted out with the room behind
+//         them. Anything they hold stays: a cup floats through the air on its own. Setup, main loop and clean-up
+//         are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

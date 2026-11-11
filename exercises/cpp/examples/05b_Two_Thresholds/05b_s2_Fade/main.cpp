@@ -27,6 +27,13 @@ const std::string Keys = "SPACE (hold)  hide the measurements    F  fade on/off 
 const double NoisePixels = 15, AccelerationPixels = 300, Dt = 1.0 / 30;
 const double CoastSlowdownSeconds = 0.5;   // the speed halves about every 0.35 s while unseen
 
+//cv::KalmanFilter NewFilter(cv::Point2f start){
+//
+//@param1 - start: where the object was first seen, pixels
+//
+//@brief - a Kalman filter for a dot: state x, y and their speeds, measuring x and y. F moves position by speed x
+//         Dt, H picks x and y, R is the measurement noise, Q is how far reality drifts (from AccelerationPixels),
+//         P starts unsure. O(1).
 cv::KalmanFilter NewFilter(cv::Point2f start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
@@ -40,7 +47,13 @@ cv::KalmanFilter NewFilter(cv::Point2f start)
     return kalman;
 }
 
-// Multiply the speeds (state 2 and 3), in both copies of the state OpenCV keeps.
+//void FadeSpeed(cv::KalmanFilter& kalman, float factor){
+//
+//@param1 - kalman: the filter
+//@param2 - factor: what to multiply the speeds by, 0..1
+//
+//@brief - multiplies the speeds (states 2 and 3) in both copies of the state OpenCV keeps (statePost and
+//         statePre). O(1).
 void FadeSpeed(cv::KalmanFilter& kalman, float factor)
 {
     for (int i = 2; i < 4; i++)
@@ -50,6 +63,12 @@ void FadeSpeed(cv::KalmanFilter& kalman, float factor)
     }
 }
 
+//int main(){
+//
+//@brief - the program: 05b · step 2 of 2 · A coasting object slows down (no Kinect). 05_s2's bouncing dot. Hold
+//         SPACE to hide the measurements: the filter coasts. With 05b's longer memory (seconds, not one), a
+//         coasting object at constant speed drifts far off. Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit.
 int main()
 {
     std::mt19937 random(1);

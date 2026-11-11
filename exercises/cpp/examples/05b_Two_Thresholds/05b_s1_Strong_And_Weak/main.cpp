@@ -24,6 +24,10 @@ const std::string Keys = "Q or Esc  quit";
 const float StartConfidence = 0.40f;   // sure: may start a new ID (05b)
 const float KeepConfidence = 0.15f;    // unsure: may only continue one
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo; minConfidence is the weak
+//         threshold, so YOLO hands back everything down to it. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -33,6 +37,11 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//int main(){
+//
+//@brief - the program: 05b · step 1 of 2 · Sure and unsure detections. Ask YOLO for everything down to 0.15
+//         confidence and draw the sure ones (0.40 and up) green, the unsure ones yellow. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

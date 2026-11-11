@@ -28,6 +28,9 @@ const std::string Keys = "Q or Esc  quit";
 
 const int MinDepthPixels = 20;   // fewer than this in the box's middle: "?" instead of a guess
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -37,7 +40,13 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
-// The median distance (metres) of the depth pixels landing in the middle half of the box; 0 = too few.
+//double BoxMeters(const cv::Rect2d& box, const spotter::RgbdFrame& frame){
+//
+//@param1 - box: a box on the colour picture
+//@param2 - frame: a frame with depth and colourIndex
+//
+//@brief - the median distance in metres of the depth pixels landing in the middle half of the box; 0 if fewer than
+//         MinDepthPixels land there. Visits every depth pixel: O(depth pixels).
 double BoxMeters(const cv::Rect2d& box, const spotter::RgbdFrame& frame)
 {
     cv::Rect2d middle(box.x + box.width / 4, box.y + box.height / 4, box.width / 2, box.height / 2);
@@ -52,6 +61,14 @@ double BoxMeters(const cv::Rect2d& box, const spotter::RgbdFrame& frame)
     return (int)depthsMm.size() >= MinDepthPixels ? spotter::Median(depthsMm) / 1000 : 0;
 }
 
+//void Draw(cv::Mat& picture, const spotter::Detection& d, const std::string& name, double meters){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - d: the detection
+//@param3 - name: its class name
+//@param4 - meters: its distance, or 0 for unknown
+//
+//@brief - a green box with "name 1.23 m" (or "name ? m"). O(1).
 void Draw(cv::Mat& picture, const spotter::Detection& d, const std::string& name, double meters)
 {
     std::string label = meters > 0 ? cv::format("%s %.2f m", name.c_str(), meters) : name + " ? m";
@@ -59,6 +76,12 @@ void Draw(cv::Mat& picture, const spotter::Detection& d, const std::string& name
     cv::putText(picture, label, d.box.tl() + cv::Point2d(4, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
 }
 
+//int main(){
+//
+//@brief - the program: 02 · step 4 of 4 · How far away is each box?. Steps 2 and 3 together: for each YOLO box,
+//         collect the depth pixels that land in the MIDDLE half of the box (step 3's colourIndex), and take their
+//         median. Why the middle: a loose box around a person is mostly the wall behind them. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

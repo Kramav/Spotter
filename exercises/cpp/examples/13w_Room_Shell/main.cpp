@@ -155,6 +155,16 @@ struct Shell
     std::vector<Surface> surfaces;
 };
 
+//bool LoadShell(int argc, char** argv, Shell& shell){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional room folder
+//@param3 - shell: filled with the folder, info and shots
+//
+//@brief - step 1: the room folder given, or the newest under RoomsFolder. Refuses an old (format 1, mirrored)
+//         room. Loads every included scan (LoadScan) with its full colour picture (colour_full.bmp), its colour
+//         index and the colour model fitted from them; scans without the full picture fall back to the depth
+//         grid's colour. False if nothing loaded. O(scans x pixels).
 bool LoadShell(int argc, char** argv, Shell& shell)
 {
     shell.folder = argc > 1 ? fs::path(argv[1]) : spotter::NewestRoomFolder(RoomsFolder);
@@ -190,8 +200,17 @@ bool LoadShell(int argc, char** argv, Shell& shell)
 //  Step 2 (new): the walls, floor and ceiling
 // ---------------------------------------------------------------------
 
-// The ceiling: the highest height where level readings cover MinCeilingAreaMeters2. A fan, a lamp or a
-// beam hangs lower and covers less, so it never wins; the ceiling it hides is step 4's job.
+//bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY){
+//
+//@param1 - points: the room's points, levelled (Y up)
+//@param2 - normals: which way each faces
+//@param3 - floorY: the floor's height
+//@param4 - ceilingY: set to the ceiling's height
+//
+//@brief - the ceiling: the highest height (2 cm steps, at least MinCeilingAboveFloorMeters above the floor) where
+//         level, down-facing readings cover MinCeilingAreaMeters2 of the plan (AreaCellMeters cells). A fan, a
+//         lamp or a beam hangs lower and covers less, so it never wins; the ceiling it hides is step 4's job.
+//         False if none qualifies. O(points).
 bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY)
 {
     const float levelCos = std::cos(LevelDegrees * (float)CV_PI / 180);
@@ -220,7 +239,13 @@ bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::P
     return false;
 }
 
-// The walls' ends chained into a closed loop if they make one; otherwise their convex hull.
+//std::vector<cv::Point2f> Outline(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& walls, bool& closed){
+//
+//@param1 - walls: the walls' ends seen from above, (x, z)
+//@param2 - closed: set to true if the walls made a closed loop
+//
+//@brief - the walls' ends chained into a closed loop if they make one (from the first wall, each next unused wall
+//         whose end lies within JoinMeters of the loop's end); otherwise their convex hull. O(walls^2).
 std::vector<cv::Point2f> Outline(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& walls, bool& closed)
 {
     std::vector<cv::Point2f> loop{ walls[0].first, walls[0].second };
@@ -248,6 +273,17 @@ std::vector<cv::Point2f> Outline(const std::vector<std::pair<cv::Point2f, cv::Po
     return hull;
 }
 
+//Surface MakeSurface(const std::string& name, const cv::Point3f& origin, const cv::Point3f& across, const cv::Point3f& down, float widthMeters, float heightMeters){
+//
+//@param1 - name: the surface's name, for its file
+//@param2 - origin: its top-left corner in the room
+//@param3 - across: unit direction along its columns
+//@param4 - down: unit direction along its rows
+//@param5 - widthMeters: how wide it is
+//@param6 - heightMeters: how tall it is
+//
+//@brief - an empty surface: inward = down x across (the side it's seen from), a texel of TexelMeters (coarser if
+//         it would pass MaxTexels), and every texel inside. O(texels).
 Surface MakeSurface(const std::string& name, const cv::Point3f& origin, const cv::Point3f& across, const cv::Point3f& down,
                     float widthMeters, float heightMeters)
 {
@@ -263,7 +299,15 @@ Surface MakeSurface(const std::string& name, const cv::Point3f& origin, const cv
     return s;
 }
 
-// A floor or ceiling: its texels inside the outline.
+//void Clip(Surface& s, const std::vector<cv::Point2f>& outline, float y){
+//
+//@param1 - s: a floor or ceiling; its `inside` mask is clipped
+//@param2 - outline: the walls' outline seen from above, (x, z)
+//@param3 - y: the surface's height, to put each outline point on the surface
+//
+//@brief - a floor or ceiling: only the texels inside the outline polygon stay inside (each outline point is put on
+//         the surface at height y, turned into texel units, and the polygon is filled into the mask). O(texels +
+//         outline).
 void Clip(Surface& s, const std::vector<cv::Point2f>& outline, float y)
 {
     std::vector<cv::Point> corners;
@@ -276,7 +320,13 @@ void Clip(Surface& s, const std::vector<cv::Point2f>& outline, float y)
     cv::fillPoly(s.inside, std::vector<std::vector<cv::Point>>{ corners }, cv::Scalar(255));
 }
 
-// BuildRoom levels the room; from then on every scan is placed in the levelled room.
+//void Level(Shell& shell, const cv::Matx33f& firstCamera){
+//
+//@param1 - shell: the shell; its shots get their levelled pose
+//@param2 - firstCamera: scan 1's camera -> the levelled room (BuildRoom's)
+//
+//@brief - BuildRoom levels the room; from then on every scan is placed in the levelled room: each shot's camera <-
+//         room turn and offset are worked out (the inverse of w = firstCamera * (turn * p + shift)). O(scans).
 void Level(Shell& shell, const cv::Matx33f& firstCamera)
 {
     shell.firstCamera = firstCamera;
@@ -288,6 +338,15 @@ void Level(Shell& shell, const cv::Matx33f& firstCamera)
     }
 }
 
+//bool FindSurfaces(Shell& shell){
+//
+//@param1 - shell: the shell with its shots; its surfaces, floor, ceiling and outline are filled
+//
+//@brief - step 2: BuildRoom's walls at full height, FindTwinFloor's floor and FindCeiling's ceiling, from every
+//         scan's ICP points levelled and thinned to one per CubeMeters cube (evenly spread, so a wall seen up
+//         close doesn't outweigh one seen once; D43: raw points put the walls' foot, and so the floor, too high).
+//         Floor and ceiling follow the walls' outline; each wall faces into the room. False if no walls.
+//         O(BuildRoom + points).
 bool FindSurfaces(Shell& shell)
 {
     std::vector<const spotter::Scan*> scans;
@@ -358,11 +417,25 @@ bool FindSurfaces(Shell& shell)
 //  Step 3 (new): each texel's colour, from the scans that saw it
 // ---------------------------------------------------------------------
 
+//cv::Point3f Centre(const Surface& s, int row, int column){
+//
+//@param1 - s: a surface
+//@param2 - row: a texel's row
+//@param3 - column: its column
+//
+//@brief - the room point at the middle of that texel. O(1).
 cv::Point3f Centre(const Surface& s, int row, int column)
 {
     return s.origin + s.across * ((column + 0.5f) * s.texel) + s.down * ((row + 0.5f) * s.texel);
 }
 
+//cv::Vec3b Bilinear(const cv::Mat& picture, double column, double row){
+//
+//@param1 - picture: a BGR picture
+//@param2 - column: a position between pixels
+//@param3 - row: likewise
+//
+//@brief - the colour at a fractional position, blended from the four nearest pixels. O(1).
 cv::Vec3b Bilinear(const cv::Mat& picture, double column, double row)
 {
     const int c = std::min((int)column, picture.cols - 2), r = std::min((int)row, picture.rows - 2);
@@ -378,7 +451,19 @@ struct Sighting
     float weight;   // head-on and near
 };
 
-// What one scan saw at room point w on surface s, if it saw it.
+//bool Sight(const Shot& shot, const Surface& s, const cv::Point3f& w, const spotter::PinholeCamera& lens, Sighting& out){
+//
+//@param1 - shot: one scan
+//@param2 - s: the surface
+//@param3 - w: a room point on it
+//@param4 - lens: the depth camera
+//@param5 - out: set to the colour and weight of what it saw
+//
+//@brief - what one scan saw at room point w on surface s, if it saw it: the point must land in the picture, the
+//         scan's depth there must agree with the surface (within AgreeMeters: not a couch in front of the wall,
+//         not the fan under the ceiling), the view must face it (at least MinFacing), and the colour camera must
+//         have seen the same spot (its colour index agrees). The colour comes from the full picture (bilinear) or
+//         the depth grid's. Weight = facing squared / distance squared (head-on and near). O(1).
 bool Sight(const Shot& shot, const Surface& s, const cv::Point3f& w, const spotter::PinholeCamera& lens, Sighting& out)
 {
     const cv::Point3f p = shot.toCamera * w + shot.offset;
@@ -405,6 +490,15 @@ bool Sight(const Shot& shot, const Surface& s, const cv::Point3f& w, const spott
     return true;
 }
 
+//void Texture(Surface& s, const std::vector<Shot>& shots, const spotter::PinholeCamera& lens){
+//
+//@param1 - s: the surface; its colour and seen masks are filled
+//@param2 - shots: every scan
+//@param3 - lens: the depth camera
+//
+//@brief - step 3: every texel asks every scan (Sight, in parallel). With three or more sightings, colours unlike
+//         the per-channel median by more than OutlierColour (a fan blade, a reflection) are dropped first; of the
+//         rest the highest weight gives the colour, and a texel with any sighting left is seen. O(texels x scans).
 void Texture(Surface& s, const std::vector<Shot>& shots, const spotter::PinholeCamera& lens)
 {
     s.colour = cv::Mat(s.inside.size(), CV_8UC3, cv::Scalar(0, 0, 0));
@@ -447,7 +541,13 @@ void Texture(Surface& s, const std::vector<Shot>& shots, const spotter::PinholeC
 //  Step 4 (new): fill what nobody saw, with the surface's own pattern
 // ---------------------------------------------------------------------
 
-// The plainest fully seen square: colour nearest the surface's usual colour, least busy (not a poster).
+//cv::Rect Exemplar(const Surface& s){
+//
+//@param1 - s: a textured surface
+//
+//@brief - the plainest fully seen square (ExemplarTexels, down to MinExemplarTexels): the one whose colour is
+//         nearest the surface's usual colour and that's least busy (not a poster). Empty if there is none.
+//         O(texels).
 cv::Rect Exemplar(const Surface& s)
 {
     cv::Mat seenInt, sum, squares;
@@ -485,6 +585,17 @@ cv::Rect Exemplar(const Surface& s)
     return best;
 }
 
+//void Fill(Surface& s, std::mt19937& random){
+//
+//@param1 - s: a textured surface; its unseen texels are filled
+//@param2 - random: the random number generator
+//
+//@brief - step 4: a. the slow changes (the seen colour averaged over BaseCellMeters cells, empty cells inpainted
+//         with Telea, smoothed back up); b. the pattern (what's left of the seen colour); c. blocks of the pattern
+//         from the exemplar square, in rows, each the best of BlockCandidates at matching what's already there
+//         where it overlaps (Efros and Freeman 2001's image quilting, without its seam cut), writing only unseen
+//         texels; d. slow changes plus pattern in the unseen texels only. O(texels x BlockCandidates x block
+//         area).
 void Fill(Surface& s, std::mt19937& random)
 {
     const int rows = s.inside.rows, columns = s.inside.cols;
@@ -570,10 +681,21 @@ void Fill(Surface& s, std::mt19937& random)
 //  Steps 5-6: look, save
 // ---------------------------------------------------------------------
 
-// The viewer works in camera coordinates (Y down, Z ahead); the room is Y up, Z towards the first
-// camera: turned 180 degrees about X, it's seen from in front, as 09b's flip. It's its own inverse.
+//cv::Point3f ForView(const cv::Point3f& p){
+//
+//@param1 - p: a point in the room (Y up, Z towards the first camera)
+//
+//@brief - the room -> the viewer's coordinates (Y down, Z ahead): turned 180 degrees about X, (x, y, z) -> (x, -y,
+//         -z), as 09b's flip, so the room is seen from in front. It is its own inverse. O(1).
 cv::Point3f ForView(const cv::Point3f& p) { return { p.x, -p.y, -p.z }; }
 
+//void ReadyToView(Surface& s){
+//
+//@param1 - s: a filled surface
+//
+//@brief - the points the viewer draws: every ViewStep-th texel inside the surface, with its point (turned with
+//         ForView) and colour, and a second colour for the marked view (a filled texel blended 40% with
+//         MarkColour). O(texels / ViewStep^2).
 void ReadyToView(Surface& s)
 {
     for (int row = 0; row < s.inside.rows; row += ViewStep)
@@ -587,7 +709,12 @@ void ReadyToView(Surface& s)
         }
 }
 
-// Where the viewer's eye is, in the room (OrbitView::Project, backwards).
+//cv::Point3f Eye(const spotter::OrbitView& view){
+//
+//@param1 - view: the viewer
+//
+//@brief - where the viewer's eye is, in the room (OrbitView::Project, backwards): pivot + distance x (cos pitch
+//         sin yaw, -sin pitch, -cos pitch cos yaw), turned back with ForView. O(1).
 cv::Point3f Eye(const spotter::OrbitView& view)
 {
     const float r = (float)CV_PI / 180, d = view.distance;
@@ -595,6 +722,15 @@ cv::Point3f Eye(const spotter::OrbitView& view)
     return ForView(view.pivot + cv::Point3f(d * cp * sy, -d * sp, -d * cp * cy));
 }
 
+//void Show(const Shell& shell, bool marked, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - shell: the surfaces
+//@param2 - marked: true = show the filled texels marked
+//@param3 - view: the viewer
+//@param4 - renderer: draws the points
+//
+//@brief - the surfaces as points, leaving out any surface seen from outside (its back, towards the eye); shown
+//         with the key strip. O(shown points).
 void Show(const Shell& shell, bool marked, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     const cv::Point3f eye = Eye(view);
@@ -607,7 +743,13 @@ void Show(const Shell& shell, bool marked, spotter::OrbitView& view, spotter::Po
     cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
-// shell_<date>_<time>\ in the room's folder: the .obj (levelled, Y up, metres), its .mtl, a .bmp per surface.
+//fs::path Save(const Shell& shell){
+//
+//@param1 - shell: the finished surfaces
+//
+//@brief - shell_<date>_<time>\ in the room's folder: the .obj (levelled, Y up, metres: the floor and ceiling as
+//         QuadMeters quads, a wall as one quad, counter-clockwise from inside), its .mtl, and a .bmp per surface.
+//         Returns the folder. O(texels + quads).
 fs::path Save(const Shell& shell)
 {
     char stamp[32];
@@ -651,6 +793,15 @@ fs::path Save(const Shell& shell)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13w · Room Shell (no Kinect; after 13e). Just the room itself: every wall from the floor to
+//         the ceiling, the floor and the ceiling, each a flat surface with its own picture (a texture), as an .obj
+//         you can open in Blender or MeshLab. Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

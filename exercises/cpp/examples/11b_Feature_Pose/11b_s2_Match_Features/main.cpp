@@ -33,6 +33,12 @@ struct Features
     std::vector<cv::KeyPoint> keypoints;
 };
 
+//Features Find(const cv::Mat& picture, cv::ORB& orb){
+//
+//@param1 - picture: a BGR picture
+//@param2 - orb: the ORB detector
+//
+//@brief - a copy of the picture with its ORB keypoints and descriptors (found on the grey version). O(pixels).
 Features Find(const cv::Mat& picture, cv::ORB& orb)
 {
     Features f;
@@ -43,7 +49,13 @@ Features Find(const cv::Mat& picture, cv::ORB& orb)
     return f;
 }
 
-// New: each live feature's best A partner, if clearly better than its second best.
+//std::vector<cv::DMatch> Match(const Features& live, const Features& a){
+//
+//@param1 - live: the live view's features
+//@param2 - a: view A's features
+//
+//@brief - new: each live feature's best A partner (Hamming distance, brute force), kept only if clearly better
+//         than its second best (distance under MatchRatio x the second's). O(n x m).
 std::vector<cv::DMatch> Match(const Features& live, const Features& a)
 {
     std::vector<cv::DMatch> kept;
@@ -55,6 +67,12 @@ std::vector<cv::DMatch> Match(const Features& live, const Features& a)
     return kept;
 }
 
+//int main(){
+//
+//@brief - the program: 11b · step 2 of 3 · Match features between two views. SPACE keeps view A's picture and
+//         features. Then, every frame, each live feature looks for the A feature with the most similar description
+//         (the fewest of the 256 answers different: the Hamming distance). Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

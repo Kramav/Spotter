@@ -35,6 +35,16 @@ struct Room
     std::vector<cv::Vec3b> colours;
 };
 
+//void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options){
+//
+//@param1 - room: the scans so far; one is added
+//@param2 - scan: the new scan
+//@param3 - camera: the depth camera
+//@param4 - random: the random number generator
+//@param5 - options: the scan settings
+//
+//@brief - the first scan is the origin; every later one is placed among the earlier ones (PlaceScan) and refused
+//         if it can't be. A placed scan's points join the room's cloud. O(PlaceScan).
 void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options)
 {
     if (!room.scans.empty())
@@ -49,7 +59,13 @@ void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camer
     room.scans.push_back(std::move(scan));
 }
 
-// New: every scan (pose.txt last), then points.ply and room.txt with finished 1.
+//void SaveFolder(Room& room){
+//
+//@param1 - room: the placed scans and the folder to write
+//
+//@brief - new: StartRoomFolder, every scan (WriteScan, pose.txt last), then FinishRoomFolder: points.ply and
+//         room.txt with finished 1. Prints whether it saved, the scan count and the point count (13z rebuilds the
+//         room from it). O(scans x pixels).
 void SaveFolder(Room& room)
 {
     room.info.scans = (int)room.scans.size();
@@ -61,6 +77,11 @@ void SaveFolder(Room& room)
                 room.folder.string().c_str(), room.scans.size(), points);
 }
 
+//int main(){
+//
+//@brief - the program: 13e · step 3 of 4 · Save the scans as a room folder. In steps 1 and 2 the scans are gone
+//         when the program ends. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

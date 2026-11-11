@@ -90,8 +90,12 @@ const cv::Vec3b Orange(0, 160, 255);
 //  Step 1: the doll's house
 // ---------------------------------------------------------------------
 
-// The viewer works in camera coordinates (Y down, Z ahead); the room is Y up, Z towards the first
-// camera: turned 180 degrees about X, it's seen from in front, as 09b's flip.
+//cv::Point3f ForView(const cv::Point3f& p){
+//
+//@param1 - p: a point in the room (Y up, Z towards the first camera)
+//
+//@brief - the room -> the viewer's coordinates (Y down, Z ahead): turned 180 degrees about X, (x, y, z) -> (x, -y,
+//         -z), as 09b's flip, so the room is seen from in front. It is its own inverse. O(1).
 cv::Point3f ForView(const cv::Point3f& p) { return { p.x, -p.y, -p.z }; }
 
 struct House
@@ -102,6 +106,13 @@ struct House
     cv::Point3f middle;
 };
 
+//House MakeHouse(const spotter::TwinRoom& room){
+//
+//@param1 - room: the loaded room
+//
+//@brief - the room as a doll's house: the floor (FindTwinFloor), the points from just under the floor up to
+//         CutAboveFloorMeters (turned for the viewer), their middle and the radius (90th percentile reach). Prints
+//         the counts and size. O(points).
 House MakeHouse(const spotter::TwinRoom& room)
 {
     House house;
@@ -140,8 +151,13 @@ struct Twin
     std::vector<cv::Vec3b> visitorColours;
 };
 
-// Step 1: the room folder given on the command line, or the newest one under RoomsFolder. None: the
-// room waits for the first empty view (LearnAndLocate).
+//Twin LoadTwin(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional room folder
+//
+//@brief - step 1: the room folder given, or the newest under RoomsFolder. None: the room waits for the first empty
+//         view (LearnAndLocate). O(LoadTwinRoom).
 Twin LoadTwin(int argc, char** argv)
 {
     Twin twin;
@@ -154,6 +170,17 @@ Twin LoadTwin(int argc, char** argv)
     return twin;
 }
 
+//void LearnAndLocate(Twin& twin, const spotter::RgbdFrame& frame, const spotter::StillBackground& background, spotter::OrbitView& view){
+//
+//@param1 - twin: the room and where the Kinect is; updated
+//@param2 - frame: this frame
+//@param3 - background: the recorded empty view
+//@param4 - view: the viewer, repositioned for a new room
+//
+//@brief - with no scanned room the Kinect's own empty view becomes the room (OneViewRoom). Then LocateKinect from
+//         every LocateStep-th pixel of the empty view finds where the Kinect stands in it; prints the starts,
+//         time, share matched, the camera's place and height, the best fits, and warns about two alike fits or a
+//         poor match. O(LocateKinect).
 void LearnAndLocate(Twin& twin, const spotter::RgbdFrame& frame, const spotter::StillBackground& background, spotter::OrbitView& view)
 {
     std::vector<cv::Point3f> cloud = frame.depthCamera.Cloud(background.DepthMm()), sample;
@@ -184,6 +211,15 @@ void LearnAndLocate(Twin& twin, const spotter::RgbdFrame& frame, const spotter::
 //  Step 4: the visitors, into the room
 // ---------------------------------------------------------------------
 
+//void Visitors(const spotter::RgbdFrame& frame, const cv::Mat& mask, bool highlight, Twin& twin){
+//
+//@param1 - frame: this frame
+//@param2 - mask: the foreground mask: the visitors
+//@param3 - highlight: true = tint them orange
+//@param4 - twin: the room and where the Kinect is; its visitor points are replaced
+//
+//@brief - step 4: the foreground pixels as 3D points in the room (each from its own depth, moved by the located
+//         pose and turned for the viewer) with their colour. Nothing until the room is located. O(pixels).
 void Visitors(const spotter::RgbdFrame& frame, const cv::Mat& mask, bool highlight, Twin& twin)
 {
     const spotter::Pose& pose = twin.located.pose;
@@ -207,6 +243,15 @@ void Visitors(const spotter::RgbdFrame& frame, const cv::Mat& mask, bool highlig
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const Twin& twin, const spotter::StillBackground& background, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - twin: the room and the visitors
+//@param2 - background: for the countdown
+//@param3 - view: the viewer
+//@param4 - renderer: draws the points
+//
+//@brief - the doll's house, the visitors, a circle where the camera is, a title, and the matched share; shown with
+//         the key strip. O(points).
 void Show(const Twin& twin, const spotter::StillBackground& background, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     cv::Mat& image = renderer.Begin(view, cv::Scalar(20, 20, 20));
@@ -231,6 +276,15 @@ void Show(const Twin& twin, const spotter::StillBackground& background, spotter:
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: Demo 4 · Room Twin (presentation; from 13e, 08 and 03). The room you scanned with 13e, as a
+//         slowly turning doll's house (the ceiling cut off), with the visitors walking around INSIDE it, live, in
+//         3D. A first cut of roadmap step 15 (objects in the map), for people. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

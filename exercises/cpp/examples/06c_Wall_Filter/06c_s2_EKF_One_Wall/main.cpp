@@ -25,6 +25,12 @@
 
 const double NoiseMeters = 0.02, NoiseDegrees = 1.5, DriftMeters = 0.002;
 
+//int main(){
+//
+//@brief - the program: 06c · step 2 of 2 · An extended Kalman filter for one wall (no Kinect). A made-up wall
+//         whose nearest point (its "foot") is at X = 1.0, Z = 3.0 m. Each frame the wall finder measures, with
+//         noise, what a radar would: the DISTANCE to the foot and the ANGLE to it. The filter keeps the foot as X,
+//         Z. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     const cv::Point2d trueFoot(1.0, 3.0);

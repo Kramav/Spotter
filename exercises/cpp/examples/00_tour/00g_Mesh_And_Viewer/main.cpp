@@ -35,7 +35,10 @@ const std::string Keys = "mouse drag / W A S D  turn    wheel / Z X  zoom    R  
 
 const spotter::PinholeCamera DepthCamera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
 
-// A wall 2.5 m away, a box front 1.8 m away, and a dome bulging out of the wall.
+//cv::Mat MadeUpDepthMm(){
+//
+//@brief - a depth picture of a wall 2.5 m away, a box front 1.8 m away and a dome bulging 400 mm out of the wall.
+//         O(pixels).
 cv::Mat MadeUpDepthMm()
 {
     cv::Mat depthMm(424, 512, CV_32F, cv::Scalar(2500));
@@ -49,6 +52,12 @@ cv::Mat MadeUpDepthMm()
     return depthMm;
 }
 
+//spotter::Mesh MeshIt(const std::vector<cv::Point3f>& cloud){
+//
+//@param1 - cloud: the made-up depth cloud
+//
+//@brief - part 1: MeshFromGrid on every 2nd pixel, skipping triangles where depth jumps over 3%, coloured nearer =
+//         greener; prints how many triangles were kept and why the rest are missing. Returns the mesh. O(pixels).
 spotter::Mesh MeshIt(const std::vector<cv::Point3f>& cloud)
 {
     std::printf("1. MeshFromGrid: every 2nd pixel, squares skipped where depth jumps over 3%%:\n");
@@ -63,6 +72,11 @@ spotter::Mesh MeshIt(const std::vector<cv::Point3f>& cloud)
     return mesh;
 }
 
+//void Save(spotter::Mesh mesh){
+//
+//@param1 - mesh: the mesh (a copy: it is turned here)
+//
+//@brief - part 2: TurnToYUp, then SaveObj to tour_00g.obj; prints whether it was written. O(points + triangles).
 void Save(spotter::Mesh mesh)
 {
     spotter::TurnToYUp(mesh);   // Blender and MeshLab expect Y up
@@ -70,6 +84,12 @@ void Save(spotter::Mesh mesh)
     std::printf("2. SaveObj: %s tour_00g.obj (Y turned up for 3D programs). Open it in Blender or MeshLab.\n", ok ? "wrote" : "could NOT write");
 }
 
+//void ProjectByHand(spotter::OrbitView& view){
+//
+//@param1 - view: the viewer, turned 30 degrees here and reset after
+//
+//@brief - part 3: projects the box's corner by hand (pivot to the middle, yaw, step back, pinhole) and with
+//         OrbitView::Project, and prints both so they can be compared. O(1).
 void ProjectByHand(spotter::OrbitView& view)
 {
     std::printf("3. OrbitView: where does the box's corner land when the view is turned 30 deg?\n");
@@ -90,6 +110,10 @@ void ProjectByHand(spotter::OrbitView& view)
     view.Reset();
 }
 
+//int main(){
+//
+//@brief - the program: 00g · Tour: Mesh, SaveObj, OrbitView and PointRenderer (no Kinect needed). What they're
+//         for. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

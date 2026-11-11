@@ -29,11 +29,24 @@ const std::string Keys = "click a box  capture it     Q or Esc  quit";
 
 const float DepthBandMeters = 0.3f;
 
+//void OnMouse(int event, int x, int y, int flags, void* click){
+//
+//@param1 - event: OpenCV's mouse event
+//@param2 - x: the mouse's column in the half-size window
+//@param3 - y: its row
+//@param4 - flags: OpenCV's flags (unused)
+//@param5 - click: a cv::Point2d the left-click is written to, in colour pixels
+//
+//@brief - OpenCV's mouse callback: a left click stores its spot doubled (the window is half size), i.e. in colour
+//         pixels. O(1).
 void OnMouse(int event, int x, int y, int, void* click)
 {
     if (event == cv::EVENT_LBUTTONDOWN) *(cv::Point2d*)click = cv::Point2d(x * 2, y * 2);
 }
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -43,7 +56,14 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
-// The depth pixels in the box and near its middle depth. Returns their colour pixels, for the tint.
+//std::vector<cv::Point> CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, const spotter::RgbdFrame& frame){
+//
+//@param1 - box: the clicked box on the colour picture
+//@param2 - depthMm: the depth picture, mm
+//@param3 - frame: a frame with colourIndex
+//
+//@brief - the depth pixels in the box and within DepthBandMeters of the middle half's median depth; prints the
+//         counts. Returns their colour pixels, for the tint. O(depth pixels).
 std::vector<cv::Point> CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, const spotter::RgbdFrame& frame)
 {
     cv::Rect2d centre(box.x + box.width / 4, box.y + box.height / 4, box.width / 2, box.height / 2);
@@ -67,6 +87,10 @@ std::vector<cv::Point> CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, con
     return kept;
 }
 
+//int main(){
+//
+//@brief - the program: 08b · step 2 of 3 · Cut the object out of the depth. Click a box. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

@@ -23,12 +23,25 @@ const std::string Keys = "B  remember the room now     Q or Esc  quit";
 // Too small: the noise shows up green. Too big: a hand flat on a table disappears.
 const float NearerMm = 100;
 
+//cv::Mat Foreground(const cv::Mat& liveMm, const cv::Mat& backgroundMm){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - backgroundMm: the empty room's depth, mm (empty = not recorded)
+//
+//@brief - a 255/0 mask of pixels clearly nearer than the background (background - live > NearerMm) that have a
+//         reading. All zero before the background exists. O(pixels).
 cv::Mat Foreground(const cv::Mat& liveMm, const cv::Mat& backgroundMm)
 {
     if (backgroundMm.empty()) return cv::Mat::zeros(liveMm.size(), CV_8U);
     return (backgroundMm - liveMm > NearerMm) & (liveMm > 0);   // each comparison gives a 255/0 mask
 }
 
+//int main(){
+//
+//@brief - the program: 03 · step 2 of 3 · Which pixels are new?. A pixel is "foreground" when it is clearly nearer
+//         than the remembered room (by more than the noise) AND has a reading. The answer is a mask. 255 =
+//         foreground, 0 = not. It is drawn green on the grey depth picture. Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

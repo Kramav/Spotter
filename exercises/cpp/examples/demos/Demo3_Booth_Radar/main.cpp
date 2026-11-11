@@ -68,6 +68,10 @@ const int ReportEveryMs = 1000;
 const bool StartFullscreen = true;
 const std::string Window = "Demo 3 - booth radar";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.15 (the
+//         tracker's weak threshold, 05b). O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -89,9 +93,25 @@ struct WallTrack
     int seenFrames = 0, missedFrames = 0;
     double rawMeters = 0;      // this frame's measured distance, to compare in the console
 
+    //cv::Point2d Foot(){
+    //
+    //@brief - the wall's foot (its nearest point to the camera) as (X right, Z ahead): the first two state numbers.
+    //         O(1).
     cv::Point2d Foot() const { return { state[0], state[1] }; }
+    //double Meters(){
+    //
+    //@brief - the camera's distance from the wall: the length of the foot vector. O(1).
     double Meters() const { return cv::norm(Foot()); }
+    //double Degrees(){
+    //
+    //@brief - the wall's angle as in 06b: 0 = facing the camera squarely, from the foot's direction. O(1).
     double Degrees() const { return -std::atan2(state[0], state[1]) * 180 / CV_PI; }   // as 06b's: 0 = facing the camera
+    //cv::Point2d End(int i){
+    //
+    //@param1 - i: 0 or 1: which end of the wall
+    //
+    //@brief - that end's spot on the floor: the foot plus the end's distance along the wall (the foot direction turned
+    //         90 degrees, as in 06b). O(1).
     cv::Point2d End(int i) const
     {
         cv::Point2d along(state[1] / Meters(), -state[0] / Meters());   // the foot direction turned 90 deg, as in 06b
@@ -105,9 +125,14 @@ struct WallTracks
     int nextId = 1;
 };
 
-// Step 12: a found wall as the 4 numbers the filter measures: the distance to its foot, the
-// direction to the foot (radians, 0 = straight ahead, + = right), and how far along the wall each
-// end is from the foot. False for a wall too short to have a direction.
+//bool MeasureWall(const spotter::Wall& wall, cv::Vec4d& measured){
+//
+//@param1 - wall: a found wall
+//@param2 - measured: set to the 4 numbers the filter measures
+//
+//@brief - step 12: a found wall as the distance to its foot, the direction to the foot (radians, 0 = straight
+//         ahead, + = right) and how far along the wall each end is from the foot. False for a wall under 1 mm long
+//         (it would put NaN in the filter for good, review bug 9). O(1).
 bool MeasureWall(const spotter::Wall& wall, cv::Vec4d& measured)
 {
     double length = cv::norm(wall.ends[1] - wall.ends[0]);
@@ -118,10 +143,23 @@ bool MeasureWall(const spotter::Wall& wall, cv::Vec4d& measured)
     return true;
 }
 
-// Step 13: walls stand still, so the state stays; the filter only gets a little less sure of it.
+//void PredictWall(WallTrack& wall){
+//
+//@param1 - wall: the wall's filter
+//
+//@brief - the filter's predict step: a wall doesn't move, so the state stays and the uncertainty grows by
+//         WallDriftMeters squared on every diagonal entry. O(1).
 void PredictWall(WallTrack& wall) { wall.uncertainty += cv::Matx44d::eye() * (WallDriftMeters * WallDriftMeters); }
 
-// Step 15: the extended Kalman filter's correct step.
+//void CorrectWall(WallTrack& wall, const cv::Vec4d& measured){
+//
+//@param1 - wall: the wall's filter; updated
+//@param2 - measured: the 4 numbers from MeasureWall
+//
+//@brief - step 15: the extended Kalman filter's correct step: h(state) is what the wall finder would measure, H
+//         its Jacobian (distance = hypot(x, z), angle = atan2(x, z), ends measured directly), the angle difference
+//         is wrapped, the Kalman gain moves the state, and the uncertainty is updated in the Joseph form (review
+//         bug 9). O(1).
 void CorrectWall(WallTrack& wall, const cv::Vec4d& measured)
 {
     double x = wall.state[0], z = wall.state[1], r2 = x * x + z * z, r = std::sqrt(r2);
@@ -152,8 +190,14 @@ void CorrectWall(WallTrack& wall, const cv::Vec4d& measured)
     wall.uncertainty = keep * wall.uncertainty * keep.t() + gain * R * gain.t();
 }
 
-// Steps 13-15 for every wall: predict, match the found walls (closest pair first, as in 05),
-// correct; start new walls, forget lost ones.
+//void UpdateWallTracks(WallTracks& tracks, const std::vector<spotter::Wall>& walls){
+//
+//@param1 - tracks: the wall filters; updated
+//@param2 - walls: the walls found this frame
+//
+//@brief - steps 13-15 for every wall: predict, match the found walls (closest pair first, within MatchMeters and
+//         MatchDegrees), correct; unconfirmed walls are forgotten at their first miss, confirmed ones after
+//         ForgetFrames; unmatched walls start new filters. O(T x W x min(T, W)).
 void UpdateWallTracks(WallTracks& tracks, const std::vector<spotter::Wall>& walls)
 {
     for (WallTrack& wall : tracks.list) PredictWall(wall);
@@ -203,7 +247,18 @@ void UpdateWallTracks(WallTracks& tracks, const std::vector<spotter::Wall>& wall
     }
 }
 
-// Steps 1-7, as in 06: YOLO on its own thread, the tracker, and each object's trail on the floor.
+//void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDetector& detector, spotter::Tracker& tracker, spotter::BoxDepthSampler& boxDepth, spotter::TrackTrails& trails){
+//
+//@param1 - frame: this frame
+//@param2 - dt: seconds since the last frame
+//@param3 - detector: YOLO on its own thread
+//@param4 - tracker: the tracker
+//@param5 - boxDepth: the depth lookup, rebuilt here
+//@param6 - trails: each object's floor trail
+//
+//@brief - steps 1-7, as in 06: build the depth lookup, predict, take a finished YOLO batch if any and match it,
+//         offer the new picture, re-measure distances, and add each object's floor spot to its trail. O(Build +
+//         tracks).
 void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDetector& detector, spotter::Tracker& tracker,
                   spotter::BoxDepthSampler& boxDepth, spotter::TrackTrails& trails)
 {
@@ -219,9 +274,22 @@ void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDete
 //  Output
 // ---------------------------------------------------------------------
 
+//bool OnRadar(const std::string& name){
+//
+//@param1 - name: a class name
+//
+//@brief - true if the RadarClasses list is empty or holds the name. O(RadarClasses).
 bool OnRadar(const std::string& name) { return RadarClasses.empty() || std::find(RadarClasses.begin(), RadarClasses.end(), name) != RadarClasses.end(); }
 
-// The camera half: a box, a number and the distance on each tracked thing.
+//void DrawCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - the camera half: a box, an ID and the distance on each tracked thing (thin while coasting), and the fps.
+//         O(tracks).
 void DrawCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const spotter::Track& track : tracker.Tracks())
@@ -236,7 +304,20 @@ void DrawCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter
     fps.Draw(picture);
 }
 
-// The radar half, then both halves in one window (new).
+//void Show(cv::Mat& camera, spotter::RadarView& radar, const std::vector<spotter::Wall>& walls, const WallTracks& wallTracks, const spotter::Tracker& tracker, const spotter::TrackTrails& trails, const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera){
+//
+//@param1 - camera: the camera half, already drawn
+//@param2 - radar: the bird's-eye map
+//@param3 - walls: the raw walls found this frame
+//@param4 - wallTracks: the filtered walls
+//@param5 - tracker: the tracked objects
+//@param6 - trails: each object's floor trail
+//@param7 - classes: the class names
+//@param8 - colourCamera: the colour camera's model
+//
+//@brief - the radar half (new): the raw walls thin, each confirmed filtered wall thick with its label, each shown
+//         object's trail, and captions; then both halves side by side in one window (the camera scaled to the
+//         radar's height); shown with the key strip. O(pixels + trail points).
 void Show(cv::Mat& camera, spotter::RadarView& radar, const std::vector<spotter::Wall>& walls, const WallTracks& wallTracks, const spotter::Tracker& tracker,
           const spotter::TrackTrails& trails, const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera)
 {
@@ -257,6 +338,14 @@ void Show(cv::Mat& camera, spotter::RadarView& radar, const std::vector<spotter:
     cv::imshow(Window, spotter::WithKeys(both, Keys));
 }
 
+//void Report(const std::vector<spotter::Wall>& walls, const WallTracks& wallTracks, const spotter::Tracker& tracker){
+//
+//@param1 - walls: the raw walls found this frame
+//@param2 - wallTracks: the filtered walls
+//@param3 - tracker: the tracked objects
+//
+//@brief - console lines: object count, walls found and tracked, then each confirmed wall's filtered distance (and
+//         the raw one), length, angle and frames seen. O(walls).
 void Report(const std::vector<spotter::Wall>& walls, const WallTracks& wallTracks, const spotter::Tracker& tracker)
 {
     std::printf("%zu objects | %zu walls found this frame, %zu tracked\n", tracker.Tracks().size(), walls.size(), wallTracks.list.size());
@@ -271,6 +360,13 @@ void Report(const std::vector<spotter::Wall>& walls, const WallTracks& wallTrack
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: Demo 3 · Booth Radar (presentation; built from 06c). One screen, two halves: on the left
+//         the camera, with a box, a number and the distance on everyone and everything YOLO knows; on the right
+//         the same scene from ABOVE, like a radar: each one a dot with a trail, and the walls of the stand as grey
+//         lines. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1
+//         if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

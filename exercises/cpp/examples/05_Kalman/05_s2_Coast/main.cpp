@@ -24,6 +24,13 @@ const std::string Keys = "SPACE (hold)  hide the measurements     Q or Esc  quit
 
 const double NoisePixels = 15, AccelerationPixels = 300, Dt = 1.0 / 30;
 
+//cv::KalmanFilter NewFilter(cv::Point2f start){
+//
+//@param1 - start: where the object was first seen, pixels
+//
+//@brief - a Kalman filter for a dot: state x, y and their speeds, measuring x and y. F moves position by speed x
+//         Dt, H picks x and y, R is the measurement noise, Q is how far reality drifts (from AccelerationPixels),
+//         P starts unsure. O(1).
 cv::KalmanFilter NewFilter(cv::Point2f start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
@@ -37,6 +44,12 @@ cv::KalmanFilter NewFilter(cv::Point2f start)
     return kalman;
 }
 
+//int main(){
+//
+//@brief - the program: 05 · step 2 of 3 · Coasting when the measurements stop (no Kinect). Step 1's dot, now
+//         moving in a straight line and bouncing off the walls. Hold SPACE to hide the measurements, like YOLO
+//         missing an object. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit.
 int main()
 {
     std::mt19937 random(1);

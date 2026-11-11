@@ -28,7 +28,13 @@ const double NoisePixels = 15;          // how much the measurements wobble
 const double AccelerationPixels = 300;  // how suddenly the filter thinks the dot can change speed
 const double Dt = 1.0 / 30;             // 30 frames a second
 
-// State: x, y, speed x, speed y. Measured: x, y.
+//cv::KalmanFilter NewFilter(cv::Point2f start){
+//
+//@param1 - start: where the object was first seen, pixels
+//
+//@brief - a Kalman filter for a dot: state x, y and their speeds, measuring x and y. F moves position by speed x
+//         Dt, H picks x and y, R is the measurement noise, Q is how far reality drifts (from AccelerationPixels),
+//         P starts unsure. O(1).
 cv::KalmanFilter NewFilter(cv::Point2f start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
@@ -42,6 +48,12 @@ cv::KalmanFilter NewFilter(cv::Point2f start)
     return kalman;
 }
 
+//int main(){
+//
+//@brief - the program: 05 · step 1 of 3 · A Kalman filter follows a noisy dot (no Kinect). A dot moves in a circle
+//         (white, the truth). We only get noisy measurements of it (red), like YOLO's wobbly box centres. A Kalman
+//         filter (green) keeps a guess of the position AND speed, and each frame. Setup, main loop and clean-up
+//         are laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     std::mt19937 random(1);

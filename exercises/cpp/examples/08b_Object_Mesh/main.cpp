@@ -89,6 +89,9 @@ const Back BackGuess = Back::Mirror;
 
 const std::string Window = "08b object mesh  (click an object to capture, C clear, Q quit)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.40. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -98,6 +101,9 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//spotter::KinectSource::Options KinectSettings(){
+//
+//@brief - the Kinect's options: the defaults with the colour exposure capped (30 fps in a dim room, 05c). O(1).
 spotter::KinectSource::Options KinectSettings()
 {
     spotter::KinectSource::Options options;
@@ -120,13 +126,31 @@ struct Capture
     std::vector<spotter::Detection> detections;   // seen when it was clicked (for the person check)
 };
 
+//void OnMouse(int event, int x, int y, int flags, void* capture){
+//
+//@param1 - event: OpenCV's mouse event
+//@param2 - x: the mouse's column in the half-size window
+//@param3 - y: its row
+//@param4 - flags: OpenCV's flags (unused)
+//@param5 - capture: the Capture the click is stored in
+//
+//@brief - OpenCV's mouse callback: a left click stores its spot doubled (the window is half size), i.e. in colour
+//         pixels. O(1).
 void OnMouse(int event, int x, int y, int, void* capture)
 {
     if (event == cv::EVENT_LBUTTONDOWN) ((Capture*)capture)->click = cv::Point(x * 2, y * 2);   // the window is half size
 }
 
-// RANSAC as in 09, over the object's pixels only: the level-ish plane with the most points ON it and
-// few BELOW it. That's the table or floor it stands on.
+//bool FindSupport(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& support){
+//
+//@param1 - mask: the object's pixels
+//@param2 - cloud: a 3D point per depth pixel
+//@param3 - random: the random number generator
+//@param4 - support: set to the plane it stands on
+//
+//@brief - RANSAC as in 09, over the object's pixels only: the level-ish plane with the most points ON it (within
+//         PlaneMarginMeters) and few BELOW it (under MaxBelowShare). That's the table or floor it stands on. True
+//         if at least MinPlaneShare of the points are on it; then refitted to them. O(RansacTries x pixels).
 bool FindSupport(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& support)
 {
     std::vector<int> kept;
@@ -162,7 +186,14 @@ bool FindSupport(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std
     return true;
 }
 
-// Drop the points on or below the surface the object stands on, if there is one.
+//void RemoveSupport(cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std::mt19937& random){
+//
+//@param1 - mask: the object's pixels; changed in place
+//@param2 - cloud: a 3D point per depth pixel
+//@param3 - random: the random number generator
+//
+//@brief - drops the points on or below the surface the object stands on (FindSupport), if there is one and
+//         RemoveSupportPlane is on; prints how many are left. O(RansacTries x pixels).
 void RemoveSupport(cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std::mt19937& random)
 {
     spotter::Plane support;
@@ -172,8 +203,16 @@ void RemoveSupport(cv::Mat& mask, const std::vector<cv::Point3f>& cloud, std::mt
     std::printf("  above the surface it stands on: %d\n", cv::countNonZero(mask));
 }
 
-// The object's depth pixels: in the box, near its middle depth, above its support, one blob.
-// Prints how many pixels each step leaves, so you can see which step does what.
+//cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Point3f>& cloud, const spotter::RgbdFrame& frame, std::mt19937& random){
+//
+//@param1 - box: the clicked box on the colour picture
+//@param2 - cloud: a 3D point per depth pixel (the averaged depth)
+//@param3 - frame: a frame with colourIndex
+//@param4 - random: the random number generator
+//
+//@brief - the object's depth pixels: in the box, within DepthBandMeters of the middle half's median depth, above
+//         its support (RemoveSupport), and only the biggest connected blob. Prints how many pixels each step
+//         leaves, so you can see which step does what. O(depth pixels + RemoveSupport).
 cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Point3f>& cloud, const spotter::RgbdFrame& frame, std::mt19937& random)
 {
     cv::Mat mask = cv::Mat::zeros(Height, Width, CV_8U);
@@ -206,9 +245,16 @@ cv::Mat CutOut(const cv::Rect2d& box, const std::vector<cv::Point3f>& cloud, con
     return labels == biggest;
 }
 
-// Clicked without a box: grow the object from the clicked depth pixel. The points near the click,
-// minus the surface it stands on, then a flood fill from the click that only steps to a neighbour
-// less than MaxJumpMm away in depth: it stops at the object's edges.
+//cv::Mat CutOutAround(int seed, const std::vector<cv::Point3f>& cloud, std::mt19937& random){
+//
+//@param1 - seed: the clicked depth pixel's index
+//@param2 - cloud: a 3D point per depth pixel
+//@param3 - random: the random number generator
+//
+//@brief - clicked without a box: grows the object from the clicked depth pixel. The points within ClickReachMeters
+//         of the click, minus the surface it stands on, then a flood fill from the click that only steps to a
+//         neighbour less than MaxJumpMm away in depth, so it stops at the object's edges. Empty (with a message)
+//         if the click has no depth or is on the surface itself. O(depth pixels + RemoveSupport).
 cv::Mat CutOutAround(int seed, const std::vector<cv::Point3f>& cloud, std::mt19937& random)
 {
     cv::Mat mask = cv::Mat::zeros(Height, Width, CV_8U);
@@ -230,7 +276,12 @@ cv::Mat CutOutAround(int seed, const std::vector<cv::Point3f>& cloud, std::mt199
     return mask;
 }
 
-// The depth pixel seen nearest to a colour pixel (within ClickSnapPixels), or -1.
+//int DepthPixelAt(cv::Point click, const spotter::RgbdFrame& frame){
+//
+//@param1 - click: a spot on the colour picture
+//@param2 - frame: a frame with depth and colourIndex
+//
+//@brief - the depth pixel that lands nearest to a colour pixel (within ClickSnapPixels), or -1. O(depth pixels).
 int DepthPixelAt(cv::Point click, const spotter::RgbdFrame& frame)
 {
     int best = -1;
@@ -245,7 +296,14 @@ int DepthPixelAt(cv::Point click, const spotter::RgbdFrame& frame)
     return best;
 }
 
-// Step 4: each 2x2 square of object pixels gives two triangles, unless the corners jump in depth.
+//spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, const cv::Mat& registered){
+//
+//@param1 - mask: the object's pixels
+//@param2 - cloud: a 3D point per depth pixel
+//@param3 - registered: colour per depth pixel
+//
+//@brief - step 4: a point per object pixel and two triangles per 2 x 2 square of them, unless the corners jump in
+//         depth by more than MaxJumpMm; group "seen_front", facing the camera. O(pixels).
 spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, const cv::Mat& registered)
 {
     spotter::Mesh mesh;
@@ -275,7 +333,15 @@ spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& 
     return mesh;
 }
 
-// Step 5: a grey twin of every front point, pushed behind, plus a rim joining the two.
+//void AddGuessedBack(spotter::Mesh& mesh){
+//
+//@param1 - mesh: the mesh; the guessed back is added to it
+//
+//@brief - step 5: a grey twin of every front point pushed behind (flat at the farthest depth, or mirrored about
+//         the middle as deep as it is wide, never in front of the front), its triangles reversed, plus a rim
+//         joining the border edges (an edge whose reverse no triangle uses). Group "guessed_back". ponytail: "as
+//         deep as it is wide" is the whole guess; a cylinder fit (docs/ideas.md) would be better, a real back
+//         needs more views. O(triangles log triangles).
 void AddGuessedBack(spotter::Mesh& mesh)
 {
     const std::vector<cv::Vec3i>& front = mesh.groups["seen_front"];
@@ -315,7 +381,15 @@ void AddGuessedBack(spotter::Mesh& mesh)
     }
 }
 
-// A scan made without a box has no class to refuse, so check it isn't mostly a person (07d).
+//bool MostlyPerson(const cv::Mat& mask, const Capture& capture, const spotter::RgbdFrame& frame, int person){
+//
+//@param1 - mask: the object's pixels
+//@param2 - capture: the capture, for the detections at the click
+//@param3 - frame: a frame with colourIndex
+//@param4 - person: the class number of "person"
+//
+//@brief - a scan made without a box has no class to refuse, so check it isn't mostly a person (07d): true if more
+//         than PersonShare of its pixels land inside a person box. O(pixels x detections).
 bool MostlyPerson(const cv::Mat& mask, const Capture& capture, const spotter::RgbdFrame& frame, int person)
 {
     int inPerson = 0;
@@ -329,7 +403,17 @@ bool MostlyPerson(const cv::Mat& mask, const Capture& capture, const spotter::Rg
     return inPerson > PersonShare * cv::countNonZero(mask);
 }
 
-// Step 1: what did the click hit? The smallest box under it, else the nearest depth reading.
+//bool StartCapture(Capture& capture, const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>& detections, const spotter::ClassList& classes, spotter::DepthAverager& averager){
+//
+//@param1 - capture: the click and what it hit; filled in
+//@param2 - frame: this frame
+//@param3 - detections: this frame's boxes
+//@param4 - classes: the class names
+//@param5 - averager: the depth averager; started
+//
+//@brief - step 1: what did the click hit? The smallest box under it, else the nearest depth reading. A person is
+//         refused (privacy); so is a click with neither a box nor a reading. Otherwise remembers the target and
+//         starts the averager; true if it started. O(detections + depth pixels).
 bool StartCapture(Capture& capture, const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>& detections,
                   const spotter::ClassList& classes, spotter::DepthAverager& averager)
 {
@@ -347,7 +431,17 @@ bool StartCapture(Capture& capture, const spotter::RgbdFrame& frame, const std::
     return true;
 }
 
-// Steps 3-6, on the averaged depth. Returns the colour pixels to tint.
+//std::vector<cv::Point> FinishCapture(const Capture& capture, const spotter::DepthAverager& averager, const spotter::RgbdFrame& frame, const spotter::ClassList& classes, std::mt19937& random){
+//
+//@param1 - capture: the click and what it hit
+//@param2 - averager: the finished depth average
+//@param3 - frame: this frame
+//@param4 - classes: the class names
+//@param5 - random: the random number generator
+//
+//@brief - steps 3-6, on the averaged depth: the cloud, the cut-out (around the click or in the box), a privacy
+//         check, the mesh with its guessed back, then SaveObj to object_<name>_<time>.obj with Y up. Returns the
+//         colour pixels to tint on the screen. O(depth pixels + CutOut).
 std::vector<cv::Point> FinishCapture(const Capture& capture, const spotter::DepthAverager& averager, const spotter::RgbdFrame& frame,
                                      const spotter::ClassList& classes, std::mt19937& random)
 {
@@ -378,6 +472,18 @@ std::vector<cv::Point> FinishCapture(const Capture& capture, const spotter::Dept
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>& detections, const std::vector<cv::Point>& tint, const spotter::DepthAverager& averager, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - frame: this frame
+//@param2 - detections: this frame's boxes
+//@param3 - tint: the colour pixels of the last object, tinted green
+//@param4 - averager: for the hold-still count
+//@param5 - classes: the class names
+//@param6 - fps: the frame-rate meter
+//
+//@brief - the half-size colour picture with the last object tinted green, a box and name per detection (person
+//         red), "HOLD STILL n / N" or "click an object to capture" and the fps; shown with the key strip.
+//         O(pixels).
 void Show(const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>& detections, const std::vector<cv::Point>& tint,
           const spotter::DepthAverager& averager, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
@@ -405,6 +511,12 @@ void Show(const spotter::RgbdFrame& frame, const std::vector<spotter::Detection>
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 08b · Object Mesh. Example 08 turned every depth pixel into a 3D point. This example keeps
+//         only the points of ONE detected object and joins them into triangles: a 3D model you can open in Blender
+//         or MeshLab. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal
+//         exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

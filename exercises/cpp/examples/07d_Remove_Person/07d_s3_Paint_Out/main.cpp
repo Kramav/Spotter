@@ -27,6 +27,9 @@ const double PersonShare = 0.3;   // a blob is a person if this share of it is i
 const int MinBlobPixels = 500;
 const float BlendRate = 0.1f;
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -61,7 +64,13 @@ void Learn(cv::Mat& memory, const cv::Mat& registered, const cv::Mat& foreground
     }
 }
 
-// New: label the foreground blobs; a big one with PersonShare of it in person boxes is removed.
+//cv::Mat PersonBlobs(const cv::Mat& foreground, const cv::Mat& inPerson){
+//
+//@param1 - foreground: the foreground mask
+//@param2 - inPerson: 1 where a pixel is inside a person box
+//
+//@brief - new: labels the foreground blobs; a blob of at least MinBlobPixels with PersonShare of it inside person
+//         boxes is a person and goes in the returned mask (255). O(pixels).
 cv::Mat PersonBlobs(const cv::Mat& foreground, const cv::Mat& inPerson)
 {
     cv::Mat labels, stats, centroids;
@@ -77,6 +86,12 @@ cv::Mat PersonBlobs(const cv::Mat& foreground, const cv::Mat& inPerson)
     return remove;
 }
 
+//int main(){
+//
+//@brief - the program: 07d · step 3 of 3 · Paint the person out. Steps 1 and 2 together. A foreground blob
+//         (something in front of the room) that lies mostly inside person boxes is a person: replace its pixels
+//         with the colour memory. Whole blobs, not boxes, so the wall inside the box stays live. Setup, main loop
+//         and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

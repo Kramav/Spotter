@@ -22,6 +22,9 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -31,6 +34,13 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//int main(){
+//
+//@brief - the program: 06 · step 1 of 2 · Where on the floor is each object?. Each box already has a distance
+//         (02_s4). The box centre's offset from the middle of the picture gives the sideways position: the pinhole
+//         model on the colour camera, X = (u + 0.5 - cx) * Z / fx. So each object gets a spot on the floor. Setup,
+//         main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't
+//         start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

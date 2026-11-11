@@ -31,6 +31,10 @@ const std::string Keys = "Q or Esc  quit";
 
 const float MinWallHeightMeters = 0.8f;
 
+//spotter::PlaneSearch UprightPlanes(){
+//
+//@brief - FindPlanes' settings for walls: upright within 20 degrees, at most 4 planes, each with at least 5% of
+//         the readings. O(1).
 spotter::PlaneSearch UprightPlanes()
 {
     spotter::PlaneSearch search;
@@ -41,7 +45,16 @@ spotter::PlaneSearch UprightPlanes()
     return search;
 }
 
-// One piece -> a line on the floor, if it's tall enough to be a wall.
+//bool WallLine(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, cv::Point2d& a, cv::Point2d& b){
+//
+//@param1 - piece: one plane piece from FindPlanes
+//@param2 - grid: the grid its cells index
+//@param3 - a: set to one end of the wall on the floor
+//@param4 - b: set to the other end
+//
+//@brief - one piece -> a line on the floor: the normal's up/down part is dropped, the foot is the wall's nearest
+//         point to the camera, and the ends are the 2nd and 98th percentiles along the wall. True if its points
+//         span at least MinWallHeightMeters (a wall, not furniture). O(piece cells).
 bool WallLine(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, cv::Point2d& a, cv::Point2d& b)
 {
     const cv::Point3f& n = piece.plane.normal;
@@ -59,6 +72,11 @@ bool WallLine(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, 
     return spotter::Percentile(heights, 0.98) - spotter::Percentile(heights, 0.02) >= MinWallHeightMeters;
 }
 
+//int main(){
+//
+//@brief - the program: 06b · step 3 of 3 · Walls seen from above. Step 2's pieces now come from the library
+//         (spotter::FindPlanes, upright). Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});   // colour too: the radar shows its field of view

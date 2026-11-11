@@ -69,6 +69,10 @@ const double AccelerationMeters = 1.0;
 const int ReportEveryMs = 1000;
 const std::string Window = "05 kalman  (Q quits)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence MinConfidence.
+//         O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -96,10 +100,25 @@ struct Track
     double lastFilteredMeters = 0, rawChangeSum = 0, filteredChangeSum = 0;   // jitter, as in 04
     int changeCount = 0;
 
+    //double CentreX(){
+    //
+    //@brief - the filtered box centre's x, in colour pixels (state 0). O(1).
     double CentreX() const { return kalman.statePost.at<float>(0); }
+    //double CentreY(){
+    //
+    //@brief - the filtered box centre's y, in colour pixels (state 1). O(1).
     double CentreY() const { return kalman.statePost.at<float>(1); }
+    //double Meters(){
+    //
+    //@brief - the filtered distance in metres (state 2); 0 until one has been measured. O(1).
     double Meters() const { return kalman.statePost.at<float>(2); }
+    //double MetersPerSecond(){
+    //
+    //@brief - the filtered speed along the distance (state 5): + = moving away. O(1).
     double MetersPerSecond() const { return kalman.statePost.at<float>(5); }
+    //cv::Rect2d Box(){
+    //
+    //@brief - where the box should be NOW: the filtered centre with the last detection's size. O(1).
     cv::Rect2d Box() const { return cv::Rect2d(CentreX() - boxSize.width / 2, CentreY() - boxSize.height / 2, boxSize.width, boxSize.height); }
 };
 
@@ -115,7 +134,16 @@ struct Measured
     double rawMeters;   // 0 = no depth this frame
 };
 
-// A new filter for an object first seen at this centre and distance, standing still.
+//cv::KalmanFilter NewKalman(double centreX, double centreY, double meters){
+//
+//@param1 - centreX: the box centre's x, pixels
+//@param2 - centreY: its y, pixels
+//@param3 - meters: its distance; <= 0 = not measured yet
+//
+//@brief - a new 6-state filter (x, y, distance and their speeds, 3 measured) for an object first seen here,
+//         standing still. H picks the first three, R is the measurement noises squared, P starts at about one
+//         measurement's noise for the position and "no idea" for the speeds (very unsure of the distance if none
+//         yet). O(1).
 cv::KalmanFilter NewKalman(double centreX, double centreY, double meters)
 {
     cv::KalmanFilter kalman(6, 3, 0, CV_32F);   // 6 state numbers, 3 measured
@@ -139,7 +167,14 @@ cv::KalmanFilter NewKalman(double centreX, double centreY, double meters)
     return kalman;
 }
 
-// The time between frames changes, so the "how things move" matrices are rebuilt every frame.
+//void SetTimeStep(cv::KalmanFilter& kalman, double dt){
+//
+//@param1 - kalman: the filter; its F and Q are rebuilt
+//@param2 - dt: seconds since the last frame
+//
+//@brief - the time between frames changes, so F (position += speed x dt, speed unchanged) and Q (how far real
+//         motion can drift from constant speed: a dt^2 / 2 for positions, a dt for speeds, from the Acceleration
+//         settings) are rebuilt every frame. O(1).
 void SetTimeStep(cv::KalmanFilter& kalman, double dt)
 {
     // F: position += speed * dt, speed stays the same (constant velocity).
@@ -158,8 +193,14 @@ void SetTimeStep(cv::KalmanFilter& kalman, double dt)
     }
 }
 
-// Correct: blend this frame's measurement in. No depth this frame? Feed in the prediction's own
-// distance with a huge noise, so the filter ignores it and keeps its guess.
+//void Correct(Track& track, const Measured& m){
+//
+//@param1 - track: the track to correct
+//@param2 - m: this frame's detection with its distance
+//
+//@brief - blends the measurement in. No depth this frame? It feeds in the prediction's own distance with a huge
+//         noise, so the filter ignores it and keeps its guess. Also resets the missed count and records how much
+//         the raw and filtered distances changed. O(1).
 void Correct(Track& track, const Measured& m)
 {
     double meters = m.rawMeters;
@@ -185,8 +226,13 @@ void Correct(Track& track, const Measured& m)
     track.lastFilteredMeters = track.Meters();
 }
 
-// Predict: move every object forward in time. Afterwards the filter's best guess (statePost) IS
-// the prediction, so an object YOLO misses simply keeps moving ("coasting").
+//void Predict(Tracks& tracks, double dt){
+//
+//@param1 - tracks: the tracks; moved on in place
+//@param2 - dt: seconds since the last frame
+//
+//@brief - moves every object forward in time (SetTimeStep, predict). Afterwards the filter's best guess
+//         (statePost) IS the prediction, so an object YOLO misses keeps moving ("coasting"). O(tracks).
 void Predict(Tracks& tracks, double dt)
 {
     for (Track& track : tracks.list)
@@ -196,6 +242,13 @@ void Predict(Tracks& tracks, double dt)
     }
 }
 
+//void StartTrack(Tracks& tracks, const Measured& m, const spotter::ClassList& classes){
+//
+//@param1 - tracks: the tracks; one is added
+//@param2 - m: the unmatched detection
+//@param3 - classes: the class names, for the console line
+//
+//@brief - a new ID for it, with a fresh filter at its centre and distance; prints "new ID". O(1).
 void StartTrack(Tracks& tracks, const Measured& m, const spotter::ClassList& classes)
 {
     Track track;
@@ -208,7 +261,15 @@ void StartTrack(Tracks& tracks, const Measured& m, const spotter::ClassList& cla
     tracks.list.push_back(std::move(track));
 }
 
-// 04's greedy matching. The only change: Box() is where the object should be NOW (predicted).
+//void Match(Tracks& tracks, const std::vector<Measured>& measured, const spotter::ClassList& classes){
+//
+//@param1 - tracks: the tracks; updated in place
+//@param2 - measured: this frame's detections with their distances
+//@param3 - classes: the class names
+//
+//@brief - 04's greedy matching; the only change: Box() is where the object should be NOW (predicted). Matched
+//         tracks are corrected, unmatched detections start tracks, unmatched tracks count a missed frame and are
+//         dropped after MaxMissedFrames. O(T x D x min(T, D)).
 void Match(Tracks& tracks, const std::vector<Measured>& measured, const spotter::ClassList& classes)
 {
     std::vector<bool> trackMatched(tracks.list.size(), false), detectionMatched(measured.size(), false);
@@ -245,6 +306,15 @@ void Match(Tracks& tracks, const std::vector<Measured>& measured, const spotter:
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracks: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a box per track in its ID's colour (thin and "(predicted)" while coasting), labelled with its class,
+//         distance and whether it's approaching or moving away, and the fps; shown with the key strip. O(tracks).
 void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const Track& track : tracks.list)
@@ -266,6 +336,14 @@ void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& clas
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - tracks: the tracked objects; their change counters are reset
+//@param2 - classes: the class names
+//@param3 - fps: the frame-rate meter
+//
+//@brief - fps, how many objects are tracked, and per track its raw and filtered distance, speed and the average
+//         frame-to-frame change of each in mm; then the counters restart. O(tracks).
 void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     std::printf("%.1f fps | %zu objects tracked\n", fps.Fps(), tracks.list.size());
@@ -284,6 +362,11 @@ void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::Fp
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 05 · Kalman. Example 04 matched each box to where the object WAS last frame, and smoothed
+//         its distance with a running average. Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

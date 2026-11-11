@@ -22,7 +22,12 @@
 
 #include "spotter/geometry.hpp"
 
-// 30,000 random spots on the floor, the back wall and the left wall (about 3 cm apart).
+//std::vector<cv::Point3f> Sample(cv::RNG& random){
+//
+//@param1 - random: the random number generator
+//
+//@brief - 30,000 random spots on the floor, the back wall and the left wall of a made-up room (about 3 cm apart).
+//         O(30,000).
 std::vector<cv::Point3f> Sample(cv::RNG& random)
 {
     std::vector<cv::Point3f> points;
@@ -36,7 +41,16 @@ std::vector<cv::Point3f> Sample(cv::RNG& random)
     return points;
 }
 
-// New: ICP from "not moved": B's points (in B's coordinates) onto A's, through A's k-d tree.
+//spotter::Pose Icp(cv::flann::Index& tree, const std::vector<cv::Point3f>& a, const std::vector<cv::Point3f>& b, bool print){
+//
+//@param1 - tree: A's points in a k-d tree
+//@param2 - a: A's points
+//@param3 - b: B's points, in B's coordinates
+//@param4 - print: true = print each round
+//
+//@brief - new: ICP from "not moved", B's points onto A's: 30 rounds of (step 1) the nearest A point for each moved
+//         B point through the tree, kept if within a gate that shrinks from 20 cm to 3 cm, then (step 2) Kabsch on
+//         the pairs, on top of the pose so far; stops when it settles. O(rounds x n log m).
 spotter::Pose Icp(cv::flann::Index& tree, const std::vector<cv::Point3f>& a, const std::vector<cv::Point3f>& b, bool print)
 {
     spotter::Pose pose;
@@ -59,6 +73,14 @@ spotter::Pose Icp(cv::flann::Index& tree, const std::vector<cv::Point3f>& a, con
     return pose;
 }
 
+//void Try(float rightMeters, float leftDegrees, bool print){
+//
+//@param1 - rightMeters: how far B moved right
+//@param2 - leftDegrees: how far B turned left
+//@param3 - print: true = print each round
+//
+//@brief - makes A and B samples of the same room with B moved by that much, runs Icp and prints the pose it found.
+//         O(Icp).
 void Try(float rightMeters, float leftDegrees, bool print)
 {
     const spotter::Pose truth{ spotter::TurnAbout(cv::Vec3d(0, -leftDegrees * CV_PI / 180, 0)), cv::Point3f(rightMeters, 0, 0) };
@@ -73,6 +95,12 @@ void Try(float rightMeters, float leftDegrees, bool print)
     std::printf("  found: right %+.3f m, forward %+.3f m, turned %.2f deg\n", found.shift.x, found.shift.z, found.Degrees());
 }
 
+//int main(){
+//
+//@brief - the program: 11 · step 3 of 3 · Pair up, fit, repeat: ICP (no Kinect needed). Now nobody tells you the
+//         pairs. Guess them: each B point's partner is the nearest A point (step 1). At first many guesses are
+//         wrong, but the best fit to them (step 2) still moves B the right way, so the next guesses are better.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     Try(0.05f, 3, true);

@@ -17,7 +17,14 @@ namespace
 {
 const int DepthWidth = 512, DepthHeight = 424, ColourWidth = 1920, ColourHeight = 1080;
 
-// A copy of libfreenect2's depth with "no reading" (NaN, infinity, 0) as 0.
+//void CleanCopy(const float* from, cv::Mat& to, int rows, int columns){
+//
+//@param1 - from: libfreenect2's depth floats, millimetres
+//@param2 - to: the CV_32F picture to fill (made the right size)
+//@param3 - rows: the picture's height
+//@param4 - columns: the picture's width
+//
+//@brief - copies libfreenect2's depth with "no reading" (NaN, infinity, 0) as 0. O(rows x columns).
 void CleanCopy(const float* from, cv::Mat& to, int rows, int columns)
 {
     to.create(rows, columns, CV_32F);

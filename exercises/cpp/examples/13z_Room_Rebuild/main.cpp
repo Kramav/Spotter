@@ -58,14 +58,23 @@ const int ShowStep = 2;                          // the viewer draws every 2nd p
 const size_t MaxShownPoints = 600000;
 const float PivotMeters = 2.5f;
 
-// The merge can be finer than live: time doesn't matter offline. 0.01 = 1 cm cubes.
+//spotter::RoomOptions RoomSettings(){
+//
+//@brief - 13z's merging and clean-model settings: RoomOptions' defaults with 2 cm cubes. O(1).
 spotter::RoomOptions RoomSettings() { spotter::RoomOptions o; o.voxelMeters = 0.02f; return o; }
 
 // ---------------------------------------------------------------------
 //  The new idea: choosing rooms and scans in the console
 // ---------------------------------------------------------------------
 
-// "1-12,15" (or "all", or nothing = all) as numbers from 1 to count. False if it can't be read.
+//bool ParseList(const std::string& text, int count, std::vector<int>& numbers){
+//
+//@param1 - text: what was typed, e.g. "1-12,15"
+//@param2 - count: the highest number allowed
+//@param3 - numbers: set to the chosen numbers, sorted
+//
+//@brief - "1-12,15" (or "all", or nothing = all) as numbers from 1 to count, in a set so each appears once. False
+//         if it can't be read or a number is out of range. O(count).
 bool ParseList(const std::string& text, int count, std::vector<int>& numbers)
 {
     std::set<int> chosen;
@@ -88,7 +97,13 @@ bool ParseList(const std::string& text, int count, std::vector<int>& numbers)
     return !numbers.empty();
 }
 
-// Step 1: the rooms to work on (empty = quit).
+//std::vector<spotter::SavedRoom> PickRooms(fs::path searchIn){
+//
+//@param1 - searchIn: the folder to look for rooms in
+//
+//@brief - step 1: lists the saved rooms (FindRooms) and asks which; a number list picks them, a folder name
+//         searches there instead, q or cancel gives none (quit). Asks again on anything it doesn't understand.
+//         O(rooms).
 std::vector<spotter::SavedRoom> PickRooms(fs::path searchIn)
 {
     while (true)
@@ -123,6 +138,14 @@ struct Loaded
     std::vector<cv::Point3f> landmarks;
 };
 
+//bool LoadRoom(const spotter::SavedRoom& room, Loaded& loaded){
+//
+//@param1 - room: the room chosen
+//@param2 - loaded: filled with its info, scans, scan folders and landmarks
+//
+//@brief - step 2: reads one room's room.txt, asks which scans to load ("1-12,15", Enter = all, skip = next room)
+//         and loads each (a refused scan is skipped with the reason), plus the far landmarks; prints the counts.
+//         False to skip this room. O(scans x pixels).
 bool LoadRoom(const spotter::SavedRoom& room, Loaded& loaded)
 {
     std::string problem;
@@ -156,6 +179,9 @@ bool LoadRoom(const spotter::SavedRoom& room, Loaded& loaded)
 //  Output: files
 // ---------------------------------------------------------------------
 
+//std::string Stamp(){
+//
+//@brief - the local date and time as "YYYYMMDD_HHMMSS", for file names. O(1).
 std::string Stamp()
 {
     char stamp[32];
@@ -164,6 +190,11 @@ std::string Stamp()
     return stamp;
 }
 
+//std::vector<const spotter::Scan*> Included(const Loaded& loaded){
+//
+//@param1 - loaded: the loaded room
+//
+//@brief - pointers to the loaded scans that aren't excluded. O(scans).
 std::vector<const spotter::Scan*> Included(const Loaded& loaded)
 {
     std::vector<const spotter::Scan*> included;
@@ -171,6 +202,14 @@ std::vector<const spotter::Scan*> Included(const Loaded& loaded)
     return included;
 }
 
+//void BuildObj(const fs::path& room, const Loaded& loaded){
+//
+//@param1 - room: the room folder, where the file goes
+//@param2 - loaded: the loaded room
+//
+//@brief - E: merges the included scans (FuseScans), builds the clean model (BuildRoom), writes
+//         room_scan_<time>.obj in the room's folder with the far landmarks, and prints the size, time, up source,
+//         height, walls and blocks. Says so if every scan is excluded. O(FuseScans).
 void BuildObj(const fs::path& room, const Loaded& loaded)
 {
     std::vector<const spotter::Scan*> included = Included(loaded);
@@ -194,6 +233,13 @@ void BuildObj(const fs::path& room, const Loaded& loaded)
                 built.floorSeen ? "seen" : "guessed", built.ceilingSeen ? "seen" : "guessed", built.walls.size(), built.blocks.size());
 }
 
+//void BuildPly(const fs::path& room, const Loaded& loaded){
+//
+//@param1 - room: the room folder, where the file goes
+//@param2 - loaded: the loaded room
+//
+//@brief - K: every included scan's own points and colours (RoomPoints), levelled as the .obj is, written to
+//         points_<time>.ply in the room's folder. Says so if every scan is excluded. O(total pixels).
 void BuildPly(const fs::path& room, const Loaded& loaded)
 {
     std::vector<const spotter::Scan*> included = Included(loaded);
@@ -213,6 +259,20 @@ void BuildPly(const fs::path& room, const Loaded& loaded)
 //  Output: the viewer
 // ---------------------------------------------------------------------
 
+//void Draw(const Loaded& loaded, const std::vector<std::vector<cv::Point3f>>& shown, const std::vector<std::vector<cv::Vec3b>>& colours, int selected, bool byScan, spotter::OrbitView& view, spotter::PointRenderer& renderer, const std::string& window){
+//
+//@param1 - loaded: the loaded room
+//@param2 - shown: each scan's points to draw, in the room
+//@param3 - colours: their colours
+//@param4 - selected: the selected scan's index, -1 = none
+//@param5 - byScan: true = one colour per scan
+//@param6 - view: the viewer's angles
+//@param7 - renderer: draws the points
+//@param8 - window: the window to show it in
+//
+//@brief - the room's points (excluded grey, or one colour per scan, no more than MaxShownPoints), each scan's
+//         camera (selected white, excluded grey, suspicious red) labelled with its number, the far landmarks in
+//         magenta, and the keys or the selection's options; shown with the key strip. O(shown points).
 void Draw(const Loaded& loaded, const std::vector<std::vector<cv::Point3f>>& shown, const std::vector<std::vector<cv::Vec3b>>& colours,
           int selected, bool byScan, spotter::OrbitView& view, spotter::PointRenderer& renderer, const std::string& window)
 {
@@ -245,7 +305,14 @@ void Draw(const Loaded& loaded, const std::vector<std::vector<cv::Point3f>>& sho
     cv::imshow(window, spotter::WithKeys(image, Keys));
 }
 
-// One room in the viewer. False when Q was pressed (stop everything), true for N or the window closed.
+//bool View(const fs::path& room, Loaded& loaded){
+//
+//@param1 - room: the room folder
+//@param2 - loaded: the loaded room; X changes a scan's excluded flag
+//
+//@brief - one room in the viewer: a click selects a camera, X excludes or includes it (and writes it back to
+//         pose.txt), E builds the .obj, K the .ply, C colours by scan, Esc deselects, + - zoom. False when Q was
+//         pressed (stop everything), true for N or the window closed. O(frames shown x shown points).
 bool View(const fs::path& room, Loaded& loaded)
 {
     std::vector<std::vector<cv::Point3f>> shown(loaded.scans.size());
@@ -308,6 +375,15 @@ bool View(const fs::path& room, Loaded& loaded)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13z · Room Rebuild (no Kinect needed). Rebuilds rooms from the folders 13e writes as it
+//         scans (and legacy 13c/13d/13e's), any time later. No scanning and no placing: each scan's points,
+//         picture and placement are read back (spotter::LoadScan). Setup, main loop and clean-up are laid out in
+//         the file's sections. Returns 0 on a normal exit.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

@@ -67,6 +67,11 @@ struct BackgroundMemory
     std::vector<float> depthMm;                     // the remembered room, 0 = nothing yet
     std::vector<int> nearerFrames, fartherFrames;   // how long each pixel has disagreed
 
+    //void Forget(size_t pixels){
+    //
+    //@param1 - pixels: how many depth pixels there are
+    //
+    //@brief - forgets the room: clears the remembered depth and both counters for every pixel. O(pixels).
     void Forget(size_t pixels)
     {
         depthMm.assign(pixels, 0);
@@ -75,7 +80,16 @@ struct BackgroundMemory
     }
 };
 
-// Feed one frame (mm, 0 = no reading) into the memory. Returns the foreground mask (255 = nearer).
+//cv::Mat UpdateBackground(const cv::Mat& liveMm, BackgroundMemory& memory){
+//
+//@param1 - liveMm: this frame's depth, mm, 0 = no reading
+//@param2 - memory: the room's memory; updated
+//
+//@brief - feeds one frame into the memory, per pixel: no reading learns nothing; the first reading is taken as the
+//         room; clearly nearer than remembered is foreground until it has stayed AbsorbFrames, then it joins the
+//         room; clearly farther for LeaveFrames means something left, so the memory takes it (one frame isn't
+//         enough: ceiling fans); the same distance blends in by BlendRate. Returns the foreground mask (255 =
+//         nearer). O(pixels).
 cv::Mat UpdateBackground(const cv::Mat& liveMm, BackgroundMemory& memory)
 {
     if (memory.depthMm.size() != liveMm.total()) memory.Forget(liveMm.total());
@@ -104,7 +118,12 @@ cv::Mat UpdateBackground(const cv::Mat& liveMm, BackgroundMemory& memory)
     return foreground;
 }
 
-// Drop blobs smaller than MinBlobPixels from the mask. Returns the boxes of the ones left.
+//std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask){
+//
+//@param1 - mask: a 255/0 mask; small blobs are cleared in place
+//
+//@brief - drops blobs (groups of touching 255 pixels) smaller than MinBlobPixels from the mask and returns the
+//         boxes of the ones left. O(pixels).
 std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask)
 {
     cv::Mat labels, stats, centroids;
@@ -126,6 +145,15 @@ std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask)
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<cv::Rect>& blobs){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - foreground: the foreground mask
+//@param3 - blobs: the boxes of the big blobs
+//
+//@brief - the depth in grey over 0..MaxDepthMeters (black where there's no reading) with the foreground in green,
+//         a yellow box and pixel count per blob, and how many blobs are in front of the background; shown with the
+//         key strip. O(pixels).
 void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<cv::Rect>& blobs)
 {
     // Grey over 0..MaxDepth, black where there's no reading, foreground green (at least a bit bright).
@@ -152,6 +180,12 @@ void Show(const cv::Mat& liveMm, const cv::Mat& foreground, const std::vector<cv
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 07c · Depth Background. A fixed camera sees the same room over and over. Remember it, and
+//         anything that comes in front of what you remember is new: a person, a moved chair, a cup put down. No
+//         neural network, just depth. Setup, main loop and clean-up are laid out in the file's sections. Returns 0
+//         on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

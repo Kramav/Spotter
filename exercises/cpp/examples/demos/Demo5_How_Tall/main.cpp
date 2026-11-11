@@ -58,7 +58,16 @@ const std::string Window = "Demo 5 - how tall are you";
 //  The new idea: height from the top and bottom rows, each in 3D
 // ---------------------------------------------------------------------
 
-// One row of the blob as a 3D point: the average of its foreground pixels, each from its own depth.
+//std::optional<cv::Point3f> RowPoint(int row, const cv::Rect& box, const cv::Mat& mask, const cv::Mat& liveMm, const spotter::PinholeCamera& camera){
+//
+//@param1 - row: a picture row
+//@param2 - box: the blob's box
+//@param3 - mask: the foreground mask
+//@param4 - liveMm: this frame's depth, mm
+//@param5 - camera: the depth camera
+//
+//@brief - one row of the blob as a 3D point: the average of its foreground pixels, each from its own depth.
+//         Nothing if fewer than MinRowReadings read. O(box width).
 std::optional<cv::Point3f> RowPoint(int row, const cv::Rect& box, const cv::Mat& mask, const cv::Mat& liveMm, const spotter::PinholeCamera& camera)
 {
     cv::Point3f sum(0, 0, 0);
@@ -80,6 +89,17 @@ struct Person
     bool wholeInView = false;   // head and feet both seen
 };
 
+//Person Measure(const cv::Rect& box, const cv::Mat& mask, const cv::Mat& liveMm, const spotter::PinholeCamera& camera){
+//
+//@param1 - box: the blob's box
+//@param2 - mask: the foreground mask
+//@param3 - liveMm: this frame's depth, mm
+//@param4 - camera: the depth camera
+//
+//@brief - the person's height: the top row and the bottom row that have readings (RowPoint) are the head and the
+//         feet, and their 3D distance is the height. wholeInView is false if the blob touches the picture's top or
+//         bottom. With no head or no feet it gives no measurement (legacy measured to the camera here: review bug
+//         12). O(box area).
 Person Measure(const cv::Rect& box, const cv::Mat& mask, const cv::Mat& liveMm, const spotter::PinholeCamera& camera)
 {
     Person person{ box };
@@ -97,6 +117,18 @@ Person Measure(const cv::Rect& box, const cv::Mat& mask, const cv::Mat& liveMm, 
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const cv::Mat& liveMm, const cv::Mat& mask, const std::vector<Person>& people, const spotter::StillBackground& background, double tallest, const spotter::FpsMeter& fps){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - mask: the foreground mask
+//@param3 - people: the visitors measured
+//@param4 - background: for the countdown
+//@param5 - tallest: the tallest visitor so far, 0 = none
+//@param6 - fps: the frame-rate meter
+//
+//@brief - the depth picture with visitors green, a yellow box and height over each ("step back" if not whole in
+//         view), the background countdown, "tallest today" and "live only: nothing is recorded" (a number only, no
+//         picture), and the fps; shown with the key strip. O(pixels).
 void Show(const cv::Mat& liveMm, const cv::Mat& mask, const std::vector<Person>& people, const spotter::StillBackground& background,
           double tallest, const spotter::FpsMeter& fps)
 {
@@ -126,6 +158,12 @@ void Show(const cv::Mat& liveMm, const cv::Mat& mask, const std::vector<Person>&
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: Demo 5 · How Tall Are You? (presentation; built from 03). Step in front of the Kinect and
+//         your height appears over your head, in metres, from depth alone (no AI, works in the dark). The tallest
+//         visitor so far stays in the corner: a number only, no picture. Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

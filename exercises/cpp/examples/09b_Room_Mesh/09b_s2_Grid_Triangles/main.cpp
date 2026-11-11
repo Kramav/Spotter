@@ -28,6 +28,14 @@ const std::string Keys = "S  scan and save     Q or Esc  quit";
 
 const int Step = 2;
 
+//spotter::Mesh Triangles(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours){
+//
+//@param1 - cloud: a depth cloud, 512 wide (NaN = no reading)
+//@param2 - colours: one colour per cloud point
+//
+//@brief - a point per Step-th pixel with a reading, and two triangles per square of neighbouring kept pixels
+//         (group seen_room); this by-hand version is what MeshFromGrid does, without the jump test yet. O(pixels /
+//         Step^2).
 spotter::Mesh Triangles(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours)
 {
     const int columns = 512 / Step, rows = 424 / Step;
@@ -53,6 +61,12 @@ spotter::Mesh Triangles(const std::vector<cv::Point3f>& cloud, const std::vector
     return mesh;
 }
 
+//int main(){
+//
+//@brief - the program: 09b · step 2 of 2 · Every square becomes two triangles. Step 1's scan as 3D points (08),
+//         coloured. The depth picture is already a grid, so neighbouring points are neighbours in 3D too: each 2x2
+//         square of points (every 2nd pixel) becomes two triangles. Setup, main loop and clean-up are laid out in
+//         the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

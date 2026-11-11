@@ -42,6 +42,13 @@ const std::string Keys = "Q or Esc  quit";
 
 const std::string Window = "00a KinectSource: colour | depth | registered  (raise your RIGHT hand: it shows on the right)";
 
+//void PrintFirstFrame(const spotter::RgbdFrame& frame, const spotter::KinectSource& kinect){
+//
+//@param1 - frame: the first frame from the Kinect
+//@param2 - kinect: the open source, asked for its factory calibration
+//
+//@brief - prints the sizes of every picture in the frame, both cameras' pinhole numbers (after the unmirror) and
+//         the device's own calibration text (what room scans save). O(1).
 void PrintFirstFrame(const spotter::RgbdFrame& frame, const spotter::KinectSource& kinect)
 {
     const spotter::PinholeCamera& d = frame.depthCamera;
@@ -53,7 +60,12 @@ void PrintFirstFrame(const spotter::RgbdFrame& frame, const spotter::KinectSourc
     std::printf("as the device reports it (saved with room scans):\n%s", kinect.CalibrationText().c_str());
 }
 
-// The depth pixel in the middle: its distance, its 3D point, and the colour pixel it lands on.
+//void PrintCentre(const spotter::RgbdFrame& frame){
+//
+//@param1 - frame: a frame with depth and colourIndex
+//
+//@brief - the depth pixel in the middle: its distance in mm, its 3D point (Unproject) and the colour pixel it
+//         lands on (colourIndex). Prints "no reading" if either is missing. O(1).
 void PrintCentre(const spotter::RgbdFrame& frame)
 {
     cv::Point centre(frame.depthMm.cols / 2, frame.depthMm.rows / 2);
@@ -65,6 +77,12 @@ void PrintCentre(const spotter::RgbdFrame& frame)
                 mm, p.x, p.y, p.z, index % frame.colour.cols, index / frame.colour.cols);
 }
 
+//cv::Mat SideBySide(const spotter::RgbdFrame& frame){
+//
+//@param1 - frame: a frame with colour, depth and registered pictures
+//
+//@brief - the colour picture scaled to the depth picture's height, the depth picture (DepthPicture) and the
+//         registered colour, side by side. O(pixels).
 cv::Mat SideBySide(const spotter::RgbdFrame& frame)
 {
     cv::Mat colour, picture;
@@ -73,6 +91,12 @@ cv::Mat SideBySide(const spotter::RgbdFrame& frame)
     return picture;
 }
 
+//int main(){
+//
+//@brief - the program: 00a · Tour: KinectSource and RgbdFrame (needs the Kinect). What it's for: every example
+//         starts with a camera. spotter::KinectSource opens the Kinect v2, and each Next() fills one
+//         spotter::RgbdFrame. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

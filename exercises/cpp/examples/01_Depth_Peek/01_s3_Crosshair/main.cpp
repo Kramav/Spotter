@@ -25,6 +25,12 @@ const std::string Keys = "W A S D  move the crosshair     Q or Esc  quit";
 
 const int StepPixels = 10;   // how far one key press moves the crosshair
 
+//void MoveCrosshair(int key, cv::Point& crosshair){
+//
+//@param1 - key: what cv::waitKey returned
+//@param2 - crosshair: the crosshair's pixel; moved in place
+//
+//@brief - W A S D move the crosshair StepPixels, kept inside the 512 x 424 picture. O(1).
 void MoveCrosshair(int key, cv::Point& crosshair)
 {
     if (key == 'w') crosshair.y -= StepPixels;
@@ -35,6 +41,13 @@ void MoveCrosshair(int key, cv::Point& crosshair)
     crosshair.y = std::clamp(crosshair.y, 0, 423);
 }
 
+//void Show(const cv::Mat& depthMm, cv::Point crosshair){
+//
+//@param1 - depthMm: the depth picture, mm
+//@param2 - crosshair: the pixel to read
+//
+//@brief - draws DepthPicture with a green cross at the crosshair and its reading beside it, and shows it with the
+//         key strip. O(pixels).
 void Show(const cv::Mat& depthMm, cv::Point crosshair)
 {
     cv::Mat picture = spotter::DepthPicture(depthMm);   // 0.5 m = white .. 6 m = black, red = no reading
@@ -45,6 +58,12 @@ void Show(const cv::Mat& depthMm, cv::Point crosshair)
     cv::imshow("01 step 3: crosshair (WASD moves)", spotter::WithKeys(picture, Keys));
 }
 
+//int main(){
+//
+//@brief - the program: 01 · step 3 of 3 · A crosshair you can move. Draw the depth picture the way the examples do
+//         (spotter::DepthPicture: near = WHITE, far = black, no reading = RED), put a crosshair on it, and write
+//         the distance under it. W A S D move the crosshair. Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

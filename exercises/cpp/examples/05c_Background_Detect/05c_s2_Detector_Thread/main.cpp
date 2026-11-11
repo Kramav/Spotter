@@ -40,6 +40,9 @@ struct Shared
     bool boxesWaiting = false;
 };
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -49,6 +52,14 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//void Detector(spotter::YoloDetector& yolo, Shared& shared){
+//
+//@param1 - yolo: a ready detector
+//@param2 - shared: what this thread and the main loop share; touched only under its lock
+//
+//@brief - the detector thread's loop: sleep until the main loop hands over a frame (no CPU used), run YOLO on it
+//         without holding the lock (~150 ms), then hand the boxes back; returns when told to quit. O(detector run)
+//         per frame.
 void Detector(spotter::YoloDetector& yolo, Shared& shared)
 {
     while (true)
@@ -68,6 +79,12 @@ void Detector(spotter::YoloDetector& yolo, Shared& shared)
     }
 }
 
+//int main(){
+//
+//@brief - the program: 05c · step 2 of 2 · YOLO on its own thread. Run YOLO on a second thread, so the main loop
+//         never waits for it: main loop every frame: if YOLO finished, take its boxes; if it's idle, give it a
+//         copy of this frame. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

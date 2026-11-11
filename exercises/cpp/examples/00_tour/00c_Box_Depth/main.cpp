@@ -29,8 +29,13 @@
 
 const int DepthWidth = 512, DepthHeight = 424, ColourWidth = 1920, ColourHeight = 1080;
 
-// A wall 3 m away with a "person" 1.5 m away in the middle, 5% holes. Each depth pixel lands
-// about 2.9 colour pixels from its neighbour, shifted a little by distance (parallax).
+//void MakeFrame(cv::Mat& depthMm, std::vector<int>& colourIndex){
+//
+//@param1 - depthMm: filled with a made-up depth picture, CV_32F mm
+//@param2 - colourIndex: filled with where each depth pixel lands in colour
+//
+//@brief - a wall 3 m away with a "person" 1.5 m away in the middle, 5% holes and 10 mm of noise. Each depth pixel
+//         lands about 2.9 colour pixels from its neighbour, shifted a little by distance (parallax). O(pixels).
 void MakeFrame(cv::Mat& depthMm, std::vector<int>& colourIndex)
 {
     std::mt19937 random(1);
@@ -49,7 +54,14 @@ void MakeFrame(cv::Mat& depthMm, std::vector<int>& colourIndex)
         }
 }
 
-// The slow way, as example 02 does it.
+//double SlowMedian(const cv::Rect2d& box, const cv::Mat& depthMm, const std::vector<int>& colourIndex){
+//
+//@param1 - box: a box on the colour picture
+//@param2 - depthMm: the depth picture, mm
+//@param3 - colourIndex: each depth pixel's colour pixel
+//
+//@brief - the slow way, as example 02 does it: visits every depth pixel, keeps those landing in the middle half of
+//         the box, and takes their median in metres (0 under 20 readings). O(depth pixels) per box.
 double SlowMedian(const cv::Rect2d& box, const cv::Mat& depthMm, const std::vector<int>& colourIndex)
 {
     cv::Rect2d middle(box.x + box.width / 4, box.y + box.height / 4, box.width / 2, box.height / 2);
@@ -60,11 +72,22 @@ double SlowMedian(const cv::Rect2d& box, const cv::Mat& depthMm, const std::vect
     return mm.size() >= 20 ? spotter::Median(mm) / 1000 : 0;
 }
 
+//double Milliseconds(std::chrono::steady_clock::time_point start){
+//
+//@param1 - start: when the timing began
+//
+//@brief - the milliseconds since `start`. O(1).
 double Milliseconds(std::chrono::steady_clock::time_point start)
 {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 }
 
+//int main(){
+//
+//@brief - the program: 00c · Tour: BoxDepthSampler (no Kinect needed). What it's for: "how far away is the thing
+//         in this box?", for boxes drawn on the colour picture (YOLO's). The answer is the median depth of the
+//         depth pixels that land in the middle of the box (example 02, steps 3-4). Setup, main loop and clean-up
+//         are laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     cv::Mat depthMm;

@@ -18,6 +18,12 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//int main(){
+//
+//@brief - the program: 02 · step 1 of 4 · Show the colour camera. The Kinect has a second camera: colour, 1920 x
+//         1080. Ask KinectSource for colour too (the default) and show it. The window is shrunk to half size so it
+//         fits on the screen. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});   // colour + depth

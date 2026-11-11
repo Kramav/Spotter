@@ -35,11 +35,24 @@ const std::string Keys = "click a box  capture and save     Q or Esc  quit";
 
 const float DepthBandMeters = 0.3f, MaxJumpMm = 20;
 
+//void OnMouse(int event, int x, int y, int flags, void* click){
+//
+//@param1 - event: OpenCV's mouse event
+//@param2 - x: the mouse's column in the half-size window
+//@param3 - y: its row
+//@param4 - flags: OpenCV's flags (unused)
+//@param5 - click: a cv::Point2d the left-click is written to, in colour pixels
+//
+//@brief - OpenCV's mouse callback: a left click stores its spot doubled (the window is half size), i.e. in colour
+//         pixels. O(1).
 void OnMouse(int event, int x, int y, int, void* click)
 {
     if (event == cv::EVENT_LBUTTONDOWN) *(cv::Point2d*)click = cv::Point2d(x * 2, y * 2);
 }
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -49,7 +62,14 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
-// Step 2's cut-out as a mask over the depth picture, then its biggest blob.
+//cv::Mat CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, const spotter::RgbdFrame& frame){
+//
+//@param1 - box: the clicked box on the colour picture
+//@param2 - depthMm: the depth picture, mm
+//@param3 - frame: a frame with colourIndex
+//
+//@brief - step 2's cut-out as a mask over the depth picture (pixels in the box within DepthBandMeters of the
+//         middle depth), then only its biggest connected blob. O(depth pixels).
 cv::Mat CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, const spotter::RgbdFrame& frame)
 {
     cv::Rect2d centre(box.x + box.width / 4, box.y + box.height / 4, box.width / 2, box.height / 2);
@@ -73,7 +93,14 @@ cv::Mat CutOut(const cv::Rect2d& box, const cv::Mat& depthMm, const spotter::Rgb
     return biggest > 0 ? cv::Mat(labels == biggest) : mask;
 }
 
-// New: two triangles per 2x2 square of kept pixels, unless the corners jump in depth.
+//spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, const cv::Mat& registered){
+//
+//@param1 - mask: the object's pixels
+//@param2 - cloud: a 3D point per depth pixel
+//@param3 - registered: colour per depth pixel
+//
+//@brief - new: a point per kept pixel and two triangles per 2 x 2 square of kept pixels, unless the corners jump
+//         in depth by more than MaxJumpMm; group "seen_front", facing the camera. O(pixels).
 spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& cloud, const cv::Mat& registered)
 {
     spotter::Mesh mesh;
@@ -97,6 +124,12 @@ spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& 
     return mesh;
 }
 
+//void Save(spotter::Mesh& mesh){
+//
+//@param1 - mesh: the mesh; turned to Y up
+//
+//@brief - TurnToYUp, then SaveObj to object_<time>.obj; prints the triangle count (never commit it). O(points +
+//         triangles).
 void Save(spotter::Mesh& mesh)
 {
     std::string path = cv::format("object_%lld.obj", (long long)std::time(nullptr));
@@ -104,6 +137,14 @@ void Save(spotter::Mesh& mesh)
     if (spotter::SaveObj(path, mesh, "Spotter 08b step 3: the front only")) std::printf("Saved %zu triangles to %s (never commit it)\n", mesh.groups["seen_front"].size(), path.c_str());
 }
 
+//int main(){
+//
+//@brief - the program: 08b · step 3 of 3 · Join the pixels into triangles and save them. Step 2's cut-out, then: -
+//         keep its biggest connected blob (stray bits of other things go); - the depth picture is already a grid:
+//         each 2x2 square of kept pixels becomes two triangles, unless the corners jump more than 20 mm in depth
+//         (that's an edge, not a surface); - save as an .obj (spotter::SaveObj), turned Y up for 3D programs.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

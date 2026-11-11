@@ -66,12 +66,19 @@ const double MaxDistanceMeters = 100.0;
 const int ReportEveryMs = 1000;
 const std::string Window = "02 detect + distance  (Q quits)";
 
+//spotter::KinectSource::Options KinectSettings(){
+//
+//@brief - the Kinect's options: the defaults (colour and depth, cut-off 6 m). O(1).
 spotter::KinectSource::Options KinectSettings()
 {
     spotter::KinectSource::Options options;   // colour + depth, cut-off 6 m
     return options;
 }
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options from the Settings: model path, names path, input size and minimum confidence.
+//         O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -94,6 +101,15 @@ struct Measured
     std::optional<cv::Point3f> where;    // metres from the depth camera; empty = too few samples
 };
 
+//Measured Measure(const spotter::Detection& detection, const spotter::RgbdFrame& frame){
+//
+//@param1 - detection: one detected box
+//@param2 - frame: a frame with depth and colourIndex
+//
+//@brief - steps 3 and 4: keeps every depth pixel that lands in the middle part of the box (BoxShrink), takes the
+//         median depth and the median of their positions (the object's middle), and turns them into a 3D point
+//         with the depth camera's pinhole model. Too few samples (MinDepthSamples) leaves `where` empty. O(depth
+//         pixels).
 Measured Measure(const spotter::Detection& detection, const spotter::RgbdFrame& frame)
 {
     Measured result;
@@ -136,6 +152,13 @@ Measured Measure(const spotter::Detection& detection, const spotter::RgbdFrame& 
 //  Output
 // ---------------------------------------------------------------------
 
+//std::string Label(const Measured& m, const spotter::ClassList& classes){
+//
+//@param1 - m: a measured detection
+//@param2 - classes: the class names
+//
+//@brief - "name 1.23m x+0.10 y-0.05": the class name with the 3D point's distance, right and down; "name ?m"
+//         without a measurement. O(1).
 std::string Label(const Measured& m, const spotter::ClassList& classes)
 {
     const std::string& name = classes.Name(m.detection.classId);
@@ -143,6 +166,15 @@ std::string Label(const Measured& m, const spotter::ClassList& classes)
     return cv::format("%s %.2fm x%+.2f y%+.2f", name.c_str(), m.where->z, m.where->x, m.where->y);
 }
 
+//void Show(cv::Mat& picture, const std::vector<Measured>& objects, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - objects: the measured detections
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a green box and label per object (those past MaxDistanceMeters skipped), a yellow box for the area its
+//         depth was sampled from, and the fps; shown with the key strip. O(objects).
 void Show(cv::Mat& picture, const std::vector<Measured>& objects, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     const cv::Scalar green(0, 255, 0), yellow(0, 255, 255);
@@ -160,6 +192,15 @@ void Show(cv::Mat& picture, const std::vector<Measured>& objects, const spotter:
 
 struct StepTimes { double captureMs = 0, detectMs = 0, measureMs = 0; };
 
+//void Report(const std::vector<Measured>& objects, const spotter::ClassList& classes, const StepTimes& times, const spotter::FpsMeter& fps){
+//
+//@param1 - objects: the measured detections
+//@param2 - classes: the class names
+//@param3 - times: milliseconds each step took
+//@param4 - fps: the frame-rate meter
+//
+//@brief - console lines: fps, the time of capture, detection and measuring, then each object's label, confidence
+//         and sample count. O(objects).
 void Report(const std::vector<Measured>& objects, const spotter::ClassList& classes, const StepTimes& times, const spotter::FpsMeter& fps)
 {
     std::printf("%.1f fps | capture+register %.0f ms, detect %.0f ms, sample+deproject %.0f ms | %zu detections\n",
@@ -168,6 +209,11 @@ void Report(const std::vector<Measured>& objects, const spotter::ClassList& clas
         std::printf("  %-40s conf %.2f  samples %5d\n", Label(m, classes).c_str(), m.detection.confidence, m.samples);
 }
 
+//double MillisecondsSince(std::chrono::steady_clock::time_point start){
+//
+//@param1 - start: when the timing began
+//
+//@brief - the milliseconds since `start`. O(1).
 double MillisecondsSince(std::chrono::steady_clock::time_point start)
 {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
@@ -177,6 +223,11 @@ double MillisecondsSince(std::chrono::steady_clock::time_point start)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 02 · Detect + Distance. Run YOLO on the Kinect's colour camera, then use the depth camera
+//         to measure every box: person 1.84m x-0.31 y+0.12 Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
