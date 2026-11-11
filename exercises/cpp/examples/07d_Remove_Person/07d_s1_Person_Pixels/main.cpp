@@ -23,6 +23,9 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -32,7 +35,14 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
-// 1 where the depth pixel lands inside a box of class `classId`.
+//cv::Mat InsideBoxes(const std::vector<spotter::Detection>& detections, int classId, const spotter::RgbdFrame& frame){
+//
+//@param1 - detections: what the detector found
+//@param2 - classId: the class to look for (e.g. person)
+//@param3 - frame: a frame with depth and colourIndex
+//
+//@brief - a mask over the depth picture: 1 where the depth pixel lands inside a box of that class (via
+//         colourIndex). O(depth pixels x detections).
 cv::Mat InsideBoxes(const std::vector<spotter::Detection>& detections, int classId, const spotter::RgbdFrame& frame)
 {
     cv::Mat mask = cv::Mat::zeros(frame.depthMm.size(), CV_8U);
@@ -47,6 +57,12 @@ cv::Mat InsideBoxes(const std::vector<spotter::Detection>& detections, int class
     return mask;
 }
 
+//int main(){
+//
+//@brief - the program: 07d · step 1 of 3 · Which depth pixels are inside a person box?. YOLO's boxes live in the
+//         1920 x 1080 colour picture; the depth pixels are 512 x 424. colourIndex (02_s3) says where each depth
+//         pixel lands in colour, so test that spot against each person box. Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

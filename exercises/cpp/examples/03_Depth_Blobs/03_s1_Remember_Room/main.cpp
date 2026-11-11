@@ -21,6 +21,12 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "B  remember the room now (step out of view first)   Q or Esc  quit";
 
+//int main(){
+//
+//@brief - the program: 03 · step 1 of 3 · Remember the room. Press B with nobody in view: the program keeps a copy
+//         of that depth picture (the "background"). From then on it shows how much NEARER each pixel is than the
+//         remembered room: the room itself goes black, and anything new (you) lights up. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

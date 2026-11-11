@@ -79,7 +79,16 @@ struct Floor
     double share = 0;       // of the sampled points
 };
 
-// Steps 1-3: the level plane with the most points near it.
+//spotter::Plane Ransac(const spotter::PointGrid& grid, const std::vector<int>& valid, std::mt19937& random, int& bestCount){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - valid: the indices of the cells that have a reading
+//@param3 - random: the random number generator
+//@param4 - bestCount: set to how many points lie on the best plane
+//
+//@brief - steps 1-3: the level plane (within MaxFloorSlopeDegrees) with the most points near it. Each try takes
+//         one random reading and two more within NeighbourPixels of it, since three random points from anywhere
+//         almost never all hit a small floor. O(RansacTries x valid cells).
 spotter::Plane Ransac(const spotter::PointGrid& grid, const std::vector<int>& valid, std::mt19937& random, int& bestCount)
 {
     const cv::Point3f cameraUp(0, -1, 0);   // the camera's Y axis points DOWN
@@ -109,6 +118,14 @@ spotter::Plane Ransac(const spotter::PointGrid& grid, const std::vector<int>& va
     return best;
 }
 
+//Floor FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random){
+//
+//@param1 - cloud: a depth cloud, 512 wide
+//@param2 - random: the random number generator
+//
+//@brief - thins the cloud, runs Ransac, and calls it a floor if the plane holds at least MinFloorFraction of the
+//         readings; step 4 refits the plane to ALL its inliers. Returns the floor, its share and whether it was
+//         found. O(RansacTries x cells).
 Floor FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random)
 {
     spotter::PointGrid grid = spotter::ThinCloud(cloud, 512, SampleStep);
@@ -129,10 +146,13 @@ Floor FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random)
     return floor;
 }
 
-// What the plane says about the camera (which sits at 0, 0, 0):
-//   height: the plane's distance;
-//   tilt:   how far the camera's forward axis (0, 0, 1) points below level;
-//   roll:   how far its right-hand side dips (+ = clockwise, seen from behind).
+//std::string CameraPose(const Floor& floor){
+//
+//@param1 - floor: a found floor
+//
+//@brief - what the plane says about the camera (which sits at 0, 0, 0): height = the plane's distance; tilt = how
+//         far the forward axis (0, 0, 1) points below level; roll = how far its right-hand side dips (+ =
+//         clockwise, seen from behind). Returned as text. O(1).
 std::string CameraPose(const Floor& floor)
 {
     const cv::Point3f& n = floor.plane.normal;
@@ -144,6 +164,16 @@ std::string CameraPose(const Floor& floor)
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const cv::Mat& depthMm, const std::vector<cv::Point3f>& cloud, const Floor& floor, cv::Point crosshair){
+//
+//@param1 - depthMm: the depth picture, mm
+//@param2 - cloud: its 3D points
+//@param3 - floor: the floor found (or not)
+//@param4 - crosshair: the pixel to read
+//
+//@brief - the depth picture with the floor's pixels green, the camera's pose text (or "no floor found"), and a
+//         cross at the crosshair with its height above the floor (or its distance when there is no floor); shown
+//         with the key strip. O(pixels).
 void Show(const cv::Mat& depthMm, const std::vector<cv::Point3f>& cloud, const Floor& floor, cv::Point crosshair)
 {
     cv::Mat picture = spotter::DepthPicture(depthMm);
@@ -161,6 +191,12 @@ void Show(const cv::Mat& depthMm, const std::vector<cv::Point3f>& cloud, const F
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void MoveCrosshair(int key, cv::Point& crosshair){
+//
+//@param1 - key: what cv::waitKey returned
+//@param2 - crosshair: the crosshair's pixel; moved in place
+//
+//@brief - W A S D move the crosshair CrosshairStepPixels, kept inside the 512 x 424 picture. O(1).
 void MoveCrosshair(int key, cv::Point& crosshair)
 {
     if (key == 'w') crosshair.y -= CrosshairStepPixels;
@@ -175,6 +211,12 @@ void MoveCrosshair(int key, cv::Point& crosshair)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 09 · Find the Floor. Example 08's points are in the CAMERA's coordinates: "down" is
+//         wherever the camera's bottom edge points. Tilt the Kinect and the whole room tilts with it. To make a
+//         map, we need the room's own "down": the floor. Setup, main loop and clean-up are laid out in the file's
+//         sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

@@ -31,7 +31,15 @@ const std::string Keys = "S  scan     Q or Esc  quit";
 const int Step = 4;
 const float MaxTiltDegrees = 25, MinWallHeightMeters = 0.8f, MinCeilingHeightMeters = 1.8f;
 
-// 'f' floor, 'c' ceiling, 'w' wall, 0 none, for one plane piece.
+//char Kind(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, float lowest){
+//
+//@param1 - piece: one plane piece from FindPlanes
+//@param2 - grid: the grid its cells index
+//@param3 - lowest: the lowest height seen (2nd percentile), the floor's guess
+//
+//@brief - 'f' floor, 'c' ceiling, 'w' wall, 0 none: a plane facing up (within MaxTiltDegrees) is a floor; one
+//         facing down is a ceiling only if it's at least MinCeilingHeightMeters above the lowest point; a slanted
+//         one is none; an upright one is a wall if its points span at least MinWallHeightMeters. O(piece cells).
 char Kind(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, float lowest)
 {
     const cv::Point3f up(0, -1, 0);
@@ -45,7 +53,15 @@ char Kind(const spotter::PlanePiece& piece, const spotter::PointGrid& grid, floa
     return spotter::Percentile(heights, 0.98) - spotter::Percentile(heights, 0.02) >= MinWallHeightMeters ? 'w' : 0;
 }
 
-// Every plane, sorted, its points dotted in its kind's colour.
+//std::vector<std::pair<cv::Point, cv::Scalar>> SortedDots(const spotter::PointGrid& grid, const spotter::RgbdFrame& frame, std::mt19937& random){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - frame: this frame, for colourIndex
+//@param3 - random: the random number generator
+//
+//@brief - every plane (FindPlanes), sorted by Kind, with its points as dots on the colour picture in its kind's
+//         colour (floor green, ceiling yellow, wall blue); prints each plane's kind and distance. O(FindPlanes +
+//         cells).
 std::vector<std::pair<cv::Point, cv::Scalar>> SortedDots(const spotter::PointGrid& grid, const spotter::RgbdFrame& frame, std::mt19937& random)
 {
     std::vector<float> heights;   // every point's height (camera = 0), for the ceiling rule
@@ -67,6 +83,13 @@ std::vector<std::pair<cv::Point, cv::Scalar>> SortedDots(const spotter::PointGri
     return dots;
 }
 
+//int main(){
+//
+//@brief - the program: 09c · step 2 of 3 · Floor, ceiling, walls. Step 1's planes, sorted by which way they face
+//         (the camera's up is -Y): level, normal pointing up -> floor (the lowest such plane) level, normal
+//         pointing down -> ceiling (if it's high enough) upright and at least 0.8 m tall -> wall anything else ->
+//         left for the furniture Dotted green (floor), yellow (ceiling), blue (walls). Setup, main loop and clean-
+//         up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

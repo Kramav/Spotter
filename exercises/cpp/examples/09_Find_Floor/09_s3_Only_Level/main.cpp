@@ -29,6 +29,14 @@ const std::string Keys = "Q or Esc  quit";
 const int Tries = 200, Reach = 10;
 const float ThicknessMeters = 0.02f, MaxSlopeDegrees = 45;
 
+//spotter::Plane BestLevelPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - random: the random number generator
+//@param3 - bestCount: set to how many points lie on the best plane
+//
+//@brief - RANSAC as in step 2 with one change: planes tilted more than MaxSlopeDegrees from level (their normal
+//         must point nearly up) are skipped, so a wall can't win. O(Tries x cells).
 spotter::Plane BestLevelPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount)
 {
     const cv::Point3f up(0, -1, 0);
@@ -52,6 +60,13 @@ spotter::Plane BestLevelPlane(const spotter::PointGrid& grid, std::mt19937& rand
     return best;
 }
 
+//int main(){
+//
+//@brief - the program: 09 · step 3 of 3 · Only level planes: a floor finder. Step 2 found the biggest flat thing.
+//         A floor is the biggest flat thing that is roughly LEVEL. The camera's "up" is -Y (its Y axis points
+//         down), so a plane is level when its normal points nearly along (0, -1, 0): normal . up > cos(45 deg).
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

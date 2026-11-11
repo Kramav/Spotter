@@ -66,6 +66,10 @@ const float MinWallHeightMeters = 0.8f;     // shorter = furniture
 const int ReportEveryMs = 1000;
 const std::string CameraWindow = "06b camera  (C clears trails, Q quits)", RadarWindow = "06b radar";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.15 (the
+//         tracker's weak threshold, 05b). O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -87,7 +91,18 @@ struct Wall
     double heightMeters;   // how much of its height is in view
 };
 
-// Step 9: RANSAC as in 09, over the cells still free, for upright planes only.
+//bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& free, const std::vector<int>& freeCells, std::mt19937& random, spotter::Plane& best, int& bestCount){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - free: which cells no plane has taken yet
+//@param3 - freeCells: the indices of those cells
+//@param4 - random: the random number generator
+//@param5 - best: set to the best upright plane
+//@param6 - bestCount: set to how many free points lie on it
+//
+//@brief - step 9: RANSAC as in 09 over the cells still free, upright planes only (floor, table top and ceiling
+//         skipped): three nearby free cells, their plane, count the free points within InlierThicknessMeters. True
+//         if any plane had a point. O(RansacTries x freeCells).
 bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& free, const std::vector<int>& freeCells,
                       std::mt19937& random, spotter::Plane& best, int& bestCount)
 {
@@ -113,9 +128,17 @@ bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& f
     return bestCount > 0;
 }
 
-// Step 11: the wall as a line on the floor. Drop the normal's up/down part: what's left points
-// from the wall to the camera, across the floor. "foot" is the wall's nearest point to the camera.
-// ponytail: drawn on the camera's own level, so a camera tilted 10 deg draws walls 1.5% too far.
+//bool WallFrom(const spotter::Plane& plane, const std::vector<cv::Point3f>& inliers, Wall& wall){
+//
+//@param1 - plane: an upright plane
+//@param2 - inliers: its points
+//@param3 - wall: filled in: ends, distance, angle and height
+//
+//@brief - step 11: the wall as a line on the floor. The normal's up/down part is dropped; what's left points from
+//         the wall to the camera across the floor, and the foot is its nearest point. Ends and height use the 2nd
+//         and 98th percentiles, which ignore stray points. True if it's at least MinWallHeightMeters tall (shorter
+//         is furniture). ponytail: drawn on the camera's own level, so a camera tilted 10 degrees draws walls 1.5%
+//         too far. O(inliers).
 bool WallFrom(const spotter::Plane& plane, const std::vector<cv::Point3f>& inliers, Wall& wall)
 {
     double across = std::hypot(plane.normal.x, plane.normal.z);
@@ -135,7 +158,15 @@ bool WallFrom(const spotter::Plane& plane, const std::vector<cv::Point3f>& inlie
     return wall.heightMeters >= MinWallHeightMeters;   // too short: furniture, not a wall
 }
 
-// Steps 8-11.
+//std::vector<Wall> FindWalls(const std::vector<cv::Point3f>& cloud, std::mt19937& random){
+//
+//@param1 - cloud: a depth cloud, 512 wide
+//@param2 - random: the random number generator
+//
+//@brief - steps 8-11: thin the cloud (SampleStep), then up to MaxWalls times: the best upright plane over the free
+//         cells, its biggest connected piece (a plane too scattered is taken away anyway, or it's found again),
+//         refit, and WallFrom. Stops when a plane has under MinWallShare of the readings. O(MaxWalls x RansacTries
+//         x cells).
 std::vector<Wall> FindWalls(const std::vector<cv::Point3f>& cloud, std::mt19937& random)
 {
     spotter::PointGrid grid = spotter::ThinCloud(cloud, 512, SampleStep);
@@ -172,7 +203,18 @@ std::vector<Wall> FindWalls(const std::vector<cv::Point3f>& cloud, std::mt19937&
     return walls;
 }
 
-// Steps 1-7, as in 06: YOLO on its own thread, the tracker, and each object's trail on the floor.
+//void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDetector& detector, spotter::Tracker& tracker, spotter::BoxDepthSampler& boxDepth, spotter::TrackTrails& trails){
+//
+//@param1 - frame: this frame
+//@param2 - dt: seconds since the last frame
+//@param3 - detector: YOLO on its own thread
+//@param4 - tracker: the tracker
+//@param5 - boxDepth: the depth lookup, rebuilt here
+//@param6 - trails: each object's floor trail
+//
+//@brief - steps 1-7, as in 06: build the depth lookup, predict, take a finished YOLO batch if any and match it,
+//         offer the new picture, re-measure distances, and add each object's floor spot to its trail. O(Build +
+//         tracks).
 void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDetector& detector, spotter::Tracker& tracker,
                   spotter::BoxDepthSampler& boxDepth, spotter::TrackTrails& trails)
 {
@@ -188,6 +230,15 @@ void TrackObjects(const spotter::RgbdFrame& frame, double dt, spotter::AsyncDete
 //  Output
 // ---------------------------------------------------------------------
 
+//void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a box per track in its ID's colour (thin while coasting) with its ID and class, and the fps; shown with
+//         the key strip. O(tracks).
 void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const spotter::Track& track : tracker.Tracks())
@@ -201,6 +252,18 @@ void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter
     cv::imshow(CameraWindow, spotter::WithKeys(picture, Keys));
 }
 
+//void ShowRadar(spotter::RadarView& radar, const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails, const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera){
+//
+//@param1 - radar: the bird's-eye map
+//@param2 - walls: the walls found
+//@param3 - tracker: the tracked objects
+//@param4 - trails: each object's floor trail
+//@param5 - classes: the class names
+//@param6 - colourCamera: the colour camera's model
+//
+//@brief - a fresh radar map, each wall as a grey line, each object's trail with its label (hollow while coasting);
+//         shown with the key strip. ponytail: walls come from the depth camera, objects from the colour camera,
+//         about 5 cm apart. O(pixels + trail points).
 void ShowRadar(spotter::RadarView& radar, const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails,
                const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera)
 {
@@ -212,6 +275,15 @@ void ShowRadar(spotter::RadarView& radar, const std::vector<Wall>& walls, const 
     cv::imshow(RadarWindow, spotter::WithKeys(radar.Image(), Keys));
 }
 
+//void Report(const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails, const spotter::ClassList& classes){
+//
+//@param1 - walls: the walls found
+//@param2 - tracker: the tracked objects
+//@param3 - trails: each object's floor trail
+//@param4 - classes: the class names
+//
+//@brief - console lines: object and wall counts, each wall's distance, length, angle and how much of its height is
+//         in view, and each object's X and Z. O(walls + tracks).
 void Report(const std::vector<Wall>& walls, const spotter::Tracker& tracker, const spotter::TrackTrails& trails, const spotter::ClassList& classes)
 {
     std::printf("%zu objects, %zu walls\n", tracker.Tracks().size(), walls.size());
@@ -226,6 +298,12 @@ void Report(const std::vector<Wall>& walls, const spotter::Tracker& tracker, con
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 06b · Radar + Walls. Example 06 puts the objects on a map, but the map is empty space: no
+//         room around them. This one adds the WALLS, found in the depth alone (no neural network). A wall is a
+//         big, flat, UPRIGHT surface. Setup, main loop and clean-up are laid out in the file's sections. Returns 0
+//         on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

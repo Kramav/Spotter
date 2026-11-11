@@ -89,13 +89,23 @@ struct Pose
     cv::Matx33f turn = cv::Matx33f::eye();
     cv::Point3f shift = cv::Point3f(0, 0, 0);
 
-    // A point in B's coordinates -> the same point in A's (X right, Y down, Z forward).
+    //cv::Point3f operator()(const cv::Point3f& p){
+    //
+    //@param1 - p: a point in B's coordinates
+    //
+    //@brief - the same point in A's coordinates (X right, Y down, Z forward): turn * p + shift. O(1).
     cv::Point3f operator()(const cv::Point3f& p) const { return turn * p + shift; }
 
-    // This pose first, then "next" on top of it.
+    //Pose Then(const Pose& next){
+    //
+    //@param1 - next: the pose to apply after this one
+    //
+    //@brief - this pose first, then `next` on top of it, as one pose. O(1).
     Pose Then(const Pose& next) const { return { next.turn * turn, next.turn * shift + next.shift }; }
 
-    // How far it turns, whatever the axis (the angle of a rotation matrix, from its trace).
+    //float Degrees(){
+    //
+    //@brief - how far it turns, whatever the axis: the angle of a rotation matrix, from its trace. O(1).
     float Degrees() const
     {
         float cosine = (turn(0, 0) + turn(1, 1) + turn(2, 2) - 1) / 2;
@@ -103,7 +113,11 @@ struct Pose
     }
 };
 
-// A turn to the left by some degrees, about the vertical axis (as 10's pose).
+//cv::Matx33f TurnLeft(float degrees){
+//
+//@param1 - degrees: how far to turn left
+//
+//@brief - a turn to the left by some degrees, about the vertical axis (as 10's pose). O(1).
 cv::Matx33f TurnLeft(float degrees)
 {
     float a = degrees * (float)CV_PI / 180;
@@ -112,7 +126,13 @@ cv::Matx33f TurnLeft(float degrees)
                        std::sin(a), 0, std::cos(a));
 }
 
-// Nudges, as in 10, now on top of whatever pose ICP left.
+//void Nudge(Pose& pose, int key){
+//
+//@param1 - pose: B's pose; changed in place
+//@param2 - key: what cv::waitKey returned
+//
+//@brief - nudges as in 10, now on top of whatever pose ICP left: L/J right/left, T/G up/down (Y points down), I/K
+//         forward/back by NudgeMeters; U/O turn left/right by NudgeDegrees. O(1).
 void Nudge(Pose& pose, int key)
 {
     if (key == 'l') pose.shift.x += NudgeMeters;
@@ -129,7 +149,14 @@ void Nudge(Pose& pose, int key)
 //  The new idea: ICP
 // ---------------------------------------------------------------------
 
-// Step 3: the turn + shift that best moves each "from" point onto its partner in "to" (Kabsch).
+//Pose BestFit(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to){
+//
+//@param1 - from: the points to move
+//@param2 - to: each one's partner
+//
+//@brief - step 3: the turn + shift that best moves each `from` point onto its partner in `to` (Kabsch): centre
+//         both sets, build the 3 x 3 cross-covariance of how they vary together, its SVD gives the turn (a mirror
+//         image is flipped back into a turn), and the shift follows from the centres. O(n).
 Pose BestFit(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to)
 {
     // Centre both sets: what's left is the turn.
@@ -166,7 +193,16 @@ Pose BestFit(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f
     return pose;
 }
 
-// Steps 1-4: move "from" by the pose, pair with the nearest "to" points, fit, repeat. Prints each round.
+//Pose Icp(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to, Pose pose){
+//
+//@param1 - from: B's sparse points
+//@param2 - to: A's sparse points
+//@param3 - pose: the starting pose
+//
+//@brief - steps 1-4: move `from` by the pose, pair each point with the nearest `to` point through a k-d tree (kept
+//         within a gate shrinking from IcpStartPairMeters to IcpFinalPairMeters), fit (BestFit) on top of the pose
+//         so far, repeat until it settles, with fewer than 10 pairs it gives up and keeps the pose. Prints each
+//         round. O(m log m + rounds x n log m).
 Pose Icp(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to, Pose pose)
 {
     if (from.size() < 10 || to.size() < 10) return pose;
@@ -220,6 +256,12 @@ struct Views
     bool frozenB = false;
 };
 
+//std::vector<cv::Point3f> Sparse(const std::vector<cv::Point3f>& cloud, int width){
+//
+//@param1 - cloud: a depth cloud (NaN = none)
+//@param2 - width: points per row
+//
+//@brief - every IcpStep-th pixel each way that has a reading. O(n / IcpStep^2).
 std::vector<cv::Point3f> Sparse(const std::vector<cv::Point3f>& cloud, int width)
 {
     std::vector<cv::Point3f> sparse;
@@ -228,6 +270,15 @@ std::vector<cv::Point3f> Sparse(const std::vector<cv::Point3f>& cloud, int width
     return sparse;
 }
 
+//void OnSpace(Views& views, Pose& pose, const Pose& start, const spotter::RgbdFrame& frame){
+//
+//@param1 - views: the captured views; updated
+//@param2 - pose: B's pose; reset on starting over
+//@param3 - start: the pose to start over from
+//@param4 - frame: this frame
+//
+//@brief - SPACE: the first press makes the live view A (with its sparse copy and depth); the second freezes B; the
+//         third starts over (pose back to `start`). O(pixels) when capturing.
 void OnSpace(Views& views, Pose& pose, const Pose& start, const spotter::RgbdFrame& frame)
 {
     if (views.a.empty())
@@ -250,6 +301,12 @@ void OnSpace(Views& views, Pose& pose, const Pose& start, const spotter::RgbdFra
     }
 }
 
+//void RunIcp(const Views& views, Pose& pose){
+//
+//@param1 - views: the frozen views' sparse points
+//@param2 - pose: B's pose; refined in place
+//
+//@brief - P: runs Icp from the current pose, and prints how long it took and the new pose. O(Icp).
 void RunIcp(const Views& views, Pose& pose)
 {
     int64 tick = cv::getTickCount();
@@ -258,7 +315,14 @@ void RunIcp(const Views& views, Pose& pose)
                 (cv::getTickCount() - tick) * 1000.0 / cv::getTickFrequency(), pose.shift.x, -pose.shift.y, pose.shift.z, pose.Degrees());
 }
 
-// 10's gap: B's points projected into A's picture, compared along A's line of sight.
+//std::string GapText(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera){
+//
+//@param1 - views: view A's depth and B's points
+//@param2 - pose: B's pose in A's coordinates
+//@param3 - camera: the depth camera
+//
+//@brief - 10's gap: B's points projected into A's picture, compared along A's line of sight. Returns "   median
+//         gap 1.2 cm over 80% of B", or nothing if no point landed. O(B points).
 std::string GapText(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera)
 {
     std::vector<float> gaps;
@@ -283,6 +347,17 @@ std::string GapText(const Views& views, const Pose& pose, const spotter::Pinhole
 //  Output: both clouds in one viewer (as in 10)
 // ---------------------------------------------------------------------
 
+//void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - views: view A and B's points
+//@param2 - pose: B's pose in A's coordinates
+//@param3 - camera: the depth camera, for the gap
+//@param4 - view: the viewer's angles
+//@param5 - renderer: draws the points
+//
+//@brief - both clouds in one viewer: A orange, B (moved by the pose) blue, a yellow circle where camera A is and a
+//         cyan one where B is, a status line ("P runs ICP" once frozen) and the gap; shown with the key strip.
+//         O(points).
 void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     const bool haveA = !views.a.empty();
@@ -307,6 +382,11 @@ void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& ca
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 11 · ICP. In example 10 you lined two views up by hand, nudging the pose until the walls
+//         stopped showing double. ICP (Iterative Closest Point) does the nudging itself. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

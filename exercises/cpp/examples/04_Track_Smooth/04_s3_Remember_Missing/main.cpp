@@ -34,6 +34,9 @@ struct Track
     int missedFrames = 0;
 };
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo and a minimum confidence. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -43,6 +46,15 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//void Match(std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId){
+//
+//@param1 - tracks: the tracks so far; updated in place
+//@param2 - detections: this frame's detections
+//@param3 - nextId: the next free ID; used up for each new object
+//
+//@brief - greedy matching as in step 2 (the pair overlapping most, at least MinOverlap, repeated). Matched tracks
+//         take the new box and forget being missed; unmatched detections start new IDs; unmatched tracks count a
+//         missed frame and are dropped after MaxMissedFrames. O(T x D x min(T, D)).
 void Match(std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId)
 {
     std::vector<bool> trackUsed(tracks.size(), false), detectionUsed(detections.size(), false);
@@ -70,6 +82,13 @@ void Match(std::vector<Track>& tracks, const std::vector<spotter::Detection>& de
                  tracks.end());                                                         // new: drop only after a while
 }
 
+//int main(){
+//
+//@brief - the program: 04 · step 3 of 3 · Remember an object YOLO missed. Step 2 dropped a track the first frame
+//         YOLO didn't see it. Now each track counts the frames in a row it went unmatched, and is dropped only
+//         after MaxMissedFrames. A missed object keeps its ID and comes back to it. Unseen tracks aren't drawn.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

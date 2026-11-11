@@ -28,6 +28,10 @@
 const spotter::PinholeCamera DepthCamera{ 365.5f, 365.5f, 255.3f, 205.7f, 512, 424 };
 const spotter::PinholeCamera ColourCamera{ 1081.4f, 1081.4f, 959.5f, 539.5f, 1920, 1080 };
 
+//void UnprojectAndBack(){
+//
+//@brief - prints three depth pixels turned into 3D points at 2 m (Unproject) and back (Project), and how wide the
+//         depth camera sees. O(1).
 void UnprojectAndBack()
 {
     std::printf("1. Depth pixel -> 3D point -> pixel, at 2 m:\n");
@@ -42,6 +46,10 @@ void UnprojectAndBack()
                 -DepthCamera.Unproject({ 0, 205 }, 2).x, 2 * std::atan(256 / DepthCamera.fx) * 180 / CV_PI);
 }
 
+//void TwoCameras(){
+//
+//@brief - prints one 3D spot landing on a depth pixel and on a colour pixel, to show the two cameras' different
+//         scales (and why colourIndex is needed). O(1).
 void TwoCameras()
 {
     std::printf("2. One spot, two cameras (here pretending they sit at the same place):\n");
@@ -53,6 +61,10 @@ void TwoCameras()
                 spot.x, spot.y, spot.z, inDepth.x, inDepth.y, inColour.x, inColour.y, ColourCamera.fx / DepthCamera.fx);
 }
 
+//void WholeCloud(){
+//
+//@brief - Cloud(): a flat wall 3 m ahead with a patch of no reading, turned into a point per pixel; prints that
+//         the patch is NaN and where the far corner lands. O(pixels).
 void WholeCloud()
 {
     std::printf("3. Cloud(): a flat wall 3 m ahead, every pixel at once:\n");
@@ -64,6 +76,10 @@ void WholeCloud()
                 cloud.size(), std::isnan(cloud[0].z) ? "yes" : "no", corner.x, corner.y, corner.z);
 }
 
+//void Mirror(){
+//
+//@brief - Unmirror(): one made-up reading on the picture's right, flipped; prints its column and X before and
+//         after, and the moved principal point cx. O(pixels).
 void Mirror()
 {
     std::printf("4. Unmirror(): the Kinect's pictures are mirrored, like a selfie camera.\n");
@@ -82,6 +98,12 @@ void Mirror()
                 before.x, onlyReading.x, DepthCamera.cx, frame.depthCamera.cx, after.x);
 }
 
+//int main(){
+//
+//@brief - the program: 00b · Tour: PinholeCamera and Unmirror (no Kinect needed). What it's for: turning a depth
+//         pixel into a 3D point (Unproject), a 3D point into a pixel (Project), and a whole depth picture into a
+//         cloud (Cloud). Every 3D example uses these three. Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit.
 int main()
 {
     UnprojectAndBack();

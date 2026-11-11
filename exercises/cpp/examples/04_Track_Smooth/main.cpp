@@ -57,6 +57,10 @@ const double DistanceSmoothing = 0.8;
 const int ReportEveryMs = 1000;
 const std::string Window = "04 track + smooth  (Q quits)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence MinConfidence.
+//         O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -95,8 +99,13 @@ struct Tracks
     int nextId = 1;
 };
 
-// Intersection over union: the overlapping area divided by the area the two boxes cover together.
-// 1 = identical boxes, 0 = not touching.
+//double Overlap(const cv::Rect2d& a, const cv::Rect2d& b){
+//
+//@param1 - a: one box
+//@param2 - b: the other box
+//
+//@brief - intersection over union: the shared area divided by the area the two boxes cover together. 1 =
+//         identical, 0 = not touching. O(1).
 double Overlap(const cv::Rect2d& a, const cv::Rect2d& b)
 {
     double intersection = (a & b).area();
@@ -104,7 +113,14 @@ double Overlap(const cv::Rect2d& a, const cv::Rect2d& b)
     return together > 0 ? intersection / together : 0;
 }
 
-// Step 5: the smoothed distance moves part of the way toward each new measurement.
+//void Smooth(Track& track, double rawMeters){
+//
+//@param1 - track: the track to update
+//@param2 - rawMeters: this frame's measured distance; <= 0 = none
+//
+//@brief - step 5: the smoothed distance moves part of the way (1 - DistanceSmoothing) toward each new measurement;
+//         the first one is taken as is. Also adds the raw and smoothed frame-to-frame changes to the track's sums,
+//         for Report. O(1).
 void Smooth(Track& track, double rawMeters)
 {
     if (rawMeters <= 0) return;
@@ -120,8 +136,15 @@ void Smooth(Track& track, double rawMeters)
     track.rawMeters = rawMeters;
 }
 
-// Why a new ID? If an unmatched object of the same class exists, it was probably the same thing:
-// print how much they overlapped (below MinOverlap = it moved too far, or was gone too long).
+//void ExplainNewId(const Measured& m, const Tracks& tracks, const std::vector<bool>& trackMatched, const spotter::ClassList& classes){
+//
+//@param1 - m: the detection that is about to get a new ID
+//@param2 - tracks: the tracks so far
+//@param3 - trackMatched: which tracks were matched this frame
+//@param4 - classes: the class names
+//
+//@brief - why a new ID? Finds the unmatched track of the same class that overlapped most and prints how much
+//         (below MinOverlap = it moved too far, or was gone too long), or says there was none. O(tracks).
 void ExplainNewId(const Measured& m, const Tracks& tracks, const std::vector<bool>& trackMatched, const spotter::ClassList& classes)
 {
     const Track* closest = nullptr;
@@ -139,8 +162,15 @@ void ExplainNewId(const Measured& m, const Tracks& tracks, const std::vector<boo
                     tracks.nextId, name, name, closest->id, closestOverlap, MinOverlap, closest->missedFrames + 1);
 }
 
-// Step 4: greedy matching. Of all (track, detection) pairs with the same class, take the pair that
-// overlaps most, pair them up, and repeat until no pair overlaps at least MinOverlap.
+//void Update(Tracks& tracks, const std::vector<Measured>& measured, const spotter::ClassList& classes){
+//
+//@param1 - tracks: the tracks; updated in place
+//@param2 - measured: this frame's detections with their distances
+//@param3 - classes: the class names
+//
+//@brief - step 4: greedy matching (the same-class pair overlapping most, at least MinOverlap, repeated); matched
+//         tracks take the new box and Smooth their distance; unmatched detections start new IDs (ExplainNewId says
+//         why); unmatched tracks count a missed frame and are dropped after MaxMissedFrames. O(T x D x min(T, D)).
 void Update(Tracks& tracks, const std::vector<Measured>& measured, const spotter::ClassList& classes)
 {
     std::vector<bool> trackMatched(tracks.list.size(), false), detectionMatched(measured.size(), false);
@@ -188,6 +218,15 @@ void Update(Tracks& tracks, const std::vector<Measured>& measured, const spotter
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracks: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a box per track visible now (not the missed ones) in its ID's colour, labelled "#id class smoothed
+//         (raw)", and the fps; shown with the key strip. O(tracks).
 void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const Track& track : tracks.list)
@@ -203,7 +242,14 @@ void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& clas
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
-// Average frame-to-frame change in mm: how much each number jumps around.
+//void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - tracks: the tracked objects; their change counters are reset
+//@param2 - classes: the class names
+//@param3 - fps: the frame-rate meter
+//
+//@brief - fps, how many objects are tracked, and per track its raw and smoothed distance and the average frame-to-
+//         frame change of each in mm (how much each number jumps around); then the counters restart. O(tracks).
 void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     std::printf("%.1f fps | %zu objects tracked, next new ID will be #%d\n", fps.Fps(), tracks.list.size(), tracks.nextId);
@@ -222,6 +268,12 @@ void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::Fp
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 04 · Track + Smooth. Example 02 measures every box from scratch each frame, so the
+//         distances jitter and nothing connects "the person" in one frame to the next. This example adds one idea
+//         on top: follow each object over time. Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

@@ -62,8 +62,12 @@ struct DepthStats
     float nearestMm = 1e9f, farthestMm = 0;
 };
 
-// Every pixel is a distance in mm; 0 means "no reading" (the source already turned NaN and
-// infinity into 0). Row by row: pixel (x, y) is depthMm.at<float>(y, x).
+//DepthStats Measure(const cv::Mat& depthMm){
+//
+//@param1 - depthMm: the depth picture, CV_32F mm, 0 = no reading
+//
+//@brief - visits every pixel (row by row) and keeps the nearest and farthest reading and how many pixels have
+//         none. O(pixels).
 DepthStats Measure(const cv::Mat& depthMm)
 {
     DepthStats stats;
@@ -78,13 +82,25 @@ DepthStats Measure(const cv::Mat& depthMm)
     return stats;
 }
 
+//std::string ReadingAt(const cv::Mat& depthMm, cv::Point crosshair){
+//
+//@param1 - depthMm: the depth picture, mm
+//@param2 - crosshair: the pixel to read
+//
+//@brief - that pixel's distance as text ("1234 mm") or "no reading". O(1).
 std::string ReadingAt(const cv::Mat& depthMm, cv::Point crosshair)
 {
     float mm = depthMm.at<float>(crosshair);
     return mm > 0 ? std::to_string((int)mm) + " mm" : "no reading";
 }
 
-// W A S D move the crosshair, kept inside the picture.
+//void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture){
+//
+//@param1 - key: what cv::waitKey returned
+//@param2 - crosshair: the crosshair's pixel; moved in place
+//@param3 - picture: the picture's size, to stay inside
+//
+//@brief - W A S D move the crosshair CrosshairStepPixels, kept inside the picture. O(1).
 void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture)
 {
     if (key == 'w') crosshair.y -= CrosshairStepPixels;
@@ -99,6 +115,14 @@ void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture)
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& fps){
+//
+//@param1 - depthMm: the depth picture, mm
+//@param2 - crosshair: the pixel to read
+//@param3 - fps: the frame-rate meter, drawn on the picture
+//
+//@brief - draws DepthPicture between NearMm and FarMm with a green cross, its reading and the fps, and shows it
+//         with the key strip. O(pixels).
 void Show(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& fps)
 {
     cv::Mat picture = spotter::DepthPicture(depthMm, NearMm, FarMm);
@@ -109,6 +133,14 @@ void Show(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& 
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& fps){
+//
+//@param1 - depthMm: the depth picture, mm
+//@param2 - crosshair: the pixel to read
+//@param3 - fps: the frame-rate meter
+//
+//@brief - one console line: fps, the crosshair's reading, the nearest and farthest readings and the share of
+//         pixels with none. O(pixels).
 void Report(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter& fps)
 {
     DepthStats stats = Measure(depthMm);
@@ -121,6 +153,11 @@ void Report(const cv::Mat& depthMm, cv::Point crosshair, const spotter::FpsMeter
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 01 · Depth Peek. Read the Kinect v2 depth camera and look at what it actually measures.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);   // print at once, even when piped to a file

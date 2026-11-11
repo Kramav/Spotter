@@ -21,8 +21,12 @@ namespace fs = std::filesystem;
 namespace spotter
 {
 
-// Pushes a written file from the system's cache onto the disk (bug 4: after a blue screen, a
-// file "written" but still in the cache can come back the right size and full of zeros).
+//bool SyncToDisk(const fs::path& path){
+//
+//@param1 - path: a file just written
+//
+//@brief - pushes the file from the system's cache onto the disk (_commit on Windows, fsync elsewhere). Bug 4: after a blue
+//         screen, a file "written" but still in the cache can come back the right size and full of zeros. False if it fails. O(1).
 static bool SyncToDisk(const fs::path& path)
 {
 #ifdef _WIN32
@@ -38,8 +42,13 @@ static bool SyncToDisk(const fs::path& path)
     return ok;
 }
 
-// A text file replaced in one go: written beside it, on the disk, then renamed over it. A crash
-// part-way through leaves the old file, never half of the new one.
+//bool ReplaceText(const fs::path& path, const std::string& text){
+//
+//@param1 - path: the file to replace
+//@param2 - text: its new contents
+//
+//@brief - replaces a text file in one go: written beside it as path.new, flushed to disk (SyncToDisk), then renamed over it.
+//         A crash part-way leaves the old file, never half of the new one. False if it fails. O(text length).
 static bool ReplaceText(const fs::path& path, const std::string& text)
 {
     fs::path fresh = path;
@@ -55,6 +64,12 @@ static bool ReplaceText(const fs::path& path, const std::string& text)
     return !error;
 }
 
+//std::map<std::string, std::string> ReadKeys(const fs::path& path){
+//
+//@param1 - path: a text file of "key value" lines (room.txt, pose.txt)
+//
+//@brief - reads each non-empty line that doesn't start with # as key (up to the first space) -> the rest. A missing file
+//         gives an empty map. O(lines).
 static std::map<std::string, std::string> ReadKeys(const fs::path& path)
 {
     std::map<std::string, std::string> keys;
@@ -70,6 +85,11 @@ static std::map<std::string, std::string> ReadKeys(const fs::path& path)
     return keys;
 }
 
+//std::vector<float> Numbers(const std::string& text){
+//
+//@param1 - text: numbers separated by spaces, e.g. a ReadKeys value
+//
+//@brief - every number in the text, in order; stops at the first thing that isn't one. O(length).
 static std::vector<float> Numbers(const std::string& text)
 {
     std::vector<float> numbers;
@@ -78,6 +98,11 @@ static std::vector<float> Numbers(const std::string& text)
     return numbers;
 }
 
+//std::string Now(const char* layout){
+//
+//@param1 - layout: a strftime layout, e.g. "%Y-%m-%d %H:%M"
+//
+//@brief - the local time as text in that layout (up to 31 characters). O(1).
 static std::string Now(const char* layout)
 {
     char text[32];
@@ -86,6 +111,12 @@ static std::string Now(const char* layout)
     return text;
 }
 
+//std::string TurnText(const cv::Matx33f& t, const char* number){
+//
+//@param1 - t: a 3 x 3 turn
+//@param2 - number: the printf layout of one number, e.g. "%.6f"
+//
+//@brief - the nine numbers row by row, separated by spaces (as room.txt and pose.txt hold a turn). O(1).
 static std::string TurnText(const cv::Matx33f& t, const char* number)
 {
     std::string text;
@@ -202,6 +233,12 @@ bool FinishRoomFolder(const fs::path& room, RoomInfo& info, const std::vector<Sc
 
 // --- Reading ---
 
+//int ScanNumber(const fs::path& folder){
+//
+//@param1 - folder: a folder path
+//
+//@brief - the number in a folder named scan_NNN (5 for scan_005), or 0 for any other name. Sorting by it puts scan_1000
+//         after scan_999 (bug 5). O(1).
 static int ScanNumber(const fs::path& folder)
 {
     std::string name = folder.filename().string();

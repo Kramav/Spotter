@@ -54,6 +54,10 @@ const std::vector<std::string> RadarClasses = {};
 const int ReportEveryMs = 1000;
 const std::string CameraWindow = "06 camera  (C clears trails, Q quits)", RadarWindow = "06 radar";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo, minimum confidence 0.15 (the
+//         tracker's weak threshold, 05b). O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -69,16 +73,29 @@ spotter::YoloDetector::Options YoloSettings()
 
 using Trails = std::map<int, std::deque<cv::Point2d>>;   // per ID: X, Z in metres, oldest first
 
-// Step 6: the pinhole model on the filtered estimate. How far the box centre is from the
-// picture's centre, in pixels, times distance / focal length = metres left/right of the camera.
-// ponytail: the colour camera is the origin (it sits a few cm beside the depth camera); small
-// next to box jitter. Example 09 adds the floor.
+//cv::Point2d FloorPosition(const spotter::Track& track, const spotter::PinholeCamera& colourCamera){
+//
+//@param1 - track: a tracked object with a distance
+//@param2 - colourCamera: the colour camera's model
+//
+//@brief - step 6: the pinhole model on the filtered estimate: the box centre's distance from the picture's centre,
+//         times distance / focal length, is the metres left/right of the camera. Returns (X right, Z ahead).
+//         ponytail: the colour camera is the origin (it sits a few cm beside the depth camera), small next to box
+//         jitter; example 09 adds the floor. O(1).
 cv::Point2d FloorPosition(const spotter::Track& track, const spotter::PinholeCamera& colourCamera)
 {
     cv::Point3f p = colourCamera.Unproject(cv::Point2f(track.filter.Centre()), (float)track.filter.Meters());
     return { p.x, p.z };
 }
 
+//void UpdateTrails(Trails& trails, const spotter::Tracker& tracker, const spotter::PinholeCamera& colourCamera){
+//
+//@param1 - trails: each ID's floor positions, oldest first; updated
+//@param2 - tracker: the tracked objects
+//@param3 - colourCamera: the colour camera's model
+//
+//@brief - adds each tracked object's floor position to its trail (once it has a distance), keeps the last
+//         TrailLength, and forgets the IDs the tracker forgot. O(tracks log tracks).
 void UpdateTrails(Trails& trails, const spotter::Tracker& tracker, const spotter::PinholeCamera& colourCamera)
 {
     Trails kept;   // only the IDs still tracked
@@ -92,6 +109,12 @@ void UpdateTrails(Trails& trails, const spotter::Tracker& tracker, const spotter
     trails.swap(kept);
 }
 
+//bool ShownOnRadar(int classId, const spotter::ClassList& classes){
+//
+//@param1 - classId: a track's class number
+//@param2 - classes: the class names
+//
+//@brief - true if the RadarClasses list is empty or holds this class's name. O(RadarClasses).
 bool ShownOnRadar(int classId, const spotter::ClassList& classes)
 {
     return RadarClasses.empty() || std::find(RadarClasses.begin(), RadarClasses.end(), classes.Name(classId)) != RadarClasses.end();
@@ -102,13 +125,27 @@ struct Radar
 {
     double pixelsPerMeter = (RadarSizePixels - 40) / RadarRangeMeters;
     cv::Point camera{ RadarSizePixels / 2, RadarSizePixels - 20 };
+    //cv::Point ToPixel(cv::Point2d floor){
+    //
+    //@param1 - floor: a spot on the floor, (X right, Z ahead) in metres
+    //
+    //@brief - the radar pixel for that spot: the camera is at the bottom centre and Z runs up the map. O(1).
     cv::Point ToPixel(cv::Point2d floor) const
     {
         return { (int)std::lround(camera.x + floor.x * pixelsPerMeter), (int)std::lround(camera.y - floor.y * pixelsPerMeter) };
     }
 };
 
-// Step 7: rings every metre, the camera's view edges, the 0.5 m minimum range, then each object.
+//void DrawRadar(const Trails& trails, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera){
+//
+//@param1 - trails: each ID's floor positions
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - colourCamera: the colour camera's model, for its field of view
+//
+//@brief - step 7: a ring every metre, the camera's view edges (half the field of view from atan(width / 2 / fx)),
+//         the 0.5 m minimum range, then each shown object's trail with a dot (hollow while predicted) and label;
+//         shown with the key strip. O(pixels + trail points).
 void DrawRadar(const Trails& trails, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::PinholeCamera& colourCamera)
 {
     // Half the colour camera's horizontal field of view: the picture's edge is width/2 pixels from
@@ -147,6 +184,15 @@ void DrawRadar(const Trails& trails, const spotter::Tracker& tracker, const spot
 //  Output
 // ---------------------------------------------------------------------
 
+//void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a box per track in its ID's colour (thin while coasting), labelled with ID, class and distance, and the
+//         fps; shown with the key strip. O(tracks).
 void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const spotter::Track& track : tracker.Tracks())
@@ -161,6 +207,15 @@ void ShowCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter
     cv::imshow(CameraWindow, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(const Trails& trails, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - trails: each ID's floor positions
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - console lines: fps and the object count, then each radar object's X (left or right), Z ahead and
+//         straight-line distance. O(tracks).
 void Report(const Trails& trails, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     std::printf("%.1f fps | %zu objects tracked\n", fps.Fps(), tracker.Tracks().size());
@@ -178,6 +233,12 @@ void Report(const Trails& trails, const spotter::Tracker& tracker, const spotter
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 06 · Radar. Examples 02-05c say HOW FAR away each object is. This one adds WHERE: every
+//         tracked object becomes a position on the floor, in metres, drawn on a bird's-eye "radar" map with the
+//         camera at the bottom. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

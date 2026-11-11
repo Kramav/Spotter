@@ -44,6 +44,10 @@ const std::string Keys = "Q or Esc  quit";
 
 const std::string Window = "00d YoloDetector  (Q quits)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options for yolo26n.onnx: 640 input, the end-to-end layout, the repo's names file,
+//         minimum confidence 0.4. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -55,7 +59,14 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
-// Detect, time it, draw and list what was found.
+//void DetectAndShow(spotter::YoloDetector& yolo, cv::Mat& picture, bool print){
+//
+//@param1 - yolo: a ready detector
+//@param2 - picture: a BGR picture; the boxes and labels are drawn onto it
+//@param3 - print: true = also list each detection in the console
+//
+//@brief - detects, times the run, draws each box with its class and confidence, and shows the picture with the key
+//         strip. O(detector run).
 void DetectAndShow(spotter::YoloDetector& yolo, cv::Mat& picture, bool print)
 {
     auto start = std::chrono::steady_clock::now();
@@ -72,6 +83,15 @@ void DetectAndShow(spotter::YoloDetector& yolo, cv::Mat& picture, bool print)
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 00d · Tour: YoloDetector and ClassList (needs the Kinect, or a picture). What it's for:
+//         finding objects in a colour picture. Detect(picture) returns spotter::Detection {classId, confidence,
+//         box}; ClassList turns the classId into a name ("person", "cup"). Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

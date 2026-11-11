@@ -29,8 +29,14 @@
 #include "spotter/geometry.hpp"
 #include "spotter/register.hpp"
 
-// The room in the first camera's coordinates (metres; X right, Y down, Z ahead): x -1.5 to 2.0,
-// ceiling 1.3 m above, floor 1.2 m below, z -1.0 to 3.0, and a couch 2 m ahead on the right.
+//float Raycast(const cv::Point3f& from, const cv::Point3f& ray){
+//
+//@param1 - from: where the ray starts, inside the room
+//@param2 - ray: its direction
+//
+//@brief - how far a ray goes in the made-up room (x -1.5 to 2.0, ceiling 1.3 m above, floor 1.2 m below, z -1.0 to
+//         3.0, a couch 2 m ahead on the right) before it hits something: the wall it heads for, or the couch's box
+//         if that is nearer (slab method). O(1).
 float Raycast(const cv::Point3f& from, const cv::Point3f& ray)
 {
     const float low[3] = { -1.5f, -1.3f, -1.0f }, high[3] = { 2.0f, 1.2f, 3.0f };
@@ -48,7 +54,12 @@ float Raycast(const cv::Point3f& from, const cv::Point3f& ray)
     return enter < leave && enter > 0 ? std::min(wall, enter) : wall;
 }
 
-// What a 512 x 424 depth camera standing at `pose` sees, as a cloud in its own coordinates.
+//std::vector<cv::Point3f> Photograph(const spotter::Pose& pose){
+//
+//@param1 - pose: where the camera stands in the room
+//
+//@brief - what a 512 x 424 depth camera at `pose` sees, as a cloud in its own coordinates: a Raycast per pixel
+//         plus 2 mm of noise. O(pixels).
 std::vector<cv::Point3f> Photograph(const spotter::Pose& pose)
 {
     const spotter::PinholeCamera camera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
@@ -63,12 +74,24 @@ std::vector<cv::Point3f> Photograph(const spotter::Pose& pose)
     return cloud;
 }
 
+//void Print(const char* name, const spotter::Pose& pose){
+//
+//@param1 - name: a label
+//@param2 - pose: the pose to show
+//
+//@brief - one line: the label, the shift (right, down, forward in metres) and the turn in degrees. O(1).
 void Print(const char* name, const spotter::Pose& pose)
 {
     std::printf("   %-10s right %+.3f  down %+.3f  forward %+.3f m, turned %.2f deg\n", name, pose.shift.x, pose.shift.y,
                 pose.shift.z, pose.Degrees());
 }
 
+//void PosesAndKabsch(const spotter::Pose& truth){
+//
+//@param1 - truth: the true pose of camera B in A's coordinates
+//
+//@brief - part 1: a point 2 m ahead of B shown in A's coordinates; then Kabsch recovers the pose from four exact
+//         pairs and prints it beside the truth. O(1).
 void PosesAndKabsch(const spotter::Pose& truth)
 {
     std::printf("1. A pose, and Kabsch:\n");
@@ -84,6 +107,12 @@ void PosesAndKabsch(const spotter::Pose& truth)
     std::printf("   Four exact pairs are plenty; with real data every pair is a little off, and more pairs average it out.\n");
 }
 
+//void Planes(const std::vector<cv::Point3f>& cloud){
+//
+//@param1 - cloud: camera A's depth cloud
+//
+//@brief - part 2: FindPlanes on every 4th pixel each way; prints each plane's name (floor, ceiling, wall,
+//         slanted), normal, distance and point count. O(FindPlanes).
 void Planes(const std::vector<cv::Point3f>& cloud)
 {
     std::printf("2. FindPlanes on what camera A sees (every 4th pixel each way):\n");
@@ -98,6 +127,15 @@ void Planes(const std::vector<cv::Point3f>& cloud)
     std::printf("   The normal points at the camera, so a floor's is (0, -1, 0): Y points down.\n");
 }
 
+//void IcpBetweenViews(const std::vector<cv::Point3f>& a, const std::vector<cv::Point3f>& b, const spotter::Pose& truth){
+//
+//@param1 - a: camera A's cloud
+//@param2 - b: camera B's cloud
+//@param3 - truth: B's true pose in A's coordinates
+//
+//@brief - parts 3 and 4: Icp of B's view onto A's from "not moved" (20 cm first pairing gate), printed beside the
+//         truth; then again with only the back wall, where sliding along it can't be pinned (weak directions).
+//         O(rounds x n log m).
 void IcpBetweenViews(const std::vector<cv::Point3f>& a, const std::vector<cv::Point3f>& b, const spotter::Pose& truth)
 {
     std::printf("3. Icp: B's view onto A's, starting from 'not moved':\n");
@@ -124,6 +162,12 @@ void IcpBetweenViews(const std::vector<cv::Point3f>& a, const std::vector<cv::Po
                 fit.weakDirections, 100 * std::abs(fit.pose.shift.x - truth.shift.x), 100 * std::abs(fit.pose.shift.y - truth.shift.y));
 }
 
+//int main(){
+//
+//@brief - the program: 00f · Tour: Pose, FindPlanes and Icp (no Kinect needed). What they're for. Pose where one
+//         camera stood relative to another: a turn and a shift. Any point it sees maps across as turn * p + shift.
+//         Kabsch the pose that best moves a set of points onto known partners. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     // Camera B: 10 cm right, 5 cm forward, 3 cm up (Y points down), turned 5 deg left.

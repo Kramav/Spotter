@@ -101,14 +101,25 @@ struct View
     cv::Mat descriptors;                  // ...and their descriptions (32 bytes = 256 yes/no answers each)
 };
 
+//cv::Point3f CloudAt(const View& view, const cv::Point2f& pixel){
+//
+//@param1 - view: a view with its cloud and picture
+//@param2 - pixel: a position on the depth grid, e.g. a keypoint
+//
+//@brief - the view's 3D point at that pixel (rounded, kept inside the picture); NaN where depth read nothing.
+//         O(1).
 cv::Point3f CloudAt(const View& view, const cv::Point2f& pixel)
 {
     int column = std::clamp((int)std::lround(pixel.x), 0, view.picture.cols - 1), row = std::clamp((int)std::lround(pixel.y), 0, view.picture.rows - 1);
     return view.cloud[row * view.picture.cols + column];
 }
 
-// Step 1: ORB features, only where there's both depth and colour (and not right at a hole's
-// edge, where the depth under a corner is unreliable).
+//void FindFeatures(View& view){
+//
+//@param1 - view: a view with its cloud, colours and picture; its keypoints and descriptors are filled
+//
+//@brief - step 1: ORB features (FeatureCount of them), only where there's both depth and colour and not right at a
+//         hole's edge (the mask is eroded 3 pixels), where the depth under a corner is unreliable. O(pixels).
 void FindFeatures(View& view)
 {
     cv::Mat usable(view.picture.size(), CV_8U);
@@ -120,6 +131,12 @@ void FindFeatures(View& view)
     cv::ORB::create(FeatureCount)->detectAndCompute(grey, usable, view.keypoints, view.descriptors);
 }
 
+//View Capture(const spotter::RgbdFrame& frame){
+//
+//@param1 - frame: this frame
+//
+//@brief - a view: the depth cloud, the registered colour with its per-pixel colours, the ICP points
+//         (SampleSurface) and the features (FindFeatures). O(pixels).
 View Capture(const spotter::RgbdFrame& frame)
 {
     View view;
@@ -131,8 +148,18 @@ View Capture(const spotter::RgbdFrame& frame)
     return view;
 }
 
-// Steps 2-4: match B's features to A's, lift them to 3D, RANSAC a pose that moves B onto A.
-// Returns how many matches agree with it (fewer than MinFeatureMatches = don't trust it).
+//int FeaturePose(const View& b, const View& a, std::mt19937& random, spotter::Pose& pose, std::vector<cv::DMatch>& agreeing){
+//
+//@param1 - b: the view to move
+//@param2 - a: the view to move it onto
+//@param3 - random: the random number generator
+//@param4 - pose: set to the pose, refitted to every pair that agreed
+//@param5 - agreeing: set to the matches the pose agrees with
+//
+//@brief - steps 2-4: match B's features to A's (the two most similar A features by Hamming distance, kept if the
+//         best is clearly better than the second), lift the matches to 3D with the depth under each feature, then
+//         RANSAC a pose that moves B onto A. Returns how many matches agree (fewer than MinFeatureMatches = don't
+//         trust it); 0 if there's too little to go on. O(n x m + RansacTries x pairs).
 int FeaturePose(const View& b, const View& a, std::mt19937& random, spotter::Pose& pose, std::vector<cv::DMatch>& agreeing)
 {
     agreeing.clear();
@@ -183,12 +210,26 @@ int FeaturePose(const View& b, const View& a, std::mt19937& random, spotter::Pos
     return (int)bestAgreeing.size();
 }
 
+//void PrintPose(const char* what, const spotter::Pose& pose){
+//
+//@param1 - what: a label
+//@param2 - pose: the pose to show
+//
+//@brief - one line: the label, the shift (right, up, forward in metres) and the turn in degrees. O(1).
 void PrintPose(const char* what, const spotter::Pose& pose)
 {
     std::printf("%s: right %+.3f m, up %+.3f m, forward %+.3f m, turned %.2f deg\n", what, pose.shift.x, -pose.shift.y, pose.shift.z, pose.Degrees());
 }
 
-// Steps 1-5 for B, then the match picture.
+//spotter::Pose LineUp(const View& b, const View& a, std::mt19937& random){
+//
+//@param1 - b: the view to move
+//@param2 - a: the view to move it onto
+//@param3 - random: the random number generator
+//
+//@brief - steps 1-5 for B, then the match picture: FeaturePose for a rough pose (with too few agreeing matches it
+//         says so and returns "not moved"), then Icp polishes it (step 5); prints both poses and the match
+//         picture. Returns the pose. O(FeaturePose + Icp).
 spotter::Pose LineUp(const View& b, const View& a, std::mt19937& random)
 {
     spotter::Pose pose;
@@ -230,6 +271,13 @@ struct Session
     std::mt19937 random{ 1 };
 };
 
+//void OnSpace(Session& session, const spotter::RgbdFrame& frame){
+//
+//@param1 - session: view A, view B and the pose; updated
+//@param2 - frame: this frame
+//
+//@brief - SPACE: the first press captures view A; the second captures B and lines it up (LineUp); the third starts
+//         over and closes the match window. O(pixels) plus LineUp.
 void OnSpace(Session& session, const spotter::RgbdFrame& frame)
 {
     if (!session.haveA)
@@ -257,6 +305,15 @@ void OnSpace(Session& session, const spotter::RgbdFrame& frame)
 //  Output: A, and B (live until captured) moved by the pose
 // ---------------------------------------------------------------------
 
+//void Show(const Session& session, const spotter::RgbdFrame& frame, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - session: the captured views and the pose
+//@param2 - frame: this frame, for the live view
+//@param3 - view: the viewer's angles
+//@param4 - renderer: draws the points
+//
+//@brief - A and B (live until captured, then moved by the pose) in one viewer, in orange and blue or true colours,
+//         with circles where each camera is and a status line; shown with the key strip. O(points).
 void Show(const Session& session, const spotter::RgbdFrame& frame, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     std::vector<cv::Point3f> b = session.haveB ? session.b.cloud : frame.depthCamera.Cloud(frame.depthMm);
@@ -283,6 +340,11 @@ void Show(const Session& session, const spotter::RgbdFrame& frame, spotter::Orbi
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 11b · Feature Pose. ICP (11) only works from a starting pose that's already roughly right,
+//         and in 11 you had to give it one. Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

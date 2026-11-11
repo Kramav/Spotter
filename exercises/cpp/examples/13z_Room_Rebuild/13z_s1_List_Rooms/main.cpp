@@ -16,6 +16,14 @@
 
 #include "spotter/room_folder.hpp"
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13z · step 1 of 2 · Find the saved rooms (no Kinect needed). A saved room is a folder
+//         holding a room.txt (13e writes one). Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit.
 int main(int argc, char** argv)
 {
     const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : "room_scans");

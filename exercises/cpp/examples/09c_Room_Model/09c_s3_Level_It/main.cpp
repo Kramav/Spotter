@@ -31,7 +31,14 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "S  scan and save     Q or Esc  quit";
 
-// The floor: the level plane with the most points (09), or nothing.
+//bool FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& floor){
+//
+//@param1 - cloud: a depth cloud, 512 wide
+//@param2 - random: the random number generator
+//@param3 - floor: set to the floor plane
+//
+//@brief - the floor: the level plane with the most points (FindPlanes, one level plane), or nothing; its normal
+//         must point up (-Y), not down, which would be a ceiling. O(FindPlanes).
 bool FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& floor)
 {
     spotter::PlaneSearch level;
@@ -43,6 +50,15 @@ bool FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spot
     return true;
 }
 
+//void SaveLevelled(const std::vector<cv::Point3f>& cloud, const cv::Mat& registered, const spotter::Plane& floor){
+//
+//@param1 - cloud: a depth cloud, 512 wide
+//@param2 - registered: colour per depth pixel
+//@param3 - floor: the floor plane, which says which way is up
+//
+//@brief - new: the room axes from the floor (up = its normal, "towards" = straight back with the up part dropped,
+//         right = up x towards); the mesh (MeshFromGrid) is expressed in them, so it stands straight with Y up.
+//         Prints the camera's height, tilt and roll and writes room_level_<time>.obj. O(pixels).
 void SaveLevelled(const std::vector<cv::Point3f>& cloud, const cv::Mat& registered, const spotter::Plane& floor)
 {
     cv::Point3f up = floor.normal;
@@ -58,6 +74,13 @@ void SaveLevelled(const std::vector<cv::Point3f>& cloud, const cv::Mat& register
     if (spotter::SaveObj(path, mesh, "Spotter 09c step 3: levelled by the floor")) std::printf("Saved %s (never commit it)\n", path.c_str());
 }
 
+//int main(){
+//
+//@brief - the program: 09c · step 3 of 3 · Stand the room up straight. The floor plane's normal is the room's UP,
+//         whatever the camera's tilt. Build new axes from it: up the floor's normal towards the camera's -Z
+//         (straight back), with its up/down part dropped right up x towards and turn every point into them. Setup,
+//         main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't
+//         start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

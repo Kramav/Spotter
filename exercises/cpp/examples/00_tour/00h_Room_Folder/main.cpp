@@ -32,8 +32,12 @@ namespace fs = std::filesystem;
 
 const spotter::PinholeCamera Camera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
 
-// A box room: x -1.5 to 2, ceiling 1.3 m above the first camera, floor 1.2 m below, z -1 to 3.
-// Each wall has its own colour.
+//spotter::Scan Photograph(const spotter::Pose& pose){
+//
+//@param1 - pose: where the camera stands in the made-up room
+//
+//@brief - a scan of a box room (x -1.5 to 2, ceiling 1.3 m above, floor 1.2 m below, z -1 to 3), each wall its own
+//         colour: a ray per pixel gives the cloud and picture; ICP points are made with SampleSurface. O(pixels).
 spotter::Scan Photograph(const spotter::Pose& pose)
 {
     const float low[3] = { -1.5f, -1.3f, -1.0f }, high[3] = { 2.0f, 1.2f, 3.0f };
@@ -61,6 +65,13 @@ spotter::Scan Photograph(const spotter::Pose& pose)
     return scan;
 }
 
+//void WriteRoom(const fs::path& folder, const std::vector<spotter::Scan>& scans){
+//
+//@param1 - folder: the room folder to create
+//@param2 - scans: the scans to write
+//
+//@brief - part 1: StartRoomFolder, WriteScan for each, WriteRoomInfo, then lists scan 1's files with their sizes
+//         (the others hold the same). O(pixels x scans).
 void WriteRoom(const fs::path& folder, const std::vector<spotter::Scan>& scans)
 {
     std::printf("1. Writing %zu scans to %s\n", scans.size(), folder.string().c_str());
@@ -77,6 +88,13 @@ void WriteRoom(const fs::path& folder, const std::vector<spotter::Scan>& scans)
     std::printf("   (scan_002 and scan_003 hold the same files)\n");
 }
 
+//std::vector<spotter::Scan> ReadRoom(const fs::path& folder, spotter::RoomInfo& info){
+//
+//@param1 - folder: the room folder
+//@param2 - info: filled from room.txt
+//
+//@brief - part 2: FindRooms, ReadRoomInfo, then LoadScan on each ScanFolders entry, printing loaded or refused
+//         with the reason. Returns the scans that loaded. O(pixels x scans).
 std::vector<spotter::Scan> ReadRoom(const fs::path& folder, spotter::RoomInfo& info)
 {
     std::printf("2. Reading it back:\n");
@@ -99,6 +117,13 @@ std::vector<spotter::Scan> ReadRoom(const fs::path& folder, spotter::RoomInfo& i
     return scans;
 }
 
+//void Damage(const fs::path& folder, const spotter::RoomInfo& info){
+//
+//@param1 - folder: the room folder
+//@param2 - info: its room.txt
+//
+//@brief - part 3: overwrites scan 3's cloud.bin with zeros (what a blue screen can leave) to show LoadScan refuses
+//         it, then SetExcluded on scan 2 and shows the flag read back. O(pixels).
 void Damage(const fs::path& folder, const spotter::RoomInfo& info)
 {
     std::printf("3. What a blue screen can leave: scan 3's cloud.bin the right size, but all zeros:\n");
@@ -114,6 +139,12 @@ void Damage(const fs::path& folder, const spotter::RoomInfo& info)
     std::printf("   SetExcluded(scan 2): it now loads with excluded = %d (pose.txt rewritten in one go)\n", ok && scan.excluded);
 }
 
+//void Rebuild(const std::vector<spotter::Scan>& scans){
+//
+//@param1 - scans: the scans that loaded
+//
+//@brief - part 4: FuseScans + BuildRoom; prints triangles, cube size, where up came from, floor and ceiling
+//         heights against the truth, and each wall's length. O(FuseScans).
 void Rebuild(const std::vector<spotter::Scan>& scans)
 {
     std::printf("4. FuseScans + BuildRoom on the scans that loaded:\n");
@@ -128,6 +159,12 @@ void Rebuild(const std::vector<spotter::Scan>& scans)
     for (const auto& [a, b] : room.walls) std::printf("   wall %.2f m long\n", cv::norm(b - a));
 }
 
+//int main(){
+//
+//@brief - the program: 00h · Tour: Scan, the room folder, FuseScans and BuildRoom (no Kinect needed). What they're
+//         for. 13e scans a room from many spots and saves each scan the moment it's placed; 13z reads the folder
+//         back and rebuilds the room. Setup, main loop and clean-up are laid out in the file's sections. Returns 0
+//         on a normal exit.
 int main()
 {
     const fs::path folder = fs::temp_directory_path() / "spotter_tour_00h";

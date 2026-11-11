@@ -15,6 +15,12 @@ long long CubeKey(const cv::Point3f& p, float size)
     return (cell(p.x) << 42) | (cell(p.y) << 21) | cell(p.z);
 }
 
+//cv::Point3f CloudAt(const Scan& scan, const cv::Point2f& pixel){
+//
+//@param1 - scan: a scan with its cloud and picture
+//@param2 - pixel: a position on the depth grid, e.g. a keypoint
+//
+//@brief - the scan's 3D point at that pixel (rounded, kept inside the picture); NaN where depth read nothing. O(1).
 static cv::Point3f CloudAt(const Scan& scan, const cv::Point2f& pixel)
 {
     const int width = scan.picture.cols, height = scan.picture.rows;
@@ -84,6 +90,11 @@ void AddFarFeatures(Scan& scan, const cv::Mat& colourGrey, const cv::Mat& noDept
     }
 }
 
+//cv::Mat AllDescriptors(const Scan& scan){
+//
+//@param1 - scan: a scan with features
+//
+//@brief - the near and far descriptors stacked into one matrix, near first. O(descriptors).
 static cv::Mat AllDescriptors(const Scan& scan)
 {
     cv::Mat all = scan.near.descriptors.clone();
@@ -91,7 +102,13 @@ static cv::Mat AllDescriptors(const Scan& scan)
     return all;
 }
 
-// The turn that best maps directions `from` onto `to`: Kabsch without the centring.
+//cv::Matx33f TurnBetween(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to){
+//
+//@param1 - from: directions (unit vectors)
+//@param2 - to: each one's partner direction, same order
+//
+//@brief - the turn that best maps the directions onto their partners: Kabsch without the centring (a direction has no
+//         position to centre). A mirror image is made a turn by flipping the weakest axis. O(n).
 static cv::Matx33f TurnBetween(const std::vector<cv::Point3f>& from, const std::vector<cv::Point3f>& to)
 {
     cv::Matx33d together = cv::Matx33d::zeros();
@@ -111,7 +128,17 @@ static cv::Matx33f TurnBetween(const std::vector<cv::Point3f>& from, const std::
     return cv::Matx33f(cv::Matx33d(turn));
 }
 
-// Where two rays (unit directions) pass closest: how far along each. False if they're parallel.
+//bool Triangulate(const cv::Point3f& oa, const cv::Point3f& da, const cv::Point3f& ob, const cv::Point3f& db, float& sa, float& sb){
+//
+//@param1 - oa: the first ray's origin
+//@param2 - da: its unit direction
+//@param3 - ob: the second ray's origin
+//@param4 - db: its unit direction
+//@param5 - sa: set to how far along the first ray they pass closest
+//@param6 - sb: set to how far along the second
+//
+//@brief - where two rays pass closest to each other (the closed-form skew-line solution). False if they're parallel
+//         (1 - cos^2 under 1e-7). O(1).
 static bool Triangulate(const cv::Point3f& oa, const cv::Point3f& da, const cv::Point3f& ob, const cv::Point3f& db, float& sa, float& sb)
 {
     cv::Point3f w = oa - ob;
@@ -122,8 +149,18 @@ static bool Triangulate(const cv::Point3f& oa, const cv::Point3f& da, const cv::
     return true;
 }
 
-// Does a far match agree with pose h (b's camera -> a's)? The rays must meet, far away. From
-// (almost) the same spot they can't be triangulated, so then only their directions are compared.
+//bool FarAgrees(const Pose& h, const cv::Point3f& ob, const cv::Point3f& rb, const cv::Point3f& oa, const cv::Point3f& ra, const ScanOptions& options){
+//
+//@param1 - h: a pose, b's camera -> a's
+//@param2 - ob: b's ray origin
+//@param3 - rb: b's ray, unit direction
+//@param4 - oa: a's ray origin
+//@param5 - ra: a's ray, unit direction
+//@param6 - options: farAgreeDegrees and farMinMeters
+//
+//@brief - does a far match agree with the pose? The rays must meet, at least farMinMeters away, within farAgreeDegrees x
+//         distance of each other. From (almost) the same spot (under 20 cm) they can't be triangulated, so then only their
+//         directions are compared. O(1).
 static bool FarAgrees(const Pose& h, const cv::Point3f& ob, const cv::Point3f& rb, const cv::Point3f& oa, const cv::Point3f& ra,
                       const ScanOptions& options)
 {

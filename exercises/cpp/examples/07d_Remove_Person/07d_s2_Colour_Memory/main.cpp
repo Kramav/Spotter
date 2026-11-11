@@ -23,6 +23,14 @@ const std::string Keys = "SPACE  forget and start over     Q or Esc  quit";
 
 const float BlendRate = 0.1f;   // per frame, how fast the memory follows the room
 
+//void Learn(cv::Mat& memory, const cv::Mat& registered, const cv::Mat& foreground){
+//
+//@param1 - memory: the remembered colour per depth pixel, CV_32FC3; updated
+//@param2 - registered: this frame's colour per depth pixel
+//@param3 - foreground: the foreground mask: those pixels aren't learned
+//
+//@brief - remembers the room's colour: skips pixels with something in the way or that the colour camera can't see
+//         (black); the first sighting is taken as is, later ones blend in by BlendRate. O(pixels).
 void Learn(cv::Mat& memory, const cv::Mat& registered, const cv::Mat& foreground)
 {
     for (int i = 0; i < (int)registered.total(); i++)
@@ -35,6 +43,12 @@ void Learn(cv::Mat& memory, const cv::Mat& registered, const cv::Mat& foreground
     }
 }
 
+//int main(){
+//
+//@brief - the program: 07d · step 2 of 3 · Remember what the room looks like. 07c's depth background
+//         (spotter::AdaptiveBackground) says which pixels have something in front of the room. Everywhere else,
+//         the colour we see IS the room: blend it into a colour memory. Setup, main loop and clean-up are laid out
+//         in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

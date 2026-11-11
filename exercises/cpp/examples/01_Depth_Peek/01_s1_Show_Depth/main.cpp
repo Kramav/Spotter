@@ -19,6 +19,11 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//int main(){
+//
+//@brief - the program: 01 · step 1 of 3 · Show the depth picture. The smallest Kinect program: open the depth
+//         camera and show what it sends. Each pixel is a distance in millimetres. Setup, main loop and clean-up
+//         are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

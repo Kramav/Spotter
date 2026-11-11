@@ -135,6 +135,17 @@ struct Filled
     std::vector<std::string> report;      // one line per surface, for the console
 };
 
+//void AddFilled(Filled& out, const cv::Point3f& p, const cv::Vec3b& colour, int row, int column, double& area){
+//
+//@param1 - out: the fill so far; one point is added
+//@param2 - p: the filled cell's centre in the room
+//@param3 - colour: its guessed colour
+//@param4 - row: the cell's row
+//@param5 - column: its column
+//@param6 - area: the surface's filled area; grows by one cell
+//
+//@brief - adds one filled cell: its point, colour, and which marking band it falls in (stripes every StripeCells),
+//         and counts its area. O(1).
 void AddFilled(Filled& out, const cv::Point3f& p, const cv::Vec3b& colour, int row, int column, double& area)
 {
     out.points.push_back(p);
@@ -143,7 +154,13 @@ void AddFilled(Filled& out, const cv::Point3f& p, const cv::Vec3b& colour, int r
     area += FillCellMeters * FillCellMeters;
 }
 
-// The colours of a surface's seen cells (count > 0), and cv::inpaint for the rest, from the edges in.
+//cv::Mat PaintIn(const cv::Mat& sum, const cv::Mat& count){
+//
+//@param1 - sum: per cell, the sum of the seen colours (CV_32FC3)
+//@param2 - count: per cell, how many readings (CV_32F)
+//
+//@brief - the colours of a surface's seen cells (count > 0, the average), and cv::inpaint (Telea) for the rest,
+//         from the edges in. O(cells).
 cv::Mat PaintIn(const cv::Mat& sum, const cv::Mat& count)
 {
     cv::Mat picture(sum.size(), CV_8UC3, cv::Scalar::all(128)), unknown(sum.size(), CV_8U, cv::Scalar(255));
@@ -165,6 +182,12 @@ struct Plan
 {
     float x0 = 0, z0 = 0;
     int columns = 0, rows = 0;
+    //int Index(float x, float z){
+    //
+    //@param1 - x: metres to the right
+    //@param2 - z: metres ahead
+    //
+    //@brief - the plan cell index for that spot, or -1 if it's outside the plan. O(1).
     int Index(float x, float z) const
     {
         int c = (int)std::floor((x - x0) / FillCellMeters), r = (int)std::floor((z - z0) / FillCellMeters);
@@ -180,8 +203,17 @@ struct WallMap
     std::vector<int> wall, column;
 };
 
-// Walks the first camera's line of sight towards plan point "to" in half cells, from plan distance
-// "from" up to "until", and returns the distance where it first meets a kept wall (-1: none).
+//float MeetWall(const WallMap& map, cv::Point2f to, float from, float until, int& wall, int& column){
+//
+//@param1 - map: the kept walls seen from above
+//@param2 - to: the plan point to look towards, relative to the first camera
+//@param3 - from: the plan distance to start at
+//@param4 - until: the plan distance to stop at
+//@param5 - wall: set to the wall met
+//@param6 - column: set to which of its columns
+//
+//@brief - walks the first camera's line of sight towards the plan point in half cells and returns the distance
+//         where it first meets a kept wall (-1: none, or it left the plan). O((until - from) / half a cell).
 float MeetWall(const WallMap& map, cv::Point2f to, float from, float until, int& wall, int& column)
 {
     float length = (float)cv::norm(to);
@@ -206,18 +238,46 @@ struct Grid
     cv::Point3f normal, u, v;
     float offset = 0, uMin = 0, vMin = 0;
     int columns = 0, rows = 0;
+    //bool Cell(const cv::Point3f& p, int& row, int& column){
+    //
+    //@param1 - p: a point in the room
+    //@param2 - row: set to its row in the grid
+    //@param3 - column: set to its column
+    //
+    //@brief - which grid cell the point projects into (along u for columns, v for rows). False if it falls outside the
+    //         grid. O(1).
     bool Cell(const cv::Point3f& p, int& row, int& column) const
     {
         column = (int)std::floor((u.dot(p) - uMin) / FillCellMeters);
         row = (int)std::floor((v.dot(p) - vMin) / FillCellMeters);
         return column >= 0 && row >= 0 && column < columns && row < rows;
     }
+    //cv::Point3f Centre(int row, int column, float at){
+    //
+    //@param1 - row: a cell's row
+    //@param2 - column: its column
+    //@param3 - at: its distance along the normal
+    //
+    //@brief - the room point at the middle of that cell, `at` along the normal. O(1).
     cv::Point3f Centre(int row, int column, float at) const
     {
         return normal * at + u * (uMin + (column + 0.5f) * FillCellMeters) + v * (vMin + (row + 0.5f) * FillCellMeters);
     }
 };
 
+//Grid MakeGrid(const cv::Point3f& normal, const cv::Point3f& u, const cv::Point3f& v, float offset, float uMin, float uMax, float vMin, float vMax){
+//
+//@param1 - normal: the plane's normal (unit)
+//@param2 - u: the direction of the columns (unit)
+//@param3 - v: the direction of the rows (unit)
+//@param4 - offset: the plane: normal . p = offset
+//@param5 - uMin: where the columns start
+//@param6 - uMax: where they end
+//@param7 - vMin: where the rows start
+//@param8 - vMax: where they end
+//
+//@brief - a grid of FillCellMeters cells on the plane covering [uMin, uMax] x [vMin, vMax] (at least one cell each
+//         way). O(1).
 Grid MakeGrid(const cv::Point3f& normal, const cv::Point3f& u, const cv::Point3f& v, float offset,
               float uMin, float uMax, float vMin, float vMax)
 {
@@ -227,11 +287,15 @@ Grid MakeGrid(const cv::Point3f& normal, const cv::Point3f& u, const cv::Point3f
     return grid;
 }
 
-// For a table top, a seat or a cabinet front: the cells to fill for each piece of "on" (a
-// surface's cells with its own points) of at least MinSurfaceArea. A piece covering most of its
-// rectangle (a table top with a box on it) fills to the rectangle; any other shape (an L-shaped
-// desk) only fills the holes it encloses. Parts up to "join" cells apart are one piece (a table top
-// cut in two by the shadow of something standing on it).
+//std::vector<cv::Mat> PieceDomains(const cv::Mat& on, int join){
+//
+//@param1 - on: a surface's cells that hold its own points (255)
+//@param2 - join: parts up to this many cells apart are one piece (default 0)
+//
+//@brief - for a table top, a seat or a cabinet front: the cells to fill for each piece of `on` of at least
+//         MinSurfaceArea. A piece covering most of its rectangle (a table top with a box on it) fills to the
+//         rectangle; any other shape (an L-shaped desk) only fills the holes it encloses. Parts up to `join` cells
+//         apart are one piece (a table top cut in two by the shadow of something standing on it). O(cells).
 std::vector<cv::Mat> PieceDomains(const cv::Mat& on, int join = 0)
 {
     std::vector<cv::Mat> domains;
@@ -331,7 +395,24 @@ struct Wall
     bool kept = false;
 };
 
-// Steps a and e for walls, and step f's shadows. Marks the points seen on kept walls in "claimed".
+//WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals, const std::vector<cv::Vec3b>& colours, float floorY, float cutY, const cv::Matx33f& firstCamera, std::vector<char>& claimed, Filled& out){
+//
+//@param1 - room: the room's points, levelled (Y up)
+//@param2 - normals: which way each faces
+//@param3 - colours: each point's colour
+//@param4 - floorY: the floor's height
+//@param5 - cutY: fill up to this height
+//@param6 - firstCamera: scan 1's camera -> the room, for the lines of sight
+//@param7 - claimed: set to 1 for each point seen on a kept wall
+//@param8 - out: the fill so far; the walls' cells and shadows are added
+//
+//@brief - steps a and e for walls, and step f's shadows. 1. Stacks: upright points per plan cell and how high they
+//         reach; 2. thin the paths to one cell across; 3. bridge gaps up to MaxWallGapMeters between path ends
+//         pointing at each other; 4. split where three paths meet and order each path from one end; 5. keep real
+//         walls (long enough, seen along enough of their length, not seen only through another wall); then lines
+//         of sight from the first camera find points seen through an opening (a door) and where a point casts its
+//         shadow; 6. fill each kept wall, unrolled into a flat picture, from the floor up to the cut, and the big
+//         unexplained shadows as "something dark stood here". Returns the kept walls' map. O(points + wall cells).
 WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals,
                   const std::vector<cv::Vec3b>& colours, float floorY, float cutY, const cv::Matx33f& firstCamera,
                   std::vector<char>& claimed, Filled& out)
@@ -781,8 +862,23 @@ WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector<cv::Po
 // "report": how it chose, for the console.
 
 
-// Steps a-e: every flat surface of the room (levelled: Y up; the first camera at 0,0,0), its holes
-// filled, and step f's shadows. "floorY": FindTwinFloor's.
+//Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals, const std::vector<cv::Vec3b>& colours, float floorY, bool floorSeen, float cutY, const cv::Matx33f& firstCamera){
+//
+//@param1 - room: the room's points, levelled (Y up; the first camera at 0, 0, 0)
+//@param2 - normals: which way each faces
+//@param3 - colours: each point's colour
+//@param4 - floorY: FindTwinFloor's floor height
+//@param5 - floorSeen: true if the floor was seen, false = guessed at the walls' foot
+//@param6 - cutY: fill up to this height
+//@param7 - firstCamera: scan 1's camera -> the room
+//
+//@brief - steps a-e: every flat surface of the room and its holes filled, and step f's shadows. a. walls
+//         (FillWalls); b. cabinet fronts and couch backs (upright planes found by RANSAC, refitted twice seen from
+//         above); c. the floor (inside the walls) and level surfaces (table tops, seats, shelf tops, each height
+//         fitted per tile); d. table legs (thin tall blobs under a top, made whole from the floor to the top); e.
+//         a cell counts as seen if a real point is near it or just behind it, the rest is filled with colour from
+//         the seen cells around (PaintIn). Returns the filled points, marking bands, shadows and a report line per
+//         surface. O(points + surface cells).
 Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<cv::Point3f>& normals,
                  const std::vector<cv::Vec3b>& colours, float floorY, bool floorSeen, float cutY, const cv::Matx33f& firstCamera)
 {
@@ -1106,6 +1202,15 @@ struct Room
     std::vector<cv::Vec3b> marked;     // the guess tinted blue in stripes
 };
 
+//bool LoadRoom(int argc, char** argv, Room& room){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional room folder
+//@param3 - room: filled with the points, floor and size
+//
+//@brief - step 1: the room folder given, or the newest under RoomsFolder; LoadTwinRoom and FindTwinFloor; keeps
+//         the points above the under-floor noise and works out the middle and the radius (90th percentile reach).
+//         False (with a message) if there is no room or it won't load. O(points).
 bool LoadRoom(int argc, char** argv, Room& room)
 {
     room.folder = argc > 1 ? std::filesystem::path(argv[1]) : spotter::NewestRoomFolder(RoomsFolder);
@@ -1140,6 +1245,13 @@ bool LoadRoom(int argc, char** argv, Room& room)
 //  Step 2 (new): fill, once
 // ---------------------------------------------------------------------
 
+//void FillRoom(Room& room){
+//
+//@param1 - room: the loaded room; its fill is added
+//
+//@brief - step 2 (new), once: FillHoles on the room's points up to the cut, prints the filled areas, counts and
+//         time, and tints each filled cell with the marking colour (stronger on one band) for the marked view.
+//         O(FillHoles).
 void FillRoom(Room& room)
 {
     auto start = std::chrono::steady_clock::now();
@@ -1160,6 +1272,16 @@ void FillRoom(Room& room)
 //  Steps 3-4: what to show and save (fillMode: 0 marked, 1 unmarked, 2 off)
 // ---------------------------------------------------------------------
 
+//void Gather(const Room& room, int fillMode, float topY, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours){
+//
+//@param1 - room: the loaded room with its fill
+//@param2 - fillMode: 0 = marked, 1 = unmarked, 2 = off
+//@param3 - topY: leave out anything above this height
+//@param4 - points: set to what to show or save
+//@param5 - colours: their colours
+//
+//@brief - every real point, then the fill (marked or plain colours, or none) and in the marked view the purple
+//         shadow cut-outs, all up to topY. O(points).
 void Gather(const Room& room, int fillMode, float topY, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours)
 {
     auto add = [&](const std::vector<cv::Point3f>& from, const std::vector<cv::Vec3b>& colour, size_t i) {
@@ -1178,10 +1300,23 @@ void Gather(const Room& room, int fillMode, float topY, std::vector<cv::Point3f>
         }
 }
 
-// The viewer works in camera coordinates (Y down, Z ahead); the room is Y up, Z towards the first
-// camera: turned 180 degrees about X, it's seen from in front, as 09b's flip.
+//cv::Point3f ForView(const cv::Point3f& p){
+//
+//@param1 - p: a point in the room (Y up, Z towards the first camera)
+//
+//@brief - the room -> the viewer's coordinates (Y down, Z ahead): turned 180 degrees about X, (x, y, z) -> (x, -y,
+//         -z), as 09b's flip, so the room is seen from in front. It is its own inverse. O(1).
 cv::Point3f ForView(const cv::Point3f& p) { return { p.x, -p.y, -p.z }; }
 
+//void Show(const Room& room, int fillMode, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - room: the loaded room with its fill
+//@param2 - fillMode: 0 = marked, 1 = unmarked, 2 = off
+//@param3 - view: the viewer
+//@param4 - renderer: draws the points
+//
+//@brief - the room up to the cut as a doll's house (Gather, turned with ForView) and a note on what the colours
+//         mean; shown with the key strip. O(points).
 void Show(const Room& room, int fillMode, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     std::vector<cv::Point3f> points;
@@ -1197,7 +1332,13 @@ void Show(const Room& room, int fillMode, spotter::OrbitView& view, spotter::Poi
     cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
-// Every real point (no cut) plus the fill as shown, levelled (Y up), beside the room's scans.
+//void Save(const Room& room, int fillMode){
+//
+//@param1 - room: the loaded room with its fill
+//@param2 - fillMode: 0 = marked, 1 = unmarked, 2 = off
+//
+//@brief - every real point (no cut) plus the fill as shown, written to room_filled_<date>_<time>.ply in the room's
+//         folder; prints the point count or the failure. O(points).
 void Save(const Room& room, int fillMode)
 {
     std::vector<cv::Point3f> points;
@@ -1215,6 +1356,15 @@ void Save(const Room& room, int fillMode)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words; the file's header says what it accepts
+//
+//@brief - the program: 13x · Room Fill (no Kinect; after 13e and 13z). A scan only has what the Kinect saw: the
+//         wall behind the couch, the floor under the table, the part of a table top under a box were never seen.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

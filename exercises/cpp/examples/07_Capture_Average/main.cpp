@@ -75,7 +75,16 @@ struct Capture
     std::vector<int> readings;
     int frames = -1;   // -1 = not capturing
 
+    //bool Running(){
+    //
+    //@brief - true while a capture has started (frames >= 0). O(1).
     bool Running() const { return frames >= 0; }
+    //void Start(size_t pixels){
+    //
+    //@param1 - pixels: how many depth pixels there are
+    //
+    //@brief - begins a capture: clears the sums, sums of squares and reading counts for every pixel, and the frame
+    //         count. O(pixels).
     void Start(size_t pixels)
     {
         sumMm.assign(pixels, 0);
@@ -84,6 +93,12 @@ struct Capture
         frames = 0;
         std::printf("Capturing...\n");
     }
+    //void Add(const cv::Mat& depthMm){
+    //
+    //@param1 - depthMm: this frame's depth, mm, 0 = no reading
+    //
+    //@brief - adds each reading to its pixel's sum, sum of squares and count; holes don't count, they'd drag the
+    //         average to 0. O(pixels).
     void Add(const cv::Mat& depthMm)
     {
         const float* mm = depthMm.ptr<float>();
@@ -103,6 +118,14 @@ struct Averaged
     cv::Mat averageMm, spreadMm;   // 0 = a hole (too few readings)
 };
 
+//Averaged Finish(const Capture& capture, cv::Size size){
+//
+//@param1 - capture: the finished capture
+//@param2 - size: the depth picture's size
+//
+//@brief - the average and the spread per pixel: mean = sum / readings; spread (standard deviation) = sqrt(mean of
+//         squares - square of mean), how far one frame typically strays. A pixel that read in fewer than
+//         MinValidFraction of the frames is left a hole. O(pixels).
 Averaged Finish(const Capture& capture, cv::Size size)
 {
     Averaged result{ cv::Mat(size, CV_32F, cv::Scalar(0)), cv::Mat(size, CV_32F, cv::Scalar(0)) };
@@ -118,8 +141,14 @@ Averaged Finish(const Capture& capture, cv::Size size)
     return result;
 }
 
-// Per 1 m band: how much of the view reads reliably, how much only sometimes (flaky), and the
-// noise of ONE frame there (noise grows with distance, guide §5.5).
+//void ReportBands(const Capture& capture, const Averaged& result){
+//
+//@param1 - capture: the finished capture
+//@param2 - result: its average and spread
+//
+//@brief - per 1 m band: how much of the view reads reliably, how much only sometimes (flaky), and the median noise
+//         of ONE frame there (noise grows with distance, guide 5.5); also the share never read and the noise the
+//         average should have (one frame / sqrt(frames)). O(pixels).
 void ReportBands(const Capture& capture, const Averaged& result)
 {
     const int bands = (int)std::ceil(MaxDepthMeters);
@@ -154,8 +183,14 @@ void ReportBands(const Capture& capture, const Averaged& result)
                 oneFrame / std::sqrt((double)CaptureFrames), oneFrame, CaptureFrames);
 }
 
-// Two averages of the same still scene differ only by their noise. The difference of two
-// equally noisy things has sqrt(2) times their noise, so divide by sqrt(2).
+//void ReportAgainstPrevious(const Averaged& now, const Averaged& previous){
+//
+//@param1 - now: this capture's average
+//@param2 - previous: the capture before it (empty = none)
+//
+//@brief - two averages of the same still scene differ only by their noise; the difference of two equally noisy
+//         things has sqrt(2) times their noise, so the median difference (scaled by 1.4826 to a standard
+//         deviation) is divided by sqrt(2). Asks for a second capture if there is no previous one. O(pixels).
 void ReportAgainstPrevious(const Averaged& now, const Averaged& previous)
 {
     if (previous.averageMm.empty())
@@ -179,6 +214,15 @@ void ReportAgainstPrevious(const Averaged& now, const Averaged& previous)
 //  Output
 // ---------------------------------------------------------------------
 
+//void ShowLive(const cv::Mat& liveMm, const Averaged& last, const Capture& capture, cv::Point crosshair){
+//
+//@param1 - liveMm: this frame's depth, mm
+//@param2 - last: the last average, for the crosshair's average and spread
+//@param3 - capture: the capture in progress, for its count
+//@param4 - crosshair: the pixel to read
+//
+//@brief - the live depth picture with a green cross, its reading, the last average there and one frame's spread,
+//         and "capturing n/N" while a capture runs; shown with the key strip. O(pixels).
 void ShowLive(const cv::Mat& liveMm, const Averaged& last, const Capture& capture, cv::Point crosshair)
 {
     cv::Mat picture = spotter::DepthPicture(liveMm, NearMm, MaxDepthMeters * 1000);
@@ -195,6 +239,12 @@ void ShowLive(const cv::Mat& liveMm, const Averaged& last, const Capture& captur
     cv::imshow(LiveWindow, spotter::WithKeys(picture, Keys));
 }
 
+//void ShowAverage(const Averaged& result){
+//
+//@param1 - result: the average to show
+//
+//@brief - opens the average window (1024 x 848) and shows the averaged depth picture with the key strip.
+//         O(pixels).
 void ShowAverage(const Averaged& result)
 {
     cv::namedWindow(AverageWindow, cv::WINDOW_NORMAL);
@@ -202,6 +252,13 @@ void ShowAverage(const Averaged& result)
     cv::imshow(AverageWindow, spotter::WithKeys(spotter::DepthPicture(result.averageMm, NearMm, MaxDepthMeters * 1000), Keys));
 }
 
+//void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture){
+//
+//@param1 - key: what cv::waitKey returned
+//@param2 - crosshair: the crosshair's pixel; moved in place
+//@param3 - picture: the picture's size, to stay inside
+//
+//@brief - W A S D move the crosshair CrosshairStepPixels, kept inside the picture. O(1).
 void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture)
 {
     if (key == 'w') crosshair.y -= CrosshairStepPixels;
@@ -216,6 +273,12 @@ void MoveCrosshair(int key, cv::Point& crosshair, cv::Size picture)
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 07 · Capture + Average (and far range, which was 07b). First step toward a 3D map of the
+//         room (stage B). A map is built from still captures, so depth noise matters more than speed here. With
+//         the camera still, the simplest noise filter of all works perfectly. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

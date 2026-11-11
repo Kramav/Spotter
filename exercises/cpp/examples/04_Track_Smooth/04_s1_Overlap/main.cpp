@@ -25,6 +25,9 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo and a minimum confidence. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -34,6 +37,13 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//double Overlap(const cv::Rect2d& a, const cv::Rect2d& b){
+//
+//@param1 - a: one box
+//@param2 - b: the other box
+//
+//@brief - intersection over union: `a & b` is the shared part; divided by the two areas counted once. 1 =
+//         identical, 0 = not touching. O(1).
 double Overlap(const cv::Rect2d& a, const cv::Rect2d& b)
 {
     double intersection = (a & b).area();                   // & = the boxes' shared part
@@ -41,6 +51,12 @@ double Overlap(const cv::Rect2d& a, const cv::Rect2d& b)
     return together > 0 ? intersection / together : 0;
 }
 
+//double BestOverlap(const spotter::Detection& now, const std::vector<spotter::Detection>& before){
+//
+//@param1 - now: a detection from this frame
+//@param2 - before: last frame's detections
+//
+//@brief - the biggest Overlap between `now` and any earlier detection of the same class; 0 if none. O(before).
 double BestOverlap(const spotter::Detection& now, const std::vector<spotter::Detection>& before)
 {
     double best = 0;
@@ -49,6 +65,13 @@ double BestOverlap(const spotter::Detection& now, const std::vector<spotter::Det
     return best;
 }
 
+//int main(){
+//
+//@brief - the program: 04 · step 1 of 3 · How much do two boxes overlap?. To follow an object from one frame to
+//         the next, compare its new box with last frame's boxes. The usual measure is "intersection over union"
+//         (IoU): the shared area divided by the area both cover together. 1 = the same box, 0 = not touching.
+//         Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it
+//         couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

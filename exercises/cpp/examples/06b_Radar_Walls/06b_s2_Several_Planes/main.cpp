@@ -31,7 +31,15 @@ const std::string Keys = "Q or Esc  quit";
 const int Tries = 200, Reach = 10, MaxPlanes = 4, MinCells = 300;
 const float ThicknessMeters = 0.03f, MaxTiltDegrees = 20;
 
-// Step 1's RANSAC, over the cells still free.
+//bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& free, std::mt19937& random, spotter::Plane& best){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - free: which cells no plane has taken yet
+//@param3 - random: the random number generator
+//@param4 - best: set to the best upright plane
+//
+//@brief - step 1's RANSAC over the cells still free. True if the best plane has at least MinCells points. O(Tries
+//         x cells).
 bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& free, std::mt19937& random, spotter::Plane& best)
 {
     const float maxUpness = std::sin(MaxTiltDegrees * (float)CV_PI / 180);
@@ -52,8 +60,14 @@ bool BestUprightPlane(const spotter::PointGrid& grid, const std::vector<bool>& f
     return bestCount >= MinCells;
 }
 
-// New: up to MaxPlanes searches; each keeps its plane's biggest connected piece and takes it away.
-// Returns, per grid cell, which piece it belongs to (0 = none).
+//std::vector<int> Pieces(const spotter::PointGrid& grid, std::mt19937& random){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - random: the random number generator
+//
+//@brief - new: up to MaxPlanes searches; each keeps its plane's biggest connected piece and takes the whole plane
+//         away, so it isn't found again. Returns, per grid cell, which piece it belongs to (0 = none). O(MaxPlanes
+//         x Tries x cells).
 std::vector<int> Pieces(const spotter::PointGrid& grid, std::mt19937& random)
 {
     std::vector<bool> free(grid.points.size());
@@ -79,6 +93,13 @@ std::vector<int> Pieces(const spotter::PointGrid& grid, std::mt19937& random)
     return pieceOf;
 }
 
+//int main(){
+//
+//@brief - the program: 06b · step 2 of 3 · Several planes, each as one piece. Two additions to step 1: - of the
+//         points on the plane, keep the biggest CONNECTED piece in the picture (connectedComponentsWithStats): the
+//         wall, without the strips the plane slices off other things; - take that piece's points away and search
+//         again, up to 4 times, so the 2nd, 3rd... biggest upright planes come out too. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

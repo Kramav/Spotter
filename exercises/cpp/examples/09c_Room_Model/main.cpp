@@ -81,6 +81,10 @@ const int MinBlockCells = 30;              // a furniture piece needs at least t
 
 const std::string Window = "09c room model  (S scan, C clear, Q quit)";
 
+//spotter::PlaneSearch PlaneSettings(){
+//
+//@brief - FindPlanes' settings: facing any way, at most 8 planes (a room view rarely has more big flat surfaces),
+//         InlierThicknessMeters thick, neighbours within 40 pixels, each plane at least 3% of the readings. O(1).
 spotter::PlaneSearch PlaneSettings()
 {
     spotter::PlaneSearch search;   // facing any way
@@ -116,7 +120,17 @@ struct Line
     cv::Vec3b colour;
 };
 
-// Step 5: floor, ceiling and walls among the planes, judged by the camera's own up.
+//void SortPlanes(const std::vector<spotter::PlanePiece>& pieces, const spotter::PointGrid& grid, int& floorPiece, int& ceilingPiece, std::vector<int>& wallPieces){
+//
+//@param1 - pieces: the planes found
+//@param2 - grid: the grid their cells index
+//@param3 - floorPiece: set to the floor's index, -1 = none
+//@param4 - ceilingPiece: set to the ceiling's index, -1 = none
+//@param5 - wallPieces: set to the walls' indices, biggest first
+//
+//@brief - step 5: floor, ceiling and walls among the planes, judged by the camera's own up: facing up within
+//         MaxTiltDegrees = floor candidate (the biggest wins), facing down and high enough = ceiling, upright and
+//         tall enough = wall. O(planes x cells).
 void SortPlanes(const std::vector<spotter::PlanePiece>& pieces, const spotter::PointGrid& grid, int& floorPiece, int& ceilingPiece, std::vector<int>& wallPieces)
 {
     const cv::Point3f cameraUp(0, -1, 0);   // the camera's Y axis points DOWN
@@ -149,7 +163,17 @@ void SortPlanes(const std::vector<spotter::PlanePiece>& pieces, const spotter::P
     std::sort(wallPieces.begin(), wallPieces.end(), [&](int a, int b) { return pieces[a].cells.size() > pieces[b].cells.size(); });
 }
 
-// Step 6: which way is up: the floor, else the ceiling, else two walls that aren't parallel.
+//cv::Point3f FindUp(const std::vector<spotter::PlanePiece>& pieces, int floorPiece, int ceilingPiece, const std::vector<int>& wallPieces, std::string& from){
+//
+//@param1 - pieces: the planes found
+//@param2 - floorPiece: the floor's index, -1 = none
+//@param3 - ceilingPiece: the ceiling's index, -1 = none
+//@param4 - wallPieces: the walls' indices
+//@param5 - from: set to what said which way is up
+//
+//@brief - step 6: which way is up: the floor's normal, else the ceiling's (turned over), else the cross product of
+//         the two walls that are most nearly at right angles (at least 30 degrees apart), else the camera's own
+//         up. O(walls^2).
 cv::Point3f FindUp(const std::vector<spotter::PlanePiece>& pieces, int floorPiece, int ceilingPiece, const std::vector<int>& wallPieces, std::string& from)
 {
     const cv::Point3f cameraUp(0, -1, 0);
@@ -171,7 +195,12 @@ cv::Point3f FindUp(const std::vector<spotter::PlanePiece>& pieces, int floorPiec
     return up;
 }
 
-// Step 7's corners: where two wall lines cross, if each has an end near the crossing, move both there.
+//void JoinCorners(std::vector<Line>& lines){
+//
+//@param1 - lines: the walls as lines on the floor plan; their ends are moved
+//
+//@brief - step 7's corners: where two wall lines cross (not nearly parallel), if each has an end within
+//         CornerSnapMeters of the crossing, move both ends there. O(walls^2).
 void JoinCorners(std::vector<Line>& lines)
 {
     for (size_t i = 0; i < lines.size(); i++)
@@ -188,7 +217,18 @@ void JoinCorners(std::vector<Line>& lines)
         }
 }
 
-// Steps 4-8: the clean model, plus 09b's raw mesh, all turned to stand straight.
+//Room BuildRoom(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours, std::mt19937& random){
+//
+//@param1 - cloud: a depth cloud, 512 wide
+//@param2 - colours: one colour per cloud point
+//@param3 - random: the random number generator
+//
+//@brief - steps 4-8: the planes, sorted; up; "towards the camera" from the biggest wall; 09b's raw mesh turned to
+//         stand straight; floor and ceiling heights from their planes (else the lowest and highest points seen);
+//         walls as lines on the floor plan, joined at corners and stood up; floor and ceiling as rectangles (a
+//         guess where unseen, drawn grey); and furniture boxes from what's left between floor and ceiling and off
+//         every wall's plane (split where the depth jumps). ponytail: a rectangle, not the room's true outline;
+//         boxes line up with the biggest wall and stand on the floor. O(FindPlanes + pixels).
 Room BuildRoom(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3b>& colours, std::mt19937& random)
 {
     Room room;
@@ -337,6 +377,14 @@ Room BuildRoom(const std::vector<cv::Point3f>& cloud, const std::vector<cv::Vec3
 //  Output
 // ---------------------------------------------------------------------
 
+//void Report(const Room& room, const std::string& path){
+//
+//@param1 - room: the finished model
+//@param2 - path: the .obj it was saved to
+//
+//@brief - console lines: the file and its size, what said which way is up with the camera's tilt and roll, the
+//         floor and ceiling heights (seen or guessed) and the room's height, then each wall's length and ends and
+//         each furniture block's size and place. O(walls + blocks).
 void Report(const Room& room, const std::string& path)
 {
     std::printf("Saved %s (%.1f MB). A capture of the room: never commit it.\n", path.c_str(), std::filesystem::file_size(path) / 1e6);
@@ -350,7 +398,13 @@ void Report(const Room& room, const std::string& path)
                     (low.x + high.x) / 2, -(low.z + high.z) / 2);
 }
 
-// Each sampled point's colour pixel, dotted by what it became.
+//std::vector<std::pair<cv::Point, cv::Scalar>> Dots(const Room& room, const spotter::RgbdFrame& frame){
+//
+//@param1 - room: the finished model, with its per-cell kinds
+//@param2 - frame: this frame, for colourIndex
+//
+//@brief - each sampled point's colour pixel, dotted by what it became (wall blue, floor green, ceiling yellow,
+//         furniture red). O(cells).
 std::vector<std::pair<cv::Point, cv::Scalar>> Dots(const Room& room, const spotter::RgbdFrame& frame)
 {
     std::vector<std::pair<cv::Point, cv::Scalar>> dots;
@@ -366,6 +420,14 @@ std::vector<std::pair<cv::Point, cv::Scalar>> Dots(const Room& room, const spott
     return dots;
 }
 
+//std::vector<std::pair<cv::Point, cv::Scalar>> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame, std::mt19937& random){
+//
+//@param1 - averageMm: the averaged depth, mm
+//@param2 - frame: the last frame, for its colour
+//@param3 - random: the random number generator
+//
+//@brief - builds the room model (BuildRoom), writes room_model_<time>.obj and reports it; returns the dots to
+//         show. Says so and returns nothing if there were no depth readings. O(BuildRoom).
 std::vector<std::pair<cv::Point, cv::Scalar>> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame, std::mt19937& random)
 {
     std::vector<cv::Vec3b> colours = frame.registered.reshape(0, 1);
@@ -377,6 +439,15 @@ std::vector<std::pair<cv::Point, cv::Scalar>> ScanAndSave(const cv::Mat& average
     return Dots(room, frame);
 }
 
+//void Show(const cv::Mat& colour, const std::vector<std::pair<cv::Point, cv::Scalar>>& dots, const spotter::DepthAverager& averager, const spotter::FpsMeter& fps){
+//
+//@param1 - colour: the colour picture
+//@param2 - dots: the last scan's dots
+//@param3 - averager: for the hold-still count
+//@param4 - fps: the frame-rate meter
+//
+//@brief - the half-size colour picture with the last scan's dots, "HOLD STILL n / N" or "S to scan the room", and
+//         the fps; shown with the key strip. O(pixels + dots).
 void Show(const cv::Mat& colour, const std::vector<std::pair<cv::Point, cv::Scalar>>& dots, const spotter::DepthAverager& averager, const spotter::FpsMeter& fps)
 {
     cv::Mat display;
@@ -392,6 +463,12 @@ void Show(const cv::Mat& colour, const std::vector<std::pair<cv::Point, cv::Scal
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 09c · Room Model. Example 09b's mesh is every surface exactly as the camera saw it: lumpy,
+//         full of holes, and tilted if the camera was. This one also builds a CLEAN model next to it, the way
+//         you'd draw the room. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

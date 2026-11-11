@@ -62,34 +62,81 @@ struct Session
     bool colourByScan = false;
     std::string message = "Set the Kinect down where you'll start, then press SPACE (in a window) to scan.";
 
+    //explicit Session(int averageFrames){
+    //
+    //@param1 - averageFrames: how many depth frames one scan averages
+    //
+    //@brief - a session whose averager takes that many frames per scan. O(1).
     explicit Session(int averageFrames) : averager(averageFrames) {}
 };
 
+//template <typename T> bool Running(const std::future<T>& job){
+//
+//@param1 - job: a background job
+//
+//@brief - true while the job has started and isn't finished (checked without waiting). O(1).
 template <typename T> bool Running(const std::future<T>& job)
 {
     return job.valid() && job.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
 }
+//bool Busy(const Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - true while a scan is being placed. O(1).
 inline bool Busy(const Session& s) { return Running(s.placing); }
+//bool Idle(const Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - true when nothing is being placed or averaged: SPACE, U, X, P, E and K only act then. O(1).
 inline bool Idle(const Session& s) { return !Busy(s) && !s.averager.Running(); }
 
+//void Say(Session& s, const std::string& message){
+//
+//@param1 - s: the session
+//@param2 - message: the text
+//
+//@brief - sets the on-screen message and prints it to the console. O(1).
 inline void Say(Session& s, const std::string& message)
 {
     s.message = message;
     std::printf("%s\n", message.c_str());
 }
 
+//void WaitForReaders(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - waits for the live check and the next-shot advice, which may be reading `scans`, so the list can be
+//         changed safely. O(a job's time).
 inline void WaitForReaders(Session& s)
 {
     if (s.checking.valid()) s.live = s.checking.get();
     if (s.recommending.valid()) s.next = s.recommending.get();
 }
 
+//void Recommend(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - takes the last advice if it's ready and starts working out the next shot (RecommendNext) in the
+//         background. O(1) here.
 inline void Recommend(Session& s)
 {
     if (s.recommending.valid()) s.next = s.recommending.get();
     s.recommending = std::async(std::launch::async, spotter::RecommendNext, std::cref(s.scans), s.camera, s.scanOptions);
 }
 
+//void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours){
+//
+//@param1 - s: the session, for showStep
+//@param2 - scan: a scan
+//@param3 - points: set to its points in the room
+//@param4 - colours: set to their colours
+//
+//@brief - the points the viewer draws for a scan: every showStep-th pixel each way with a reading, moved into the
+//         room by its pose. O(pixels / showStep^2).
 inline void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours)
 {
     points.clear();
@@ -106,8 +153,14 @@ inline void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::P
 
 // --- Saving: once, on K, Q, a lost Kinect or an error ---
 
-// The whole folder: every scan (pose.txt last, flushed to disk), landmarks.txt, points.ply and
-// room.txt with finished 1. Scan folders left from scans that U took back are removed.
+//bool SaveAll(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - the whole folder: StartRoomFolder, removes scan folders left from scans that U took back, every scan
+//         (pose.txt last, flushed to disk), landmarks.txt, then points.ply and room.txt with finished 1. Prints
+//         the result and the time; on failure the scans stay in memory and K tries again. True if it all saved.
+//         O(scans x pixels).
 inline bool SaveAll(Session& s)
 {
     auto start = std::chrono::steady_clock::now();
@@ -125,6 +178,13 @@ inline bool SaveAll(Session& s)
     return ok;
 }
 
+//void AddScan(Session& s, spotter::Scan scan){
+//
+//@param1 - s: the session
+//@param2 - scan: a placed scan
+//
+//@brief - waits for readers, adds the scan with its viewer points and colours, and marks the folder as not saved.
+//         O(pixels).
 inline void AddScan(Session& s, spotter::Scan scan)
 {
     WaitForReaders(s);   // the live check or the advice may be reading `scans` (13e didn't wait for the first scan)
@@ -137,6 +197,14 @@ inline void AddScan(Session& s, spotter::Scan scan)
 
 // --- Placing in the background ---
 
+//void StartPlacing(Session& s, spotter::Scan scan, int again){
+//
+//@param1 - s: the session
+//@param2 - scan: the scan to place
+//@param3 - again: the index of the scan being placed again, or -1 for a new one
+//
+//@brief - starts PlaceScan on a background thread (so the windows keep working); `again` leaves that scan and its
+//         landmarks out of the matching. O(1) here.
 inline void StartPlacing(Session& s, spotter::Scan scan, int again)
 {
     WaitForReaders(s);
@@ -150,7 +218,14 @@ inline void StartPlacing(Session& s, spotter::Scan scan, int again)
     }, std::move(scan));
 }
 
-// A finished placement: a new scan joins the room, or P's scan moves.
+//void TakePlacement(Session& s, Session::Job done){
+//
+//@param1 - s: the session
+//@param2 - done: a finished placement
+//
+//@brief - a finished placement: a refused one says why; P's scan takes its new pose, flags and stats (and its
+//         landmarks are re-made); a new scan joins the room with its far landmarks (AddLandmarks), and a
+//         suspicious one is flagged red. O(AddLandmarks).
 inline void TakePlacement(Session& s, Session::Job done)
 {
     WaitForReaders(s);
@@ -187,7 +262,13 @@ inline void TakePlacement(Session& s, Session::Job done)
                       s.scans.back().suspicious ? " - SUSPICIOUS (red): check it" : ""));
 }
 
-// Background jobs that finished since the last frame.
+//void CollectJobs(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - background jobs that finished since the last frame: a placement is taken (and all cores are freed and
+//         the next shot worked out), a live check's anchors and the advice are picked up. O(1) unless a job
+//         finished.
 inline void CollectJobs(Session& s)
 {
     if (s.placing.valid() && !Running(s.placing))
@@ -206,6 +287,15 @@ inline void CollectJobs(Session& s)
 
 // --- A new scan: averaged frames -> a Scan -> placed ---
 
+//void OnScanReady(Session& s, const spotter::RgbdFrame& frame, const cv::Mat& averageMm){
+//
+//@param1 - s: the session
+//@param2 - frame: the last frame, for colour and the colour index
+//@param3 - averageMm: the averaged depth, mm
+//
+//@brief - a scan's averaging finished: the cloud, the scan (MakeScan), its colour model and far features; refused
+//         if there are too few features (a dark or plain view); the first one becomes the room's starting point;
+//         later ones go to StartPlacing (leaving a core or two for the Kinect). O(pixels).
 inline void OnScanReady(Session& s, const spotter::RgbdFrame& frame, const cv::Mat& averageMm)
 {
     std::vector<cv::Point3f> cloud = frame.depthCamera.Cloud(averageMm);
@@ -241,13 +331,26 @@ inline void OnScanReady(Session& s, const spotter::RgbdFrame& frame, const cv::M
     }
 }
 
-// The live anchors, about twice a second, in the background (needs this frame's bigdepth).
+//bool LiveCheckDue(const Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - true when idle with scans placed, no check running, and liveEveryMs (about half a second) has passed
+//         since the last. O(1).
 inline bool LiveCheckDue(const Session& s)
 {
     return Idle(s) && !s.scans.empty() && !Running(s.checking) &&
            std::chrono::steady_clock::now() - s.lastCheck > std::chrono::milliseconds(s.liveEveryMs);
 }
 
+//void StartLiveCheck(Session& s, const spotter::RgbdFrame& frame){
+//
+//@param1 - s: the session
+//@param2 - frame: this frame (needs its bigdepth)
+//
+//@brief - the live anchors, about twice a second, in the background: this frame made into a scan with far
+//         features, then CheckLive against the placed scans and landmarks. Does nothing if it isn't due.
+//         O(MakeScan) here.
 inline void StartLiveCheck(Session& s, const spotter::RgbdFrame& frame)
 {
     if (!LiveCheckDue(s) || frame.bigdepth.empty()) return;
@@ -267,6 +370,12 @@ inline void StartLiveCheck(Session& s, const spotter::RgbdFrame& frame)
 
 // --- The keys ---
 
+//void OnUndo(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - U: removes the last scan (when idle). ponytail: landmarks made with it stay, as in 13e; rebuild them if
+//         that matters. Works out the next shot again. O(1).
 inline void OnUndo(Session& s)
 {
     if (!Idle(s) || s.scans.empty()) return;
@@ -281,6 +390,12 @@ inline void OnUndo(Session& s)
     Recommend(s);
 }
 
+//void OnExclude(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - X: toggles the selected scan out of placing, the advice and E (when idle), then works out the next shot
+//         again. O(1).
 inline void OnExclude(Session& s)
 {
     if (!Idle(s) || s.selected < 0) return;
@@ -292,6 +407,12 @@ inline void OnExclude(Session& s)
     Recommend(s);
 }
 
+//void OnPlaceAgain(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - P: places the selected scan again (StartPlacing with its index); an excluded one must be included first.
+//         O(1) here.
 inline void OnPlaceAgain(Session& s)
 {
     if (!Idle(s) || s.selected < 0) return;
@@ -300,6 +421,11 @@ inline void OnPlaceAgain(Session& s)
     s.message = cv::format("Placing scan %d again...", s.selected + 1);
 }
 
+//std::vector<const spotter::Scan*> Included(const Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - pointers to the scans that aren't excluded. O(scans).
 inline std::vector<const spotter::Scan*> Included(const Session& s)
 {
     std::vector<const spotter::Scan*> included;
@@ -307,7 +433,13 @@ inline std::vector<const spotter::Scan*> Included(const Session& s)
     return included;
 }
 
-// E: merge every included scan, build the clean model, save room_scan_<time>.obj where it runs.
+//void OnExport(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - E: merges every included scan (FuseScans), builds the clean model (BuildRoom), saves
+//         room_scan_<time>.obj where it runs with the far landmarks, and prints the size, time, up source, floor
+//         and ceiling, walls and boxes. O(FuseScans).
 inline void OnExport(Session& s)
 {
     if (!Idle(s)) return;
@@ -339,7 +471,11 @@ inline void OnExport(Session& s)
     s.message = "Exported (see the console). Scan more and export again, or Q.";
 }
 
-// K: save the folder now (Q, a lost Kinect and an error do it too).
+//void OnSave(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - K: saves the folder now (SaveAll); Q, a lost Kinect and an error do it too. O(scans x pixels).
 inline void OnSave(Session& s)
 {
     if (!Idle(s)) return;
@@ -348,7 +484,14 @@ inline void OnSave(Session& s)
     if (SaveAll(s)) s.message = "Folder saved (see the console). Scan more, or Q.";
 }
 
-// A click in the viewer selects the nearest camera circle.
+//void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at){
+//
+//@param1 - s: the session
+//@param2 - view: the viewer, to project each camera
+//@param3 - at: the clicked pixel
+//
+//@brief - a click in the viewer selects the scan whose camera circle is nearest (within 15 pixels), or none;
+//         prints its stats. O(scans).
 inline void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at)
 {
     s.selected = -1;
@@ -366,6 +509,14 @@ inline void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at)
 
 // --- The end: Q, a lost Kinect, or an error. Everything is saved BEFORE the Kinect is stopped. ---
 
+//void EndSession(Session& s, const std::string& why){
+//
+//@param1 - s: the session
+//@param2 - why: why it ended (Quitting, Kinect lost, an error), for the console
+//
+//@brief - the rescue, run on Q, a lost Kinect or an exception: a scan still being placed is
+//         waited for and kept, then the folder is saved with no questions if it isn't already. Called before the
+//         Kinect stops. Errors while waiting are printed, not thrown. O(SaveAll).
 inline void EndSession(Session& s, const std::string& why)
 {
     try

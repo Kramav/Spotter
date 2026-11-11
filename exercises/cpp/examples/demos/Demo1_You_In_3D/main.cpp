@@ -72,7 +72,9 @@ struct Cloud
     std::vector<cv::Vec3b> colours;
 };
 
-// Near = red, far = blue (OpenCV's "turbo" colour map, reversed).
+//cv::Mat DistanceColours(){
+//
+//@brief - 256 colours from near (red) to far (blue): OpenCV's "turbo" map, reversed. O(256).
 cv::Mat DistanceColours()
 {
     cv::Mat steps(1, 256, CV_8U), colours;
@@ -81,7 +83,16 @@ cv::Mat DistanceColours()
     return colours;
 }
 
-// Level (new): turn about the Kinect's left-right axis by its tilt, so a level line comes out level.
+//Cloud MakeCloud(const spotter::RgbdFrame& frame, float levelDegrees, bool byDistance, const cv::Mat& distanceColours){
+//
+//@param1 - frame: this frame
+//@param2 - levelDegrees: the Kinect's tilt, to stand the cloud level
+//@param3 - byDistance: true = colour by distance, false = the camera's colours
+//@param4 - distanceColours: the distance colour table
+//
+//@brief - level (new): turns every point about the Kinect's left-right axis by its tilt so a level line comes out
+//         level; points with no reading are dropped; coloured by distance (0.5 m to MaxDepthMeters) or by the
+//         registered colour. O(pixels).
 Cloud MakeCloud(const spotter::RgbdFrame& frame, float levelDegrees, bool byDistance, const cv::Mat& distanceColours)
 {
     const float c = std::cos(levelDegrees * (float)CV_PI / 180), s = std::sin(levelDegrees * (float)CV_PI / 180);
@@ -98,7 +109,12 @@ Cloud MakeCloud(const spotter::RgbdFrame& frame, float levelDegrees, bool byDist
     return cloud;
 }
 
-// The swing (new): a slow sine, so it pauses at each side, where the shell shows best.
+//float SwingDegrees(std::chrono::steady_clock::time_point start){
+//
+//@param1 - start: when the demo started
+//
+//@brief - the swing (new): a slow sine of OrbitSwingDegrees amplitude and OrbitSeconds period, so the view pauses
+//         at each side, where the shell shows best. O(1).
 float SwingDegrees(std::chrono::steady_clock::time_point start)
 {
     double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
@@ -109,6 +125,14 @@ float SwingDegrees(std::chrono::steady_clock::time_point start)
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - cloud: the points and colours
+//@param2 - view: the viewer
+//@param3 - renderer: draws the points
+//
+//@brief - the cloud on a dark background with a yellow circle where the camera is, a title and the point count
+//         ("live only: nothing is recorded"); shown with the key strip. O(points).
 void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     cv::Mat& image = renderer.Begin(view, cv::Scalar(20, 20, 20));
@@ -131,6 +155,12 @@ void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& 
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: Demo 1 · You in 3D (presentation; built from 08). Whoever stands in front of the Kinect
+//         sees themselves as a live 3D point cloud, slowly swinging round so they see themselves from the side.
+//         The surprise: from the side you're a thin shell. Setup, main loop and clean-up are laid out in the
+//         file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

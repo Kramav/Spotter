@@ -83,6 +83,11 @@ cv::Rect2d Track::Box() const
 
 namespace
 {
+//cv::Point2d CentreOf(const cv::Rect2d& box){
+//
+//@param1 - box: a box
+//
+//@brief - the box's centre. O(1).
 cv::Point2d CentreOf(const cv::Rect2d& box) { return { box.x + box.width / 2, box.y + box.height / 2 }; }
 }
 

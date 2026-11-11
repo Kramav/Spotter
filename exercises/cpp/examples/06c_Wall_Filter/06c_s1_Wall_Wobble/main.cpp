@@ -26,6 +26,12 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "Q or Esc  quit";
 
+//int main(){
+//
+//@brief - the program: 06c · step 1 of 2 · Walls wobble. 06b's walls (now spotter::FindWalls) found afresh every
+//         frame. Point the camera at a wall and keep it still: the wall doesn't move, but its measured distance
+//         does, by a few mm, because RANSAC is random and the depth is noisy. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

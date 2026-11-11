@@ -35,6 +35,16 @@ struct Room
     std::vector<cv::Vec3b> colours;
 };
 
+//void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options){
+//
+//@param1 - room: the scans so far; one is added
+//@param2 - scan: the new scan
+//@param3 - camera: the depth camera
+//@param4 - random: the random number generator
+//@param5 - options: the scan settings
+//
+//@brief - the first scan is the origin; every later one is placed among the earlier ones (PlaceScan) and refused
+//         if it can't be. A placed scan's points (every 2nd pixel) join the room's cloud. O(PlaceScan).
 void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camera, std::mt19937& random, const spotter::ScanOptions& options)
 {
     if (!room.scans.empty())
@@ -49,7 +59,14 @@ void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camer
     room.scans.push_back(std::move(scan));
 }
 
-// New: merge, model, save.
+//void Merge(const Room& room, const spotter::PinholeCamera& camera, std::mt19937& random){
+//
+//@param1 - room: the placed scans
+//@param2 - camera: the depth camera
+//@param3 - random: the random number generator
+//
+//@brief - new: merges every scan into one mesh (FuseScans), builds the clean model (BuildRoom), writes
+//         room_scan_<time>.obj and prints the triangle, floor, ceiling, wall and box counts. O(FuseScans).
 void Merge(const Room& room, const spotter::PinholeCamera& camera, std::mt19937& random)
 {
     std::vector<const spotter::Scan*> all;
@@ -65,6 +82,11 @@ void Merge(const Room& room, const spotter::PinholeCamera& camera, std::mt19937&
                 model.walls.size(), model.blocks.size());
 }
 
+//int main(){
+//
+//@brief - the program: 13e · step 2 of 4 · One mesh and a clean model from every scan. Step 1's scans overlap: the
+//         same wall seen five times is five slightly different layers of points. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

@@ -28,6 +28,13 @@ const std::string Keys = "Q or Esc  quit";
 
 const int DotSpacing = 8;   // draw every 8th depth pixel each way, so the dots don't cover everything
 
+//void DrawDepthDots(const spotter::RgbdFrame& frame, cv::Mat& picture){
+//
+//@param1 - frame: a frame with depth and colourIndex
+//@param2 - picture: the colour picture; dots are drawn on it
+//
+//@brief - every DotSpacing-th depth pixel as a dot at the colour pixel it lands on (colourIndex), blue far to red
+//         near (0.5 m to 6 m): shows how the two cameras' pictures line up. O(depth pixels / spacing^2).
 void DrawDepthDots(const spotter::RgbdFrame& frame, cv::Mat& picture)
 {
     for (int row = 0; row < frame.depthMm.rows; row += DotSpacing)
@@ -41,6 +48,12 @@ void DrawDepthDots(const spotter::RgbdFrame& frame, cv::Mat& picture)
         }
 }
 
+//int main(){
+//
+//@brief - the program: 02 · step 3 of 4 · Where each depth pixel lands in colour. The two cameras sit a few cm
+//         apart and see differently (512 x 424 vs 1920 x 1080, different lenses), so depth pixel (row, column) is
+//         NOT colour pixel (row, column). Setup, main loop and clean-up are laid out in the file's sections.
+//         Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

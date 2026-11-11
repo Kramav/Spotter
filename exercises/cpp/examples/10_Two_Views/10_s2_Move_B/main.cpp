@@ -26,7 +26,12 @@ const std::string Keys = "SPACE  capture A (again: let go of it)   mouse drag / 
 const float MoveRightMeters = 0.20f, MoveUpMeters = 0, MoveForwardMeters = 0, TurnLeftDegrees = 0;
 const cv::Vec3b Orange(0, 140, 255), Blue(255, 160, 0);
 
-// New: a point B sees -> where it is for A.
+//cv::Point3f ToA(const cv::Point3f& p){
+//
+//@param1 - p: a point camera B sees
+//
+//@brief - new: where it is for A: turned about the vertical axis by TurnLeftDegrees, then shifted by where B
+//         stands (Y points down, so "up" is minus Y). O(1).
 cv::Point3f ToA(const cv::Point3f& p)
 {
     const float turn = TurnLeftDegrees * (float)CV_PI / 180;
@@ -35,6 +40,11 @@ cv::Point3f ToA(const cv::Point3f& p)
     return cv::Point3f(x + MoveRightMeters, p.y - MoveUpMeters, z + MoveForwardMeters);   // 2. shift (Y points down)
 }
 
+//int main(){
+//
+//@brief - the program: 10 · step 2 of 2 · Move B into A's coordinates. Step 1's blue cloud is in the moved
+//         camera's coordinates. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

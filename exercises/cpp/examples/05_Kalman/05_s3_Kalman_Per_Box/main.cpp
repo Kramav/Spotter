@@ -33,9 +33,19 @@ struct Track
     cv::KalmanFilter kalman;   // x, y, speed x, speed y of the box centre
     cv::Size2d size;
     int missedFrames = 0;
+    //cv::Rect2d Box(){
+    //
+    //@brief - where the box is now: the filtered centre with the last detection's size. O(1).
     cv::Rect2d Box() const { return cv::Rect2d(kalman.statePost.at<float>(0) - size.width / 2, kalman.statePost.at<float>(1) - size.height / 2, size.width, size.height); }
 };
 
+//cv::KalmanFilter NewFilter(cv::Point2d start){
+//
+//@param1 - start: where the object was first seen, pixels
+//
+//@brief - a Kalman filter for a box centre: state x, y and their speeds, measuring x and y (F, H, R and Q as in
+//         step 1). P starts as one measurement's noise for the position and 1e6 for the speeds (no idea yet).
+//         O(1).
 cv::KalmanFilter NewFilter(cv::Point2d start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
@@ -49,8 +59,16 @@ cv::KalmanFilter NewFilter(cv::Point2d start)
     return kalman;
 }
 
+//cv::Point2d Centre(const cv::Rect2d& box){
+//
+//@param1 - box: a box
+//
+//@brief - the box's centre. O(1).
 cv::Point2d Centre(const cv::Rect2d& box) { return { box.x + box.width / 2, box.y + box.height / 2 }; }
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo and a minimum confidence. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -60,6 +78,16 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//void Update(std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId){
+//
+//@param1 - tracks: the tracks; updated in place
+//@param2 - detections: this frame's detections
+//@param3 - nextId: the next free ID; used up for each new object
+//
+//@brief - predict every track first, then greedy matching against the PREDICTED boxes (same class, most overlap
+//         first, at least MinOverlap); matched tracks correct their filter with the detection's centre; unmatched
+//         detections start new tracks; unmatched ones keep moving on their prediction (coasting) until they've
+//         been missed too long. O(T x D x min(T, D)).
 void Update(std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId)
 {
     for (Track& t : tracks) t.kalman.predict();   // new: everyone moves on first
@@ -89,6 +117,12 @@ void Update(std::vector<Track>& tracks, const std::vector<spotter::Detection>& d
     tracks.erase(std::remove_if(tracks.begin(), tracks.end(), [](const Track& t) { return t.missedFrames > MaxMissedFrames; }), tracks.end());
 }
 
+//int main(){
+//
+//@brief - the program: 05 · step 3 of 3 · A Kalman filter per box. Steps 1-2 on real detections: every track
+//         (04_s3) gets step 2's filter on its box centre. Each frame all filters predict; matching then uses the
+//         PREDICTED box (where the object should be now), not last frame's. Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());

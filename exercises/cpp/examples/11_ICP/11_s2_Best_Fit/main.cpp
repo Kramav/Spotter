@@ -20,11 +20,23 @@
 
 #include "spotter/geometry.hpp"
 
+//void Print(const char* what, const spotter::Pose& pose){
+//
+//@param1 - what: a label
+//@param2 - pose: the pose to show
+//
+//@brief - one line: the label, the shift (right, forward in metres) and the turn in degrees. O(1).
 void Print(const char* what, const spotter::Pose& pose)
 {
     std::printf("%-26s right %+.3f  forward %+.3f m, turned %5.2f deg\n", what, pose.shift.x, pose.shift.z, pose.Degrees());
 }
 
+//int main(){
+//
+//@brief - the program: 11 · step 2 of 3 · The best move for known pairs (no Kinect needed). If you know which
+//         point of B goes with which point of A, the turn + shift that brings each pair closest has an exact
+//         answer (Kabsch). Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit.
 int main()
 {
     // Camera B: 30 cm right, 10 cm forward, turned 12 degrees left (about the vertical axis).

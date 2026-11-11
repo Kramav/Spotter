@@ -27,7 +27,10 @@
 
 #include "spotter/track.hpp"
 
-// A depth picture that is 1 m on the left and 3.5 m on the right, mapped simply into colour.
+//spotter::BoxDepthSampler MadeUpDepth(){
+//
+//@brief - a depth picture that is 1 m on the left and 3.5 m on the right, mapped simply into colour, filed into a
+//         BoxDepthSampler (Build). O(pixels).
 spotter::BoxDepthSampler MadeUpDepth()
 {
     cv::Mat depthMm(424, 512, CV_32F);
@@ -43,6 +46,12 @@ spotter::BoxDepthSampler MadeUpDepth()
     return depth;
 }
 
+//std::vector<spotter::Detection> Batch(int frame){
+//
+//@param1 - frame: the frame number (30 per second)
+//
+//@brief - a made-up detector batch for that frame: a person walking right (unsure every 4th batch), a TV missed
+//         for batches 6-9, and an unsure "cup" on nothing. O(1).
 std::vector<spotter::Detection> Batch(int frame)
 {
     int batch = frame / 5;
@@ -53,6 +62,13 @@ std::vector<spotter::Detection> Batch(int frame)
     return found;
 }
 
+//void PrintBatch(int frame, const spotter::Tracker& tracker){
+//
+//@param1 - frame: the frame number, for the time
+//@param2 - tracker: the tracker after this frame
+//
+//@brief - one line: the time, then each track's ID, class, x position, distance, speed, and COASTING with the
+//         seconds unseen. O(tracks).
 void PrintBatch(int frame, const spotter::Tracker& tracker)
 {
     std::printf("t=%.2fs ", frame / 30.0);
@@ -62,6 +78,12 @@ void PrintBatch(int frame, const spotter::Tracker& tracker)
     std::printf("\n");
 }
 
+//int main(){
+//
+//@brief - the program: 00e · Tour: Tracker and BoxFilter (no Kinect needed). What it's for: following detected
+//         objects over time. Each object keeps an ID, a smooth box and distance, and a speed, even when the
+//         detector misses it for a while. Examples 05c, 06 and the demos use it. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit.
 int main()
 {
     spotter::BoxDepthSampler depth = MadeUpDepth();

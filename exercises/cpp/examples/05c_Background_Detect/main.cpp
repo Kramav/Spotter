@@ -70,6 +70,10 @@ const double MaxUnseenSeconds = 5.0;   // seconds now, because frames and YOLO b
 const int ReportEveryMs = 1000;
 const std::string Window = "05c background detect  (Q quits)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: ModelPath, the repo's names file, ModelInputSize, and 05b's weak threshold 0.15
+//         (the tracker sorts sure from unsure). O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -80,6 +84,10 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//spotter::KinectSource::Options KinectSettings(){
+//
+//@brief - the Kinect's options: the defaults, with the colour exposure capped if CapColorExposure is set (a steady
+//         frame rate in dim light). O(1).
 spotter::KinectSource::Options KinectSettings()
 {
     spotter::KinectSource::Options options;
@@ -87,6 +95,10 @@ spotter::KinectSource::Options KinectSettings()
     return options;
 }
 
+//spotter::Tracker::Options TrackerSettings(){
+//
+//@brief - the tracker's options: 05b's two thresholds (0.40 / 0.15), overlap 0.3 and the fading coast, with
+//         MaxUnseenSeconds. O(1).
 spotter::Tracker::Options TrackerSettings()
 {
     spotter::Tracker::Options options;   // 05b's two thresholds (0.40 / 0.15), overlap 0.3, fading coast
@@ -114,7 +126,13 @@ struct Handover
     int batchesSinceReport = 0;          // main loop only
 };
 
-// The detector thread: sleep until a frame is handed over, run YOLO on it, hand the boxes back.
+//void DetectorThread(spotter::YoloDetector& yolo, Handover& handover){
+//
+//@param1 - yolo: a ready detector
+//@param2 - handover: what this thread and the main loop share; touched only under its lock
+//
+//@brief - the detector thread: sleep until a frame is handed over, run YOLO on it without the lock (the slow
+//         part), time it, and hand the boxes back; returns when told to quit. O(detector run) per frame.
 void DetectorThread(spotter::YoloDetector& yolo, Handover& handover)
 {
     while (true)
@@ -137,8 +155,14 @@ void DetectorThread(spotter::YoloDetector& yolo, Handover& handover)
     }
 }
 
-// Main loop side, every frame: collect a finished batch if there is one, and if the detector is
-// idle, give it this frame (a copy: the main loop keeps drawing on its own).
+//std::optional<std::vector<spotter::Detection>> ExchangeWithDetector(Handover& handover, const cv::Mat& colour){
+//
+//@param1 - handover: what the thread and the main loop share
+//@param2 - colour: this frame's colour picture
+//
+//@brief - main loop side, every frame: collects a finished batch if there is one, and if the detector is idle
+//         gives it this frame (a copy: the main loop keeps drawing on its own) and wakes it. Returns the batch or
+//         nothing. O(1) plus the copy when handing over.
 std::optional<std::vector<spotter::Detection>> ExchangeWithDetector(Handover& handover, const cv::Mat& colour)
 {
     std::lock_guard<std::mutex> lock(handover.lock);
@@ -163,9 +187,14 @@ double LastDetectMs(Handover& handover)
     return handover.lastDetectMs;
 }
 
-// Stop the detector thread cleanly before the program ends.
-// ponytail: an exception would skip this, and a running std::thread's destructor ends the program;
-// spotter::AsyncDetector (the library's copy) stops itself in its destructor.
+//void StopDetector(Handover& handover, std::thread& thread){
+//
+//@param1 - handover: what the thread and the main loop share
+//@param2 - thread: the detector thread
+//
+//@brief - tells the thread to quit and joins it, so the program ends cleanly. ponytail: an exception would skip
+//         this, and a running std::thread's destructor ends the program; spotter::AsyncDetector (the library's
+//         copy) stops itself in its destructor. Waits for a run in progress.
 void StopDetector(Handover& handover, std::thread& thread)
 {
     if (!thread.joinable()) return;
@@ -177,7 +206,15 @@ void StopDetector(Handover& handover, std::thread& thread)
     thread.join();
 }
 
-// Either way, one batch of detections for this frame, or none yet.
+//std::optional<std::vector<spotter::Detection>> Detections(spotter::YoloDetector& yolo, Handover& handover, const cv::Mat& colour){
+//
+//@param1 - yolo: a ready detector, used directly when not in the background
+//@param2 - handover: what the thread and the main loop share
+//@param3 - colour: this frame's colour picture
+//
+//@brief - either way, one batch of detections for this frame, or none yet: ExchangeWithDetector with
+//         DetectInBackground, else a direct yolo.Detect that waits (like 02-05b). Counts the batch and notes how
+//         long it took. O(1) in the background, O(detector run) otherwise.
 std::optional<std::vector<spotter::Detection>> Detections(spotter::YoloDetector& yolo, Handover& handover, const cv::Mat& colour)
 {
     std::optional<std::vector<spotter::Detection>> batch;
@@ -196,6 +233,12 @@ std::optional<std::vector<spotter::Detection>> Detections(spotter::YoloDetector&
 //  Output
 // ---------------------------------------------------------------------
 
+//std::string Label(const spotter::Track& track, const spotter::ClassList& classes){
+//
+//@param1 - track: a tracked object
+//@param2 - classes: the class names
+//
+//@brief - "#id class 1.23m approaching 0.5m/s", with "(predicted)" added while coasting. O(1).
 std::string Label(const spotter::Track& track, const spotter::ClassList& classes)
 {
     std::string label = "#" + std::to_string(track.id) + " " + classes.Name(track.classId);
@@ -204,6 +247,16 @@ std::string Label(const spotter::Track& track, const spotter::ClassList& classes
     return track.Coasting() ? label + " (predicted)" : label;
 }
 
+//void Show(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps, double detectMs){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracker: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//@param5 - detectMs: how long the last YOLO run took, shown beside the fps
+//
+//@brief - a box per track in its ID's colour (thin while coasting) with its label, and the fps with the YOLO time;
+//         shown with the key strip. O(tracks).
 void Show(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps, double detectMs)
 {
     for (const spotter::Track& track : tracker.Tracks())
@@ -217,6 +270,15 @@ void Show(cv::Mat& picture, const spotter::Tracker& tracker, const spotter::Clas
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps, Handover& handover){
+//
+//@param1 - tracker: the tracked objects
+//@param2 - classes: the class names
+//@param3 - fps: the frame-rate meter
+//@param4 - handover: for the batch count and the last YOLO time; its count restarts
+//
+//@brief - console lines: display fps, YOLO batches per second and time each, the object count, then each track's
+//         label (with how long a coasting one has been unseen). O(tracks).
 void Report(const spotter::Tracker& tracker, const spotter::ClassList& classes, const spotter::FpsMeter& fps, Handover& handover)
 {
     std::printf("%.1f fps display | YOLO: %d batches/s, %.0f ms each (input %d) | %zu objects\n",
@@ -226,6 +288,13 @@ void Report(const spotter::Tracker& tracker, const spotter::ClassList& classes, 
         std::printf("  %s%s\n", Label(track, classes).c_str(), track.Coasting() ? cv::format(" (unseen %.1f s)", track.secondsUnseen).c_str() : "");
 }
 
+//void PrintEvents(spotter::Tracker& tracker, const spotter::ClassList& classes){
+//
+//@param1 - tracker: the tracker; its events are taken
+//@param2 - classes: the class names
+//
+//@brief - prints each "new ID" and "dropped" (with the seconds unseen) since the last call (Tracker::TakeEvents).
+//         O(events).
 void PrintEvents(spotter::Tracker& tracker, const spotter::ClassList& classes)
 {
     for (const spotter::TrackEvent& e : tracker.TakeEvents())
@@ -237,6 +306,12 @@ void PrintEvents(spotter::Tracker& tracker, const spotter::ClassList& classes)
 //  Setup and main operation: runs at the camera's speed
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 05c · Background Detect. Examples 02-05b run YOLO on every frame and wait for it: ~150 ms,
+//         so everything (picture, tracking, distances) runs at ~6 fps, while the Kinect delivers 30. YOLO is ~95%
+//         of each frame. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal
+//         exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

@@ -50,6 +50,10 @@ const double MinOverlap = 0.3;
 const int ReportEveryMs = 1000;
 const std::string Window = "05b two thresholds  (Q quits)";
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo; minConfidence is KeepConfidence,
+//         so YOLO hands back everything down to the weak threshold. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -72,6 +76,9 @@ struct Track
     float lastConfidence = 0;    // the detection that last matched it
     int weakMatches = 0;         // since the last report: matches only a weak detection gave
 
+    //cv::Rect2d Box(){
+    //
+    //@brief - where the box should be now: the filtered centre with the last detection's size. O(1).
     cv::Rect2d Box() const
     {
         cv::Point2d c = filter.Centre();
@@ -85,8 +92,21 @@ struct Tracks
     int nextId = 1;
 };
 
+//cv::Point2d Centre(const cv::Rect2d& box){
+//
+//@param1 - box: a box
+//
+//@brief - the box's centre. O(1).
 cv::Point2d Centre(const cv::Rect2d& box) { return { box.x + box.width / 2, box.y + box.height / 2 }; }
 
+//void Correct(Track& track, const spotter::Detection& d, double meters){
+//
+//@param1 - track: the track to correct
+//@param2 - d: the detection that matched it
+//@param3 - meters: its measured distance, 0 = none
+//
+//@brief - blends the detection's centre and distance into the track's filter, resets the missed count, remembers
+//         the confidence, and counts a weak match if it was under StartConfidence. O(1).
 void Correct(Track& track, const spotter::Detection& d, double meters)
 {
     cv::Point2d centre = Centre(d.box);
@@ -97,7 +117,19 @@ void Correct(Track& track, const spotter::Detection& d, double meters)
     if (d.confidence < StartConfidence) track.weakMatches++;
 }
 
-// One greedy matching pass (as in 05), but only with detections in [minConfidence, maxConfidence).
+//void MatchPass(Tracks& tracks, const std::vector<spotter::Detection>& detections, const spotter::BoxDepthSampler& depth, std::vector<bool>& trackMatched, std::vector<bool>& detectionMatched, float minConfidence, float maxConfidence){
+//
+//@param1 - tracks: the tracks; matched ones are corrected
+//@param2 - detections: this batch
+//@param3 - depth: this frame's depth lookup, for each box's distance
+//@param4 - trackMatched: which tracks are taken already; updated
+//@param5 - detectionMatched: which detections are taken already; updated
+//@param6 - minConfidence: only detections at least this sure...
+//@param7 - maxConfidence: ...and under this are used
+//
+//@brief - one greedy matching pass (as in 05) with only detections in [minConfidence, maxConfidence): repeatedly
+//         pair the same-class (track predicted box, detection) with the most overlap, at least MinOverlap, and
+//         Correct the track. O(T x D x min(T, D)).
 void MatchPass(Tracks& tracks, const std::vector<spotter::Detection>& detections, const spotter::BoxDepthSampler& depth,
                std::vector<bool>& trackMatched, std::vector<bool>& detectionMatched, float minConfidence, float maxConfidence)
 {
@@ -120,6 +152,13 @@ void MatchPass(Tracks& tracks, const std::vector<spotter::Detection>& detections
     }
 }
 
+//void Predict(Tracks& tracks, double dt){
+//
+//@param1 - tracks: the tracks; moved on in place
+//@param2 - dt: seconds since the last frame
+//
+//@brief - predicts every track; a coasting one (missed last batch) also has its speed faded by exp(-dt /
+//         CoastSlowdownSeconds). O(tracks).
 void Predict(Tracks& tracks, double dt)
 {
     for (Track& track : tracks.list)
@@ -129,6 +168,16 @@ void Predict(Tracks& tracks, double dt)
     }
 }
 
+//void Match(Tracks& tracks, const std::vector<spotter::Detection>& detections, const spotter::BoxDepthSampler& depth, const spotter::ClassList& classes){
+//
+//@param1 - tracks: the tracks; updated in place
+//@param2 - detections: this batch, down to the weak threshold
+//@param3 - depth: this frame's depth lookup
+//@param4 - classes: the class names
+//
+//@brief - two passes: the sure detections (StartConfidence and up) match first, then the weak ones, so a weak box
+//         never steals a sure match. Only SURE leftovers start new objects; weak leftovers are dropped. Unmatched
+//         tracks count a missed frame (printing when one is dropped after MaxMissedFrames). O(T x D x min(T, D)).
 void Match(Tracks& tracks, const std::vector<spotter::Detection>& detections, const spotter::BoxDepthSampler& depth, const spotter::ClassList& classes)
 {
     std::vector<bool> trackMatched(tracks.list.size(), false), detectionMatched(detections.size(), false);
@@ -163,6 +212,15 @@ void Match(Tracks& tracks, const std::vector<spotter::Detection>& detections, co
 //  Output
 // ---------------------------------------------------------------------
 
+//void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - picture: the colour picture; drawn on
+//@param2 - tracks: the tracked objects
+//@param3 - classes: the class names
+//@param4 - fps: the frame-rate meter
+//
+//@brief - a box per track in its ID's colour: thick when sure, thinner when weak, thin while coasting; labelled
+//         with its distance and "(predicted)" or "(weak 0.xx)"; plus the fps; shown with the key strip. O(tracks).
 void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     for (const Track& track : tracks.list)
@@ -180,6 +238,14 @@ void Show(cv::Mat& picture, const Tracks& tracks, const spotter::ClassList& clas
     cv::imshow(Window, spotter::WithKeys(picture, Keys));
 }
 
+//void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps){
+//
+//@param1 - tracks: the tracked objects; their change counters are reset
+//@param2 - classes: the class names
+//@param3 - fps: the frame-rate meter
+//
+//@brief - fps and per track its distance, how many weak detections kept it alive this second and how long it's
+//         been unseen; then the weak counters restart. O(tracks).
 void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::FpsMeter& fps)
 {
     std::printf("%.1f fps | %zu objects\n", fps.Fps(), tracks.list.size());
@@ -196,6 +262,12 @@ void Report(Tracks& tracks, const spotter::ClassList& classes, const spotter::Fp
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 05b · Two Thresholds. 05's logs showed why a still TV kept getting new IDs. YOLO's
+//         confidence for it flickered around 0.40, so it dropped out for seconds at a time, longer than
+//         MaxMissedFrames. A lower threshold everywhere would add false alarms. So use two. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

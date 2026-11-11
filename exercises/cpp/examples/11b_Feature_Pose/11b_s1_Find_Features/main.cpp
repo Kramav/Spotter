@@ -29,6 +29,12 @@ const std::string Keys = "Q or Esc  quit";
 
 const int FeatureCount = 1000;   // at most this many, the strongest first
 
+//int main(){
+//
+//@brief - the program: 11b · step 1 of 3 · Features. A feature is a small patch of the picture distinctive enough
+//         to find again from somewhere else: a poster's corner, a plug socket, the edge of a shelf. Setup, main
+//         loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't
+//         start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

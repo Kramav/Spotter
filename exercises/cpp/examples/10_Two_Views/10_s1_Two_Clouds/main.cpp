@@ -23,6 +23,12 @@ const std::string Keys = "SPACE  capture A (again: let go of it)   mouse drag / 
 
 const cv::Vec3b Orange(0, 140, 255), Blue(255, 160, 0);
 
+//int main(){
+//
+//@brief - the program: 10 · step 1 of 2 · Two clouds at once. SPACE keeps a copy of the live cloud: view A,
+//         orange. The live cloud keeps drawing in blue on top. Hold the Kinect still: blue covers orange. Slide it
+//         20 cm sideways: blue slides too, but the room didn't move. Setup, main loop and clean-up are laid out in
+//         the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

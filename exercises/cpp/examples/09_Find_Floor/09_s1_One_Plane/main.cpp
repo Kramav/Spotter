@@ -28,7 +28,15 @@ const std::string Keys = "Q or Esc  quit";
 const float ThicknessMeters = 0.02f;   // "on the plane" = within this distance
 const int NeighbourPixels = 40;        // the other two points come from this close in the picture
 
-// Three valid points near each other; false if this try didn't find them.
+//bool PickPlane(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& plane){
+//
+//@param1 - cloud: a depth cloud, 512 wide (NaN = no reading)
+//@param2 - random: the random number generator
+//@param3 - plane: set to the plane through the three points
+//
+//@brief - three valid points near each other (one random pixel and two within NeighbourPixels of it, kept inside
+//         the picture) and the plane through them. False if this try didn't find three readings or they lie in a
+//         line. O(1).
 bool PickPlane(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spotter::Plane& plane)
 {
     std::uniform_int_distribution<int> anyPixel(0, (int)cloud.size() - 1), offset(-NeighbourPixels, NeighbourPixels);
@@ -39,6 +47,11 @@ bool PickPlane(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spot
     return spotter::PlaneThrough(cloud[a], cloud[b], cloud[c], plane);
 }
 
+//int main(){
+//
+//@brief - the program: 09 · step 1 of 3 · Three points make a plane. Pick one random depth point and two more near
+//         it in the picture. They define a plane. Paint green every point within 2 cm of it. Setup, main loop and
+//         clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

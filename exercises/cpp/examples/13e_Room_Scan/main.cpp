@@ -74,9 +74,13 @@ const int ShowStep = 2;                // the viewer draws every 2nd pixel of ea
 const size_t MaxShownPoints = 600000;  // ...and at most this many points in all
 const float PivotMeters = 2.5f;
 
-// Placing, merging and the clean model: spotter::ScanOptions and RoomOptions hold 13e's values
-// (room_scan.hpp, room.hpp). Change one here, for example:
+//spotter::ScanOptions ScanSettings(){
+//
+//@brief - 13e's placing settings (ScanOptions' defaults) with MaxDepthMeters set. O(1).
 spotter::ScanOptions ScanSettings() { spotter::ScanOptions o; o.maxDepthMeters = MaxDepthMeters; return o; }
+//spotter::RoomOptions RoomSettings(){
+//
+//@brief - 13e's merging and clean-model settings (RoomOptions' defaults). O(1).
 spotter::RoomOptions RoomSettings() { return spotter::RoomOptions(); }
 
 const std::string Viewer = "13e room scan - the room so far  (drag/WASD turn, wheel zoom, click a camera to select)";
@@ -86,6 +90,15 @@ const std::string CameraWindow = "13e room scan - camera  (SPACE scan, U undo, X
 //  Keys
 // ---------------------------------------------------------------------
 
+//void HandleKey(Session& s, int key, spotter::OrbitView& view){
+//
+//@param1 - s: the session
+//@param2 - key: what cv::waitKey returned
+//@param3 - view: the viewer, for clicks, zoom and its own keys
+//
+//@brief - a click in the viewer selects a camera; SPACE scans (when idle), U undoes, X excludes, P places again, E
+//         exports, K saves, C colours by scan, Esc deselects, + - zoom, anything else goes to the viewer (W A S D,
+//         Z, R). O(1).
 void HandleKey(Session& s, int key, spotter::OrbitView& view)
 {
     cv::Point click;
@@ -110,6 +123,16 @@ void HandleKey(Session& s, int key, spotter::OrbitView& view)
 //  Output: the room so far, and the camera with instructions
 // ---------------------------------------------------------------------
 
+//void ShowRoom(const Session& s, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - s: the session
+//@param2 - view: the viewer's angles
+//@param3 - renderer: draws the points
+//
+//@brief - the room so far: every scan's points (every n-th so no more than MaxShownPoints; excluded grey, or one
+//         colour per scan with C), each scan's camera (selected white, excluded grey, suspicious red), the
+//         recommended next camera in green, the far landmarks in magenta, and a count line; shown with the key
+//         strip. O(shown points).
 void ShowRoom(const Session& s, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     cv::Mat& image = renderer.Begin(view);
@@ -145,6 +168,16 @@ void ShowRoom(const Session& s, spotter::OrbitView& view, spotter::PointRenderer
     cv::imshow(Viewer, spotter::WithKeys(image, Keys));
 }
 
+//void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::string& warning){
+//
+//@param1 - s: the session
+//@param2 - frame: this frame
+//@param3 - warning: a red message across the picture (default none)
+//
+//@brief - the half-size colour picture with the live anchors (green near, magenta far, grey the rest) and their
+//         count in red / yellow / green against what's needed, the next-shot advice, the selected scan's keys, a
+//         status line (PLACING, HOLD STILL n / N or the scan count), the message and the warning; shown with the
+//         key strip. O(pixels + features).
 void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::string& warning = "")
 {
     cv::Mat display;
@@ -177,7 +210,14 @@ void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::st
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
-// The folder (asked first), then the first frame for the camera's numbers.
+//bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame){
+//
+//@param1 - s: the session; its folder and camera info are filled
+//@param2 - kinect: the open Kinect
+//@param3 - frame: set to the first frame
+//
+//@brief - the folder (asked first, AskRoomFolder), then the first frame for the cameras' numbers and the device's
+//         calibration text. False if the answer was cancel or no frame came. O(1).
 bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
 {
     s.folder = spotter::AskRoomFolder(SaveFolder);
@@ -190,9 +230,19 @@ bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
     return true;
 }
 
-// Bigdepth (depth per colour pixel, for the far features) only on the frames that need it.
+//bool NeedBigdepth(const Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - true on the last frame of a scan's average (the full colour picture's depth is needed to find far
+//         features) and whenever a live check is due. O(1).
 bool NeedBigdepth(const Session& s) { return s.averager.Added() == s.averager.Frames() - 1 || LiveCheckDue(s); }
 
+//int main(){
+//
+//@brief - the program: 13e · Room Scan. Our most advanced room scanner: use this one for real rooms. Scan the room
+//         from many spots; each scan is placed by itself. Setup, main loop and clean-up are laid out in the file's
+//         sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

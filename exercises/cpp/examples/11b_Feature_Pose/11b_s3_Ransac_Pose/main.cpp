@@ -37,6 +37,12 @@ struct View
     std::vector<cv::Point3f> cloud;   // a 3D point per depth pixel (NaN = none)
 };
 
+//View Capture(const spotter::RgbdFrame& frame, cv::ORB& orb){
+//
+//@param1 - frame: this frame
+//@param2 - orb: the ORB detector
+//
+//@brief - a view: the registered colour picture with its ORB features, and the depth cloud. O(pixels).
 View Capture(const spotter::RgbdFrame& frame, cv::ORB& orb)
 {
     View v{ frame.registered.clone() };
@@ -47,9 +53,24 @@ View Capture(const spotter::RgbdFrame& frame, cv::ORB& orb)
     return v;
 }
 
+//cv::Point3f Under(const View& v, const cv::KeyPoint& k){
+//
+//@param1 - v: a view with its cloud and picture
+//@param2 - k: a keypoint
+//
+//@brief - the view's 3D point under the keypoint (NaN where depth read nothing). O(1).
 cv::Point3f Under(const View& v, const cv::KeyPoint& k) { return v.cloud[std::lround(k.pt.y) * v.picture.cols + std::lround(k.pt.x)]; }
 
-// Match (step 2), lift to 3D, RANSAC. Returns the matches the winning pose agrees with.
+//std::vector<cv::DMatch> RansacPose(const View& b, const View& a, std::mt19937& random, spotter::Pose& pose){
+//
+//@param1 - b: the view to move
+//@param2 - a: the view to move it onto
+//@param3 - random: the random number generator
+//@param4 - pose: set to the winning pose
+//
+//@brief - match (step 2), lift each match to a pair of 3D points (new), then RANSAC: a guess from 3 random pairs
+//         (Kabsch), the pairs within InlierMeters of it agree; the guess with most agreeing wins and is refitted
+//         to them. Returns the matches it agrees with. O(n x m + tries x pairs).
 std::vector<cv::DMatch> RansacPose(const View& b, const View& a, std::mt19937& random, spotter::Pose& pose)
 {
     std::vector<std::vector<cv::DMatch>> candidates;
@@ -81,6 +102,13 @@ std::vector<cv::DMatch> RansacPose(const View& b, const View& a, std::mt19937& r
     return agree;
 }
 
+//int main(){
+//
+//@brief - the program: 11b · step 3 of 3 · A camera move from the matches (RANSAC). Each match from step 2 has a
+//         depth under both ends, so it's a pair of 3D points: where the spot is for B, and for A. Step 2 of 11's
+//         ladder (spotter::Kabsch) turns pairs into a pose, but some matches are wrong and pull it off. Setup,
+//         main loop and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't
+//         start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

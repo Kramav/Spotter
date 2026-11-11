@@ -30,6 +30,14 @@ const int Tries = 200;
 const float ThicknessMeters = 0.02f;
 const int Reach = 10;   // the other two points come from within 10 grid cells (40 pixels)
 
+//spotter::Plane BestPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount){
+//
+//@param1 - grid: a thinned depth cloud
+//@param2 - random: the random number generator
+//@param3 - bestCount: set to how many points lie on the best plane
+//
+//@brief - RANSAC: Tries times, the plane through three neighbouring readings, scored by how many points lie within
+//         ThicknessMeters of it; keeps the best. O(Tries x cells).
 spotter::Plane BestPlane(const spotter::PointGrid& grid, std::mt19937& random, int& bestCount)
 {
     std::uniform_int_distribution<int> anyCell(0, (int)grid.points.size() - 1), offset(-Reach, Reach);
@@ -50,6 +58,12 @@ spotter::Plane BestPlane(const spotter::PointGrid& grid, std::mt19937& random, i
     return best;
 }
 
+//int main(){
+//
+//@brief - the program: 09 · step 2 of 3 · RANSAC: try many, keep the best. Step 1's random plane, 200 times per
+//         frame, scoring each by how many points lie on it; the best one is painted green. That's RANSAC (RANdom
+//         SAmple Consensus). Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a
+//         normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

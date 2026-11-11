@@ -69,7 +69,13 @@ struct Pose
 {
     float right, up, forward, turnLeftDegrees;
 
-    // A point seen by camera B -> the same point in camera A's coordinates (X right, Y down, Z forward).
+    //cv::Point3f ToA(const cv::Point3f& p){
+    //
+    //@param1 - p: a point camera B sees
+    //
+    //@brief - a point seen by camera B -> the same point in camera A's coordinates (X right, Y down, Z forward): 1.
+    //         turned about the vertical axis (B's "straight ahead" becomes A's "ahead and to the left"), 2. shifted by
+    //         where B stands. O(1).
     cv::Point3f ToA(const cv::Point3f& p) const
     {
         const float turn = turnLeftDegrees * (float)CV_PI / 180;
@@ -81,6 +87,13 @@ struct Pose
     }
 };
 
+//void Nudge(Pose& pose, int key){
+//
+//@param1 - pose: B's pose; changed in place
+//@param2 - key: what cv::waitKey returned
+//
+//@brief - L/J move B right/left, T/G up/down, I/K forward/back by NudgeMeters; U/O turn it left/right by
+//         NudgeDegrees; any other key does nothing. Prints the new pose. O(1).
 void Nudge(Pose& pose, int key)
 {
     const std::string keys = "ljtgikuo";
@@ -107,6 +120,13 @@ struct Views
     bool frozenB = false;
 };
 
+//void OnSpace(Views& views, const spotter::RgbdFrame& frame){
+//
+//@param1 - views: the captured views; updated
+//@param2 - frame: this frame
+//
+//@brief - SPACE: the first press captures view A (cloud and depth); the second freezes the live view B; the third
+//         starts over. O(pixels) when capturing.
 void OnSpace(Views& views, const spotter::RgbdFrame& frame)
 {
     if (views.a.empty())
@@ -127,9 +147,16 @@ void OnSpace(Views& views, const spotter::RgbdFrame& frame)
     }
 }
 
-// How well they meet: each moved B point is projected into camera A's picture (the pinhole maths of
-// 03) and its distance compared with what A saw there. Aligned views: the gap is about 0.
-// ponytail: gap along A's line of sight only (blind to sliding along a wall); 11 measures properly.
+//std::string GapText(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera){
+//
+//@param1 - views: view A's depth and B's points
+//@param2 - pose: B's pose in A's coordinates
+//@param3 - camera: the depth camera
+//
+//@brief - how well they meet: each moved B point is projected into camera A's picture (the pinhole maths of 03)
+//         and its distance compared with what A saw there. Aligned views: the gap is about 0. Returns "   median
+//         gap 1.2 cm over 80% of B", or nothing if no point landed. ponytail: the gap is along A's line of sight
+//         only (blind to sliding along a wall); 11 measures properly. O(B points).
 std::string GapText(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera)
 {
     std::vector<float> gaps;
@@ -154,6 +181,16 @@ std::string GapText(const Views& views, const Pose& pose, const spotter::Pinhole
 //  Output: both clouds in one viewer
 // ---------------------------------------------------------------------
 
+//void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//
+//@param1 - views: view A and B's points
+//@param2 - pose: B's pose in A's coordinates
+//@param3 - camera: the depth camera, for the gap
+//@param4 - view: the viewer's angles
+//@param5 - renderer: draws the points
+//
+//@brief - both clouds in one viewer: A orange, B (moved by the pose) blue, a yellow circle where camera A is and a
+//         cyan one where B is, a status line and the gap; shown with the key strip. O(points).
 void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& camera, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
     const bool haveA = !views.a.empty();
@@ -178,6 +215,12 @@ void Show(const Views& views, const Pose& pose, const spotter::PinholeCamera& ca
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
+//int main(){
+//
+//@brief - the program: 10 · Two Views. One camera position sees only the front of things (08). To map a room you
+//         capture it from several places and put the clouds together. That needs each capture's POSE: where the
+//         camera stood and which way it pointed, relative to the first. Setup, main loop and clean-up are laid out
+//         in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);

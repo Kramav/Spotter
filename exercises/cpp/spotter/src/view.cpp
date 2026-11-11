@@ -11,6 +11,9 @@ namespace spotter
 
 namespace
 {
+//double NowSeconds(){
+//
+//@brief - seconds on the steady clock, for Every and FpsMeter. O(1).
 double NowSeconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 }
 

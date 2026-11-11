@@ -12,6 +12,11 @@ namespace spotter
 
 namespace
 {
+//bool HasReading(float mm){
+//
+//@param1 - mm: a depth reading in millimetres
+//
+//@brief - true for a usable reading: above 0 and not infinity (NaN fails `mm > 0`). O(1).
 bool HasReading(float mm) { return mm > 0 && !std::isinf(mm); }   // NaN fails mm > 0
 }
 
@@ -105,6 +110,9 @@ cv::Mat AdaptiveBackground::Update(const cv::Mat& liveMm, const cv::Mat& neverAb
 
 void AdaptiveBackground::Forget() { rememberedMm.release(); }
 
+//double NowSeconds(){
+//
+//@brief - seconds on the steady clock, for timing and countdowns. O(1).
 static double NowSeconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 StillBackground::StillBackground(double countdownSeconds) : countdownSeconds(countdownSeconds) { Restart(); }

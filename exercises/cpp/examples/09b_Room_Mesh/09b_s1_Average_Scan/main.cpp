@@ -21,6 +21,12 @@
 // The keys, shown in a strip below each window (spotter::WithKeys).
 const std::string Keys = "S  scan     Q or Esc  quit";
 
+//int main(){
+//
+//@brief - the program: 09b · step 1 of 2 · A still, averaged scan. Press S and hold still. 30 depth frames are
+//         averaged per pixel (07's idea, now spotter::DepthAverager). The averaged depth picture opens in its own
+//         window next to the live one: fewer red holes, steadier greys. Setup, main loop and clean-up are laid out
+//         in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource::Options options;

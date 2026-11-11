@@ -26,6 +26,12 @@ const std::string Keys = "S  scan     Q or Esc  quit";
 
 const int Step = 4;   // planes are searched on every 4th pixel each way
 
+//int main(){
+//
+//@brief - the program: 09c · step 1 of 3 · Every big flat surface. Press S for an averaged scan (09b_s1). Then
+//         06b's repeated plane search (spotter::FindPlanes), this time facing ANY way: floor, ceiling, walls,
+//         table tops. Setup, main loop and clean-up are laid out in the file's sections. Returns 0 on a normal
+//         exit, 1 if it couldn't start.
 int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});

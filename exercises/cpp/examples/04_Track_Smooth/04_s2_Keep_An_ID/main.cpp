@@ -32,6 +32,9 @@ struct Track
     cv::Rect2d box;
 };
 
+//spotter::YoloDetector::Options YoloSettings(){
+//
+//@brief - the detector's options: yolo26n.onnx and its names file from the repo and a minimum confidence. O(1).
 spotter::YoloDetector::Options YoloSettings()
 {
     spotter::YoloDetector::Options options;
@@ -41,6 +44,16 @@ spotter::YoloDetector::Options YoloSettings()
     return options;
 }
 
+//std::vector<Track> Match(const std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId){
+//
+//@param1 - tracks: last frame's tracks
+//@param2 - detections: this frame's detections
+//@param3 - nextId: the next free ID; used up for each new object
+//
+//@brief - greedy matching: of all unused same-class (track, detection) pairs, take the one overlapping most (at
+//         least MinOverlap), pair them and repeat. A paired detection keeps its track's ID with the new box;
+//         unpaired detections get new IDs; unpaired tracks are not kept. Returns this frame's tracks. O(T x D x
+//         min(T, D)).
 std::vector<Track> Match(const std::vector<Track>& tracks, const std::vector<spotter::Detection>& detections, int& nextId)
 {
     std::vector<Track> kept;
@@ -65,6 +78,12 @@ std::vector<Track> Match(const std::vector<Track>& tracks, const std::vector<spo
     return kept;   // unpaired tracks are simply not kept
 }
 
+//int main(){
+//
+//@brief - the program: 04 · step 2 of 3 · Keep an ID. A "track" is an object being followed: an ID number and its
+//         last box. Each frame, pair tracks with detections greedily: take the same-class pair that overlaps most,
+//         pair them, repeat while some pair overlaps at least MinOverlap. Setup, main loop and clean-up are laid
+//         out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main()
 {
     spotter::YoloDetector yolo(YoloSettings());
