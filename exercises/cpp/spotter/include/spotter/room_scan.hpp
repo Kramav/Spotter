@@ -75,18 +75,43 @@ struct Scan
     std::vector<int> colourIndex;     // ...and which of its pixels each depth pixel landed on
 };
 
-// The point cloud, colour picture and colour index of a frame (or an averaged one) as a Scan, with
-// its ICP points and near features. The far features need AddFarFeatures as well.
+//Scan MakeScan(const std::vector<cv::Point3f>& cloud, const cv::Mat& picture, const ScanOptions& options){
+//
+//@param1 - cloud: a depth cloud, one point per depth pixel (NaN = none), e.g. an averaged frame's
+//@param2 - picture: the registered colour on the depth grid (black = none)
+//@param3 - options: the ICP step and the near features' settings
+//
+//@brief - a frame as a Scan: its ICP points (SampleSurface) and near features (FindFeatures where there's
+//         depth and colour, eroded 3 pixels clear of holes' edges). The far features need AddFarFeatures
+//         as well; the pose is the caller's. O(pixels).
 Scan MakeScan(const std::vector<cv::Point3f>& cloud, const cv::Mat& picture, const ScanOptions& options);
 
 // How a depth-camera point lands in the colour picture: column = a x/z + e/z + b, row = c y/z + f/z + d.
-// Measured from the pixels that have depth (least squares), so far rays can be cast from the
-// colour camera, which sits at (-e/a, -f/c, 0).
+// The colour camera sits at (-e/a, -f/c, 0), so far rays can be cast from it.
 struct ColourModel { double a = 1, b = 0, c = 1, d = 0, e = 0, f = 0; bool ok = false; };
+
+//ColourModel FitColourModel(const std::vector<cv::Point3f>& cloud, const std::vector<int>& colourIndex, int colourWidth){
+//
+//@param1 - cloud: a depth cloud, one point per depth pixel (NaN = none)
+//@param2 - colourIndex: per depth pixel, the colour pixel it landed on (row * colourWidth + column), -1 = none
+//@param3 - colourWidth: the colour picture's width
+//
+//@brief - fits the ColourModel's six numbers by least squares (SVD) on every 7th pixel that has depth and
+//         a colour pixel. ok = false with fewer than 200 such pixels. O(pixels).
 ColourModel FitColourModel(const std::vector<cv::Point3f>& cloud, const std::vector<int>& colourIndex, int colourWidth);
 
-// Features in the full colour picture where depth reads nothing (noDepth = 255 there), inside the
-// depth camera's view, each as a ray (13d).
+//void AddFarFeatures(Scan& scan, const cv::Mat& colourGrey, const cv::Mat& noDepth, const ColourModel& model, const PinholeCamera& depthCamera, const ScanOptions& options){
+//
+//@param1 - scan: the scan to add them to (its far, farRays and farOrigin are replaced)
+//@param2 - colourGrey: the full colour picture, grey
+//@param3 - noDepth: CV_8U, the colour picture's size, 255 where depth reads nothing
+//@param4 - model: the scan's colour model (FitColourModel); nothing happens if it isn't ok
+//@param5 - depthCamera: the depth camera, to keep to the part of the colour picture it also sees
+//@param6 - options: the far features' settings
+//
+//@brief - features where depth reads nothing (13d: too far, a window, a hallway's end), eroded 8 pixels
+//         clear of where depth starts, inside the depth camera's view; each becomes a unit ray from the
+//         colour camera (farOrigin). O(colour pixels).
 void AddFarFeatures(Scan& scan, const cv::Mat& colourGrey, const cv::Mat& noDepth, const ColourModel& model,
                     const PinholeCamera& depthCamera, const ScanOptions& options);
 
@@ -99,8 +124,7 @@ struct Landmark
     int scans[2] = { -1, -1 };   // the two scans whose rays made it (bug 14: left out when re-placing either)
 };
 
-// The pose moving scan b onto scan a from matched features: near (3D-3D), far (ray-ray) and
-// landmark (ray-point) matches all vote in RANSAC. count = how many agree.
+// What FeaturePose found: the pose and the matches that agree with it. count = how many agree.
 struct FeatureMatch
 {
     int count = 0, near = 0;
@@ -109,11 +133,34 @@ struct FeatureMatch
     std::vector<std::pair<int, int>> farPairs;       // agreeing far matches (b's, a's): new landmarks
     std::vector<std::pair<int, int>> landmarkPairs;  // agreeing (b's far feature, landmark)
 };
+
+//FeatureMatch FeaturePose(const Scan& b, const Scan& a, std::mt19937& random, int tries, const std::vector<Landmark>& landmarks, const ScanOptions& options){
+//
+//@param1 - b: the scan to move
+//@param2 - a: the scan to move it onto (its pose turns the landmarks into its coordinates)
+//@param3 - random: the random number generator for RANSAC
+//@param4 - tries: RANSAC tries
+//@param5 - landmarks: far landmarks so far (room coordinates); may be empty
+//@param6 - options: the match ratio, inlier distance and far-ray angles
+//
+//@brief - the pose moving b's camera onto a's from matched features (MatchFeatures): near (3D-3D), far
+//         (ray-ray) and landmark (ray-point) matches all vote in RANSAC, and the best guess is refitted to
+//         the matches that agree. O(n x m) to match the descriptors, then O(tries x k) for k matches.
 FeatureMatch FeaturePose(const Scan& b, const Scan& a, std::mt19937& random, int tries, const std::vector<Landmark>& landmarks,
                          const ScanOptions& options);
 
-// Which earlier scans share most features with these descriptors: each votes for the scan holding
-// its nearest twin. Up to k scan indices, best first. Excluded scans and `skip` get no votes.
+//std::vector<size_t> Shortlist(const cv::Mat& descriptors, const std::vector<Scan>& scans, int k, int skip, const ScanOptions& options){
+//
+//@param1 - descriptors: the new scan's descriptors (near and far)
+//@param2 - scans: the earlier scans
+//@param3 - k: at most this many scans come back
+//@param4 - skip: a scan index that gets no votes (-1 = none)
+//@param5 - options: shortlistHamming, how near a twin must be to vote
+//
+//@brief - which earlier scans share most features with these descriptors: each descriptor votes for the
+//         scan holding its nearest twin (NearestFeatures over every scan's descriptors stacked), if within
+//         shortlistHamming bits. Up to k scan indices with votes, best first. Excluded scans and `skip` get
+//         no votes. O(n x M) for n descriptors and M descriptors in all the scans.
 // ponytail: stacks every scan's descriptors per call (fine for tens of scans); keep a persistent
 // index if sessions grow to hundreds.
 std::vector<size_t> Shortlist(const cv::Mat& descriptors, const std::vector<Scan>& scans, int k, int skip, const ScanOptions& options);
@@ -128,41 +175,94 @@ struct Placement
     std::vector<std::pair<int, int>> farPairs;   // ...and the far matches that agreed (for AddLandmarks)
 };
 
-// Places `scan` among `earlier` (scans placed already): features against the shortlisted scans
-// give a rough pose, ICP against what that pose can see of every earlier scan polishes it, and
-// a second ICP against all but the matched scan checks it. skip = a scan to leave out (placing
-// it again); its own landmarks are left out too (bug 14).
+//Placement PlaceScan(const Scan& scan, const std::vector<Scan>& earlier, const PinholeCamera& depthCamera, std::mt19937& random, int skip, const std::vector<Landmark>& landmarks, const ScanOptions& options){
+//
+//@param1 - scan: the new scan (MakeScan + AddFarFeatures)
+//@param2 - earlier: the scans placed already
+//@param3 - depthCamera: the depth camera, to crop ICP's target to what the rough pose can see
+//@param4 - random: the random number generator for RANSAC
+//@param5 - skip: an earlier scan to leave out (placing it again), or -1; the landmarks it made are left
+//          out too (bug 14)
+//@param6 - landmarks: far landmarks so far
+//@param7 - options: every placing setting (ScanOptions)
+//
+//@brief - features against the shortlisted scans (Shortlist, FeaturePose) give a rough pose, and rays to
+//         landmarks pin it when near matches are few (13d); ICP against what that pose can see of every
+//         earlier scan, one point per thinMeters cube, polishes it; a second ICP against all but the
+//         matched scan checks it, and a big move, gap or little overlap marks it suspicious. Not placed
+//         when the features or the overlap fall short. The ICPs dominate: O(rounds x n log m).
 Placement PlaceScan(const Scan& scan, const std::vector<Scan>& earlier, const PinholeCamera& depthCamera, std::mt19937& random,
                     int skip, const std::vector<Landmark>& landmarks, const ScanOptions& options);
 
-// After scan b (index bIndex) is placed: its agreeing far matches with scan a become landmarks
-// where the rays cross far away at a clear angle; the same detail seen again refines its landmark.
-// Returns how many are new.
+//int AddLandmarks(const Scan& b, int bIndex, const Scan& a, int aIndex, const std::vector<std::pair<int, int>>& pairs, std::vector<Landmark>& landmarks, const ScanOptions& options){
+//
+//@param1 - b: the scan just placed
+//@param2 - bIndex: its index
+//@param3 - a: the scan its features matched
+//@param4 - aIndex: that scan's index
+//@param5 - pairs: the agreeing far matches (b's far feature, a's far feature), from Placement::farPairs
+//@param6 - landmarks: the landmark list, added to or refined
+//@param7 - options: the parallax, distance and merge limits
+//
+//@brief - each pair of rays that crosses between farMinMeters and farMaxMeters, at least minParallaxDegrees
+//         apart, becomes a landmark at the middle of the rays' closest points; one within
+//         landmarkMergeMeters with a similar descriptor is averaged in instead. Returns how many are new.
+//         O(pairs x landmarks).
 int AddLandmarks(const Scan& b, int bIndex, const Scan& a, int aIndex, const std::vector<std::pair<int, int>>& pairs,
                  std::vector<Landmark>& landmarks, const ScanOptions& options);
 
-// The live check: what the next scan would be placed by ("anchors"), from a frame made into a Scan
-// (with its far features). Pixels are in the full colour picture.
+// The live check's answer: what the next scan would be placed by ("anchors"). Pixels are in the full
+// colour picture.
 struct LiveCheck
 {
     int anchors = 0, farAnchors = 0;
     int scan = -1;   // the scan it matches best
     std::vector<cv::Point2f> anchorPixels, farAnchorPixels, otherPixels;
 };
+
+//LiveCheck CheckLive(const Scan& live, const std::vector<Scan>& scans, const std::vector<Landmark>& landmarks, int colourWidth, const ScanOptions& options){
+//
+//@param1 - live: the current frame made into a Scan, with its far features
+//@param2 - scans: the scans placed so far
+//@param3 - landmarks: far landmarks so far
+//@param4 - colourWidth: the full colour picture's width, to turn colour indices into pixels
+//@param5 - options: liveRansacTries (fewer than placing's, to keep the frame rate)
+//
+//@brief - FeaturePose against the 2 shortlisted scans; the best one's agreeing features are the anchors.
+//         Returns their pixels and the other features' pixels, for drawing. O(n x M) for the shortlist,
+//         then O(liveRansacTries x k).
 LiveCheck CheckLive(const Scan& live, const std::vector<Scan>& scans, const std::vector<Landmark>& landmarks, int colourWidth,
                     const ScanOptions& options);
 
-// The next shot: from which spot to turn which way to see the most that's new, still sharing at
-// least recommendMinOverlap of the view (or it couldn't be placed).
+// The next shot's advice.
 struct Recommendation
 {
     bool found = false;
     Pose pose;
     std::string text = "Next: (after the first scan)";
 };
+
+//Recommendation RecommendNext(const std::vector<Scan>& scans, const PinholeCamera& depthCamera, const ScanOptions& options){
+//
+//@param1 - scans: the scans so far (excluded ones are ignored)
+//@param2 - depthCamera: the depth camera, to project what's been seen into a candidate view
+//@param3 - options: the overlap, distance penalty, coverage cube and "new enough" settings
+//
+//@brief - from which spot to turn which way to see the most that's new, still sharing at least
+//         recommendMinOverlap of the view (or it couldn't be placed). Tries 7 turns x 3 tilts at every
+//         spot; a cell of the candidate's view (16 x 12) is known if a seen point (one per coverage cube)
+//         lands in it, or a scan from nearly that spot already looked that way (a window reads nothing).
+//         Score = the new share minus a penalty per metre from the last spot. O(S x 21 x P) for S spots
+//         and P coverage points.
 Recommendation RecommendNext(const std::vector<Scan>& scans, const PinholeCamera& depthCamera, const ScanOptions& options);
 
-// A number for the little cube of space a point is in (21 bits per axis), to keep one point per cube.
+//long long CubeKey(const cv::Point3f& p, float size){
+//
+//@param1 - p: a point
+//@param2 - size: the cube's edge in metres
+//
+//@brief - a number for the little cube of space the point is in (21 bits per axis, so it repeats every
+//         2^21 cubes), to keep one point per cube with an unordered_set. O(1).
 long long CubeKey(const cv::Point3f& p, float size);
 
 }

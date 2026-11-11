@@ -22,11 +22,32 @@ class ClassList
 {
 public:
     ClassList() = default;
-    explicit ClassList(const std::string& path);   // prints a warning if it can't be read
 
+    //ClassList(const std::string& path){
+    //
+    //@param1 - path: the names file, one class name per line, in training order
+    //
+    //@brief - reads the names. Prints a warning if the file can't be read (then the list is empty). O(lines).
+    explicit ClassList(const std::string& path);
+
+    //size_t Size(){
+    //
+    //@brief - how many class names were read. O(1).
     size_t Size() const { return names.size(); }
-    const std::string& Name(int classId) const;    // "?" for an id outside the list
-    int Find(const std::string& name) const;        // the id of "person", or -1 if there's no such class
+
+    //const std::string& Name(int classId){
+    //
+    //@param1 - classId: a detection's class number
+    //
+    //@brief - that class's name, or "?" for an id outside the list (bounds-checked). O(1).
+    const std::string& Name(int classId) const;
+
+    //int Find(const std::string& name){
+    //
+    //@param1 - name: a class name, e.g. "person"
+    //
+    //@brief - that class's id, or -1 if there's no such class. Looks through the list: O(classes).
+    int Find(const std::string& name) const;
 
 private:
     std::vector<std::string> names;

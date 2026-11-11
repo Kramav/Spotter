@@ -25,15 +25,35 @@ struct FeatureOptions
     int claheTiles = 8;
 };
 
-// ORB features of a grey picture, only where `mask` is non-zero (an empty mask = everywhere).
-// ponytail: ORB and CLAHE are made per call (microseconds), so any thread may call this at once.
+//Features FindFeatures(const cv::Mat& grey, const cv::Mat& mask, const FeatureOptions& options){
+//
+//@param1 - grey: a grey picture
+//@param2 - mask: CV_8U, features only where it's non-zero; an empty mask = everywhere
+//@param3 - options: how many, the FAST threshold, and CLAHE's settings
+//
+//@brief - ORB features (FAST corners, each described by 256 brightness comparisons), after CLAHE if
+//         evenContrast. O(pixels).
+//         ponytail: ORB and CLAHE are made per call (microseconds), so any thread may call this at once.
 Features FindFeatures(const cv::Mat& grey, const cv::Mat& mask, const FeatureOptions& options);
 
-// Each `from` descriptor's nearest `to` descriptor (Hamming distance), kept when it's clearly
-// nearer than the second nearest: distance <= ratio x second's (Lowe's ratio test). (from, to) rows.
+//std::vector<std::pair<int, int>> MatchFeatures(const cv::Mat& from, const cv::Mat& to, float ratio){
+//
+//@param1 - from: descriptors to match, one row each
+//@param2 - to: descriptors to match them against
+//@param3 - ratio: Lowe's ratio (default 0.8)
+//
+//@brief - each `from` descriptor's nearest `to` descriptor by Hamming distance, kept when it's clearly
+//         nearer than the second nearest: distance <= ratio x second's (Lowe's ratio test). Returns
+//         (from row, to row) pairs. Brute force: O(n x m) for n and m descriptors.
 std::vector<std::pair<int, int>> MatchFeatures(const cv::Mat& from, const cv::Mat& to, float ratio = 0.8f);
 
-// Each `from` descriptor's nearest `to` descriptor, no ratio test (queryIdx, trainIdx, distance in bits).
+//std::vector<cv::DMatch> NearestFeatures(const cv::Mat& from, const cv::Mat& to){
+//
+//@param1 - from: descriptors to match, one row each
+//@param2 - to: descriptors to match them against
+//
+//@brief - each `from` descriptor's nearest `to` descriptor, no ratio test (queryIdx, trainIdx, distance in
+//         bits). Empty if either is empty. Brute force: O(n x m).
 std::vector<cv::DMatch> NearestFeatures(const cv::Mat& from, const cv::Mat& to);
 
 }

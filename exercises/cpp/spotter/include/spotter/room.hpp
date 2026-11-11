@@ -35,9 +35,17 @@ struct RoomOptions
     float mergeMeters = 0.05f;       // ...and distance
 };
 
-// Every scan into one grid of little cubes holding a signed distance to the surface (+ = air in
-// front of it), averaged over the scans that saw each cube; then a surface net where the sign
-// changes. One group, "seen_room". `voxel` = the cube size it really used.
+//Mesh FuseScans(const std::vector<const Scan*>& scans, const PinholeCamera& depthCamera, const RoomOptions& options, float& voxel){
+//
+//@param1 - scans: the placed scans to merge
+//@param2 - depthCamera: the depth camera, to project each cube into each scan
+//@param3 - options: the cube size, the cube budget and the truncation distance
+//@param4 - voxel: set to the cube size really used (it grows by 25% steps until the room fits maxVoxels)
+//
+//@brief - every scan into one grid of little cubes holding a signed distance to the surface (+ = air in
+//         front of it, a TSDF), averaged over the scans that saw each cube (parallel over slices); then a
+//         surface net: one point per cube of 8 voxels where the sign changes, joined into triangles. One
+//         group, "seen_room". O(scans x voxels).
 Mesh FuseScans(const std::vector<const Scan*>& scans, const PinholeCamera& depthCamera, const RoomOptions& options, float& voxel);
 
 // The tidy model. Coordinates: X right, Y up, Z towards the first camera (first camera at 0, 0, 0).
@@ -51,14 +59,41 @@ struct Room
     std::vector<std::pair<cv::Point3f, cv::Point3f>> blocks;         // lowest and highest corners
     cv::Matx33f firstCamera = cv::Matx33f::eye();                    // scan 1's camera (X right, Y down, Z ahead) -> room
 };
+
+//Room BuildRoom(const std::vector<const Scan*>& scans, const Mesh& seen, std::mt19937& random, const RoomOptions& options){
+//
+//@param1 - scans: the placed scans
+//@param2 - seen: their merged mesh (FuseScans), copied in levelled
+//@param3 - random: the random number generator for the plane searches
+//@param4 - options: the plane search, level/upright limits, wall and ceiling heights, corner snap, blocks
+//
+//@brief - 09c across every scan: planes found per scan (FindPlanes on every sampleStep-th pixel), the same
+//         plane from two spots merged, "up" from the biggest level plane (else the ceiling, two walls, or
+//         the first camera), the room levelled; then floor, ceiling and walls sorted out, walls joined at
+//         corners within cornerSnapMeters, and what's left over the floor as furniture boxes.
+//         O(scans x maxPlanes x tries x n) for the plane searches, n sampled pixels per scan.
 Room BuildRoom(const std::vector<const Scan*>& scans, const Mesh& seen, std::mt19937& random, const RoomOptions& options);
 
-// The room as an .obj: far landmarks (scan 1's camera coordinates) added as 10 cm magenta boxes in
-// group far_landmarks; a "# spotter format 2" line (not mirrored) and the first camera's turn
-// (for presentation Demo 4) as comments.
+//bool SaveRoomObj(const std::string& path, Room room, const std::vector<cv::Point3f>& landmarks, const std::string& comment){
+//
+//@param1 - path: the .obj file to write
+//@param2 - room: the room (a copy: the landmark boxes are added to it)
+//@param3 - landmarks: far landmarks, in scan 1's camera coordinates
+//@param4 - comment: the file's first comment line
+//
+//@brief - the room as an .obj: the landmarks as 10 cm magenta boxes in group far_landmarks, a
+//         "# spotter format 2" line (not mirrored) and the first camera's turn (for presentation Demo 4) as
+//         comments. False if it can't be written. O(points + triangles).
 bool SaveRoomObj(const std::string& path, Room room, const std::vector<cv::Point3f>& landmarks, const std::string& comment);
 
-// Every scan's own points and colours, turned by `turn` (e.g. Room::firstCamera), for a .ply.
+//void RoomPoints(const std::vector<const Scan*>& scans, const cv::Matx33f& turn, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours){
+//
+//@param1 - scans: the scans to gather
+//@param2 - turn: applied after each scan's pose (e.g. Room::firstCamera, to level them)
+//@param3 - points: filled with every reading of every scan, in the room
+//@param4 - colours: filled with each point's colour from its scan's picture
+//
+//@brief - every scan's own points and colours, moved by its pose and turned, for a .ply. O(total pixels).
 void RoomPoints(const std::vector<const Scan*>& scans, const cv::Matx33f& turn, std::vector<cv::Point3f>& points, std::vector<cv::Vec3b>& colours);
 
 }
