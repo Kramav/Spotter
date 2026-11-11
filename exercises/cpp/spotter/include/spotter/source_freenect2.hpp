@@ -27,24 +27,47 @@ public:
         int timeoutMs = 10000;         // Next() gives up after this long without a frame
     };
 
-    // Opens the first Kinect and starts it. Prints what went wrong if it can't; then IsOpen() is false.
+    //KinectSource(const Options& options){
+    //
+    //@param1 - options: which pictures to make, the depth range, the filters, the timeout
+    //
+    //@brief - opens the first Kinect and starts its streams. Prints what went wrong if it can't; then
+    //         IsOpen() is false.
     explicit KinectSource(const Options& options);
-    ~KinectSource();   // stops and closes the device, also when an exception unwinds past it
+
+    //~KinectSource(){
+    //
+    //@brief - stops and closes the device, also when an exception unwinds past it (RAII).
+    ~KinectSource();
     KinectSource(const KinectSource&) = delete;
     KinectSource& operator=(const KinectSource&) = delete;
 
+    //bool IsOpen(){
+    //
+    //@brief - true if a Kinect was opened and started. O(1).
     bool IsOpen() const;
 
-    // Waits for the next frame and fills `frame` (its pictures are reused between calls).
-    // False when the device isn't open or no frame came within timeoutMs (unplugged?).
+    //bool Next(RgbdFrame& frame){
+    //
+    //@param1 - frame: filled with the new frame; its pictures are reused between calls
+    //
+    //@brief - waits for the next frame, undistorts and registers depth and colour (libfreenect2), adds
+    //         the cameras' pinhole models (made at opening) and unmirrors it all (Unmirror) if asked. False when the device
+    //         isn't open or no frame came within timeoutMs (unplugged?). O(pixels) per frame.
     bool Next(RgbdFrame& frame);
 
-    // Turn bigdepth on or off from the next frame on (13e asks for it only now and then).
+    //void SetBigdepth(bool on){
+    //
+    //@param1 - on: true to fill RgbdFrame::bigdepth, false to skip it
+    //
+    //@brief - turns bigdepth on or off from the next frame on (13e asks for it only now and then). O(1).
     void SetBigdepth(bool on);
 
-    // The factory calibration as text lines, for saving next to a scan (room.txt):
-    // "ir_params fx fy cx cy k1 k2 k3 p1 p2" and "colour_params <every number libfreenect2 has>".
-    // Before Unmirror: these are what the device reports.
+    //std::string CalibrationText(){
+    //
+    //@brief - the factory calibration as text lines, for saving next to a scan (room.txt):
+    //         "ir_params fx fy cx cy k1 k2 k3 p1 p2" and "colour_params <every number libfreenect2 has>".
+    //         Before Unmirror: these are what the device reports. O(1).
     std::string CalibrationText() const;
 
 private:
