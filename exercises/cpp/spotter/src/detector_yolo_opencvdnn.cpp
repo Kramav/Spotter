@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <opencv2/imgproc.hpp>
+#include <utility>
 
 namespace spotter
 {
@@ -123,6 +124,7 @@ void AsyncDetector::Offer(const cv::Mat& bgr)
 std::optional<std::vector<Detection>> AsyncDetector::TryTake()
 {
     std::lock_guard<std::mutex> lock(shared);
+    if (failure) std::rethrow_exception(std::exchange(failure, nullptr));
     std::optional<std::vector<Detection>> taken;
     taken.swap(result);
     return taken;
@@ -147,10 +149,14 @@ void AsyncDetector::Run()
             pictureWaiting = false;
         }
         auto start = std::chrono::steady_clock::now();
-        std::vector<Detection> found = detector.Detect(image);   // the slow part, without the lock
+        std::vector<Detection> found;
+        std::exception_ptr error;
+        try { found = detector.Detect(image); }   // the slow part, without the lock
+        catch (...) { error = std::current_exception(); }   // escaping the thread would end the program at once
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         std::lock_guard<std::mutex> lock(shared);
-        result = std::move(found);
+        if (error) failure = error;
+        else result = std::move(found);
         lastMs = ms;
         busy = false;
     }

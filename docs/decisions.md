@@ -1010,3 +1010,26 @@ user chose the folder and kept D39's save-once.
   first save cut off; cut off between the renames; only the `.old` left; the next save tidying up;
   `RemoveScansFrom`. Breaking the unfinished-`.new` rule makes it fail. `ctest` 10/10. Not run on the
   sensor: a real K is the user's check.
+
+## D46: errors reach someone who can handle them (2026-11-11)
+
+The review's initiative 2 ([review-2026-11-11-architecture.md](review-2026-11-11-architecture.md)).
+
+- **`AsyncDetector`:** an error inside the detector (an OpenCV DNN error) used to escape its thread,
+  which ends the program on the spot (`std::terminate`): no rescue, no destructors. The thread now keeps
+  it, and `TryTake` throws it again on the caller's thread, as `std::future::get` does. Examples that
+  catch (13e's way) handle it; the others stop with the message, as any other error.
+- **Room folders refuse damage with a reason instead of throwing:** `ReadRoomInfo` refuses an impossible
+  `depth_size` or camera (a negative size used to throw in `resize`); `LoadScan` refuses a `cloud.bin`
+  that is too long as well as too short; `LoadLandmarks` leaves a non-hex descriptor out (it threw from
+  `std::stoi`, and 13z doesn't catch). `LoadTwinRoom` prints each skipped scan's reason (Demos 4 and 6,
+  13w, 13x said nothing).
+- **13e's `SaveAll` catches errors itself:** the rescue calls it outside main's `try`, so an error there
+  ended the program mid-rescue. Scans written before the error are whole (D45).
+- **Checks:** `check_yolo_decode` now loads the repo's model on `AsyncDetector`'s thread (no check ran
+  the real model before), and a wrong input size (320 on the 640 export) throws through `TryTake`.
+  `check_room`: a damaged `room.txt`, a long `cloud.bin`, a broken landmark line; and the
+  `RecommendNext` check, which always passed (it only tested that the text starts with "Next:"), now
+  needs real advice from a scan's spot, and none with no scans.
+- **Not changed:** 13e quits on `q` only, not through `IsQuitKey`, because Esc deselects there. The
+  review counted it as a slip; it's deliberate.

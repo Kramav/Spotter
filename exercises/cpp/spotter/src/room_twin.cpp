@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <opencv2/imgproc.hpp>
 
 namespace spotter
@@ -25,14 +26,15 @@ bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoo
     RoomInfo info;
     if (!ReadRoomInfo(folder, info, problem)) return false;
     std::vector<Scan> scans;
+    std::string why;
     for (const std::filesystem::path& scanFolder : ScanFolders(folder))
     {
         Scan scan;
         int number;
-        std::string why;
-        if (LoadScan(scanFolder, info, scan, number, why) && !scan.excluded) scans.push_back(std::move(scan));
+        if (!LoadScan(scanFolder, info, scan, number, why)) std::printf("  %s skipped: %s\n", scanFolder.filename().string().c_str(), why.c_str());
+        else if (!scan.excluded) scans.push_back(std::move(scan));
     }
-    if (scans.empty()) { problem = "no scans to load in " + folder.string(); return false; }
+    if (scans.empty()) { problem = "no scans to load in " + folder.string() + (why.empty() ? "" : " (the last skipped: " + why + ")"); return false; }
     std::vector<const Scan*> all;
     for (const Scan& s : scans) all.push_back(&s);
     RoomOptions options;

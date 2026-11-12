@@ -1,11 +1,13 @@
 // Self-check for the YOLO decoding (detector_yolo_opencvdnn.hpp) and ClassList (detection.hpp),
-// on made-up model outputs: no model file is loaded. Both output layouts, so a different model
-// (an older export, or one you trained) decodes right before it ever runs.
+// on made-up model outputs. Both output layouts, so a different model (an older export, or one you
+// trained) decodes right before it ever runs. Last, the repo's model on AsyncDetector's thread.
 // Run: build\check_yolo_decode.exe. Exit code 0 = passed.
 
 #include "spotter/detector_yolo_opencvdnn.hpp"
 
+#include <chrono>
 #include <cstdio>
+#include <thread>
 
 int failures = 0;
 void Check(bool ok, const char* what)
@@ -63,6 +65,30 @@ int main()
     Check(names.Size() == 80 && names.Name(0) == "person" && names.Name(62) == "tv", "yolo26n.names read");
     Check(names.Name(80) == "?" && names.Name(-1) == "?", "an id outside the list is \"?\", not a crash");
     Check(names.Find("person") == 0 && names.Find("unicorn") == -1, "find a class by name");
+
+    // 4. The real model on AsyncDetector's thread (the examples' way): a picture comes back decoded, and an
+    //    error on the thread (here an input size this model wasn't exported for) reaches the caller, where
+    //    before it ended the program on the spot.
+    auto runOnce = [](int inputSize, bool& threw) {
+        spotter::YoloDetector::Options options;
+        options.modelPath = SPOTTER_REPO_ROOT "/yolo26n.onnx";
+        options.namesPath = SPOTTER_REPO_ROOT "/yolo26n.names";
+        options.inputSize = inputSize;
+        spotter::YoloDetector detector(options);
+        spotter::AsyncDetector async(detector);
+        async.Offer(cv::Mat(480, 640, CV_8UC3, cv::Scalar(90, 120, 150)));
+        threw = false;
+        for (int wait = 0; wait < 3000; wait++)   // up to 30 s
+        {
+            try { if (async.TryTake()) return true; }
+            catch (const std::exception& e) { std::printf("   thrown on the caller's thread: %.70s...\n", e.what()); threw = true; return false; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return false;
+    };
+    bool threw;
+    Check(runOnce(640, threw) && !threw, "the real model runs on AsyncDetector's thread and hands back a batch");
+    Check(!runOnce(320, threw) && threw, "an error on the detector's thread is thrown again by TryTake");
 
     std::printf(failures == 0 ? "PASSED\n" : "%d FAILED\n", failures);
     return failures == 0 ? 0 : 1;
