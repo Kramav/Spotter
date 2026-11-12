@@ -347,6 +347,11 @@ bool ReadRoomInfo(const fs::path& room, RoomInfo& info, std::string& problem)
         problem = keys.empty() ? "no room.txt" : "room.txt is from an unknown format, or has no camera";
         return false;
     }
+    if (!(size[0] >= 1 && size[1] >= 1 && size[0] <= 4096 && size[1] <= 4096) || !(camera[0] > 0 && camera[1] > 0))   // NaN fails too
+    {
+        problem = "room.txt's depth_size or camera numbers are impossible (a damaged file?)";
+        return false;
+    }
     info.depthCamera = { camera[0], camera[1], camera[2], camera[3], (int)size[0], (int)size[1] };
     if (info.format == 1)   // the device's own (mirrored) numbers: unmirror them as Unmirror does
     {
@@ -369,6 +374,7 @@ bool LoadScan(const fs::path& folder, const RoomInfo& info, Scan& scan, int& num
     std::ifstream cloud(folder / "cloud.bin", std::ios::binary);
     cloud.read((char*)scan.cloud.data(), scan.cloud.size() * sizeof(cv::Point3f));
     if (!cloud || cloud.gcount() != (std::streamsize)(scan.cloud.size() * sizeof(cv::Point3f))) { problem = "cloud.bin missing or short"; return false; }
+    if (cloud.peek() != std::char_traits<char>::eof()) { problem = "cloud.bin is longer than room.txt's depth_size says"; return false; }
     if (picture)
     {
         scan.picture = cv::imread((folder / "colour.bmp").string(), cv::IMREAD_COLOR);
@@ -430,7 +436,7 @@ std::vector<Landmark> LoadLandmarks(const fs::path& room, const RoomInfo& info)
         std::string hex;
         if (!(in >> l.point.x >> l.point.y >> l.point.z >> l.seen)) continue;
         if (info.format == 1) l.point.x *= -1;
-        if (in >> hex && hex.size() % 2 == 0)
+        if (in >> hex && hex.size() % 2 == 0 && hex.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos)   // else no descriptor
         {
             l.descriptor = cv::Mat(1, (int)hex.size() / 2, CV_8U);
             for (int b = 0; b < l.descriptor.cols; b++) l.descriptor.at<uchar>(0, b) = (uchar)std::stoi(hex.substr(2 * b, 2), nullptr, 16);

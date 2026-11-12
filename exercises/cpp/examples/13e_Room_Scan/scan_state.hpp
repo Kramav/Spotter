@@ -167,15 +167,20 @@ inline bool SaveAll(Session& s)
 {
     auto start = std::chrono::steady_clock::now();
     s.info.scans = (int)s.scans.size();
-    bool ok = spotter::StartRoomFolder(s.folder, s.info) && spotter::RemoveScansFrom(s.folder, s.scans.size());
-    for (size_t i = 0; i < s.scans.size() && ok; i++)
-    {
-        ok = s.onDisk[i] ? spotter::WritePose(s.folder, i, s.scans[i]) : spotter::WriteScan(s.folder, i, s.scans[i]);
-        s.onDisk[i] = s.onDisk[i] || ok;
-    }
-    ok = ok && spotter::WriteLandmarks(s.folder, s.landmarks);
+    bool ok = false;
     size_t points = 0;
-    ok = ok && spotter::FinishRoomFolder(s.folder, s.info, s.scans, s.roomOptions, points);
+    try   // the rescue calls this outside main's try: an error here must not end the program before it reports
+    {
+        ok = spotter::StartRoomFolder(s.folder, s.info) && spotter::RemoveScansFrom(s.folder, s.scans.size());
+        for (size_t i = 0; i < s.scans.size() && ok; i++)
+        {
+            ok = s.onDisk[i] ? spotter::WritePose(s.folder, i, s.scans[i]) : spotter::WriteScan(s.folder, i, s.scans[i]);
+            s.onDisk[i] = s.onDisk[i] || ok;
+        }
+        ok = ok && spotter::WriteLandmarks(s.folder, s.landmarks);
+        ok = ok && spotter::FinishRoomFolder(s.folder, s.info, s.scans, s.roomOptions, points);
+    }
+    catch (const std::exception& e) { ok = false; std::printf("An error while saving: %s (scans written before it are whole; 13z reads them)\n", e.what()); }
     s.saved = ok;
     std::printf("%s %s: %zu scans, points.ply %zu points, %.1f s.\n", ok ? "Saved" : "SAVING FAILED (the disk full, or the folder gone?) in",
                 s.folder.string().c_str(), s.scans.size(), points, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());

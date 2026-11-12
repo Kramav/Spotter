@@ -121,7 +121,10 @@ int main()
     }
     spotter::Recommendation next = spotter::RecommendNext(scans, Camera, options);
     std::printf("   %s\n", next.text.c_str());
-    Check(next.text.rfind("Next:", 0) == 0, "RecommendNext gives advice");
+    bool atASpot = false;
+    for (const spotter::Scan& s : scans) atASpot = atASpot || cv::norm(next.pose.shift - s.pose.shift) < 1e-6;
+    Check(next.found && next.text.rfind("Next: at spot ", 0) == 0 && atASpot, "RecommendNext suggests a new view from a scan's spot");
+    Check(!spotter::RecommendNext({}, Camera, options).found, "and nothing before the first scan");
 
     // 2. The merged mesh and the clean model.
     std::vector<const spotter::Scan*> all;
@@ -235,6 +238,22 @@ int main()
     Check(spotter::RemoveScansFrom(folder, 4) && spotter::ScanFolders(folder).size() == 4 && !fs::exists(folder / "scan_005.old") &&
           fs::exists(folder / "scan_007x"), "RemoveScansFrom deletes scan 5 and its leftovers, and nothing that isn't a scan");
     fs::remove_all(folder / "scan_007x", error);
+
+    // Damaged files are refused with a reason, never a crash.
+    const fs::path broken = fs::temp_directory_path() / "spotter_check_room_broken";
+    fs::remove_all(broken, error);
+    fs::copy(folder, broken, fs::copy_options::recursive, error);
+    spotter::RoomInfo bad;
+    std::ofstream(broken / "room.txt") << "format 2\ndepth_size -512 424\ndepth_camera 365.5 365.5 256 212\n";
+    Check(!spotter::ReadRoomInfo(broken, bad, problem), "an impossible depth_size is refused");
+    std::printf("3. damaged room.txt: \"%s\"\n", problem.c_str());
+    std::ofstream(broken / "scan_001" / "cloud.bin", std::ios::binary | std::ios::app) << "extra";
+    Check(!spotter::LoadScan(broken / "scan_001", read, back, number, problem), "a cloud.bin that's too long is refused");
+    std::ofstream(broken / "landmarks.txt") << "0.1 0.2 3.0 2 zz\n0.4 0.5 6.0 3 0aff\n";
+    std::vector<spotter::Landmark> marks = spotter::LoadLandmarks(broken, read);
+    Check(marks.size() == 2 && marks[0].descriptor.empty() && marks[1].descriptor.cols == 2 && marks[1].descriptor.at<uchar>(0, 1) == 0xff,
+          "a landmark line with a broken descriptor loads without one, and doesn't throw");
+    fs::remove_all(broken, error);
 
     // A format-1 scan: what legacy 13e wrote for the same view (mirrored), must load as scan 1 is.
     const fs::path old = fs::temp_directory_path() / "spotter_check_room_format1";

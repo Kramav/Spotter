@@ -14,6 +14,7 @@
 
 #include <opencv2/dnn.hpp>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -145,7 +146,9 @@ public:
 
     //std::optional<std::vector<Detection>> TryTake(){
     //
-    //@brief - a finished batch of detections, handed over once; empty if none finished since the last call. O(1).
+    //@brief - a finished batch of detections, handed over once; empty if none finished since the last call.
+    //         If the detector threw on its thread (an OpenCV error in the model), the error is thrown here,
+    //         on the caller's thread, where the program's own error handling can see it. O(1).
     std::optional<std::vector<Detection>> TryTake();
 
     //double LastMs(){
@@ -156,7 +159,7 @@ public:
 private:
     //void Run(){
     //
-    //@brief - the thread's loop: wait for a picture (or quit), detect, store the batch and its time, repeat.
+    //@brief - the thread's loop: wait for a picture (or quit), detect, store the batch (or the error) and its time, repeat.
     void Run();
     YoloDetector& detector;
     mutable std::mutex shared;              // everything below is touched only under this lock
@@ -164,6 +167,7 @@ private:
     cv::Mat picture;
     bool pictureWaiting = false, busy = false, quit = false;
     std::optional<std::vector<Detection>> result;
+    std::exception_ptr failure;             // an error from the thread, thrown again by TryTake
     double lastMs = 0;
     std::thread thread;                     // last: it starts after everything above exists
 };

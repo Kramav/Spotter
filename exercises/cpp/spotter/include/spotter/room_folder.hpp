@@ -158,7 +158,8 @@ std::vector<std::filesystem::path> ScanFolders(const std::filesystem::path& room
 //@param2 - info: filled from room.txt
 //@param3 - problem: why it failed, for the console
 //
-//@brief - reads room.txt (format 1 cameras are unmirrored on reading). False if it's missing or broken. O(1).
+//@brief - reads room.txt (format 1 cameras are unmirrored on reading). False if it's missing or broken, or its depth_size or
+//         camera numbers are impossible (a damaged file). O(1).
 bool ReadRoomInfo(const std::filesystem::path& room, RoomInfo& info, std::string& problem);
 
 //bool LoadScan(const std::filesystem::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem, bool picture){
@@ -172,7 +173,8 @@ bool ReadRoomInfo(const std::filesystem::path& room, RoomInfo& info, std::string
 //
 //@brief - one scan's cloud, colour picture, pose and flags (not its features or full picture), with its
 //         ICP points made by SampleSurface (the same rule as when it was scanned). Refuses a scan without
-//         pose.txt or whose cloud doesn't hold pose.txt's point count. Format 1 is mirrored back. O(pixels).
+//         pose.txt, whose cloud.bin is the wrong size, or whose cloud doesn't hold pose.txt's point count.
+//         Format 1 is mirrored back. O(pixels).
 bool LoadScan(const std::filesystem::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem, bool picture = true);
 
 //bool SetExcluded(const std::filesystem::path& scanFolder, bool excluded){
@@ -188,7 +190,8 @@ bool SetExcluded(const std::filesystem::path& scanFolder, bool excluded);
 //@param1 - room: the room folder
 //@param2 - info: its room.txt, for the format
 //
-//@brief - reads landmarks.txt (format 1 mirrored back); empty if there's none. O(landmarks).
+//@brief - reads landmarks.txt (format 1 mirrored back); empty if there's none. A broken line is skipped, and a
+//         broken descriptor left out; it never throws. O(landmarks).
 std::vector<Landmark> LoadLandmarks(const std::filesystem::path& room, const RoomInfo& info);
 
 // --- The console ---

@@ -71,6 +71,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 
 ## Status (2026-11-08)
 
+- 2026-11-11: **D46, review initiative 2 done:** errors on the detector thread reach the caller; damaged room folders are refused with a reason; 13e's save can't throw mid-rescue; `check_yolo_decode` runs the real model; the always-passing `RecommendNext` check fixed. `ctest` 9/9 (check_structure untouched). Next: initiative 9 (doc and repo hygiene, legacy tag + option).
 - 2026-11-11: **D45, review initiative 1 done:** room scans live in the repo's `room_scans/` (gitignored, outside `build/`; the real room moved there unopened), and a save swaps each scan in whole, so a crash mid-save never loses an earlier save. `ctest` 10/10; not run on the sensor. The user chose: legacy gets a tag + build option OFF; all six living docs stay required.
 - 2026-11-11: **D44, the user's decision:** the Pi is the scanner only (capture colour + depth, export to a PC); processing on the user's PC at first, cloud later. On-device YOLO/NCNN judged unviable; the Pi milestone now measures capture and export.
 - 2026-11-11: adversarial architecture/roadmap review ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)). Verdict: the design is sound for what's scheduled; the problem is verification (most library work never ran on the sensor, the accuracy and Pi gates were skipped, D7's Linux build never happened). Urgent: the only real room scan is in `build/examples/room_scans/`, which the README says to delete; copy it out. Seven open decisions in its §7 (none logged yet); remediation items in Housekeeping.
@@ -342,7 +343,7 @@ PC and loads there (D44). Nothing else has to run on the Pi.
 
 - [ ] **Review 2026-11-11 ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)), §8 initiatives 1, 2, 9:**
   - [x] Data safety (D45): room scans default to the repo's `room_scans/`; `WriteScan` writes `.new` and swaps it in; K rewrites only new scans (pose.txt for the rest); `AskRoomFolder`'s false claim removed; the real room moved there. `check_room` covers cut-off saves. A real K on the sensor still to do.
-  - [ ] Exception boundaries: `AsyncDetector::Run` catches and reports; room-folder loads validate `depth_size` etc. and give reasons (13z's `LoadLandmarks`, `LoadTwinRoom`); `check_room.cpp:124` always passes.
+  - [x] Exception boundaries (D46): `AsyncDetector` hands its thread's errors to `TryTake`; room-folder loads refuse damage with a reason; `LoadTwinRoom` prints skipped scans; 13e's `SaveAll` catches; the always-true `RecommendNext` check fixed. Checks for each.
   - [ ] Doc and repo hygiene: ideas.md says ArUco is in our OpenCV (it isn't); the mirror note at the end of Status; "one self-check per module" (10 of 19); 13y missing from EXAMPLES.md and visualizer.html; `*.bmp` not gitignored; `zone_log.csv` tracked; licence note for the Ultralytics weights.
 - [ ] **Adversarial review 2026-11-05 ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)).**
       Open bugs in `legacy/`; fix each while porting it to the `spotter` library (D34):
