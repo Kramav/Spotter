@@ -65,7 +65,7 @@ std::vector<spotter::Scan> LoadAll(const std::filesystem::path& room, const spot
 //         exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
-    std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(std::filesystem::absolute(argc > 1 ? argv[1] : "room_scans"));
+    std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(std::filesystem::absolute(argc > 1 ? argv[1] : SPOTTER_REPO_ROOT "/room_scans"));
     if (rooms.empty()) { std::printf("No saved room there (13e saves them).\n"); return 1; }
     spotter::RoomInfo info;
     std::string problem;

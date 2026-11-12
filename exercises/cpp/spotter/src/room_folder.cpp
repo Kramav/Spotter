@@ -157,24 +157,39 @@ bool StartRoomFolder(const fs::path& room, const RoomInfo& info)
     return WriteRoomInfo(room, empty);
 }
 
-bool WritePose(const fs::path& room, size_t index, const Scan& scan)
+//std::string PoseText(size_t index, const Scan& scan){
+//
+//@param1 - index: the scan's index, from 0
+//@param2 - scan: the scan
+//
+//@brief - pose.txt's contents: turn, shift, flags, the cloud's point count and the stats. O(pixels).
+static std::string PoseText(size_t index, const Scan& scan)
 {
     size_t points = 0;
     for (const cv::Point3f& p : scan.cloud) points += !std::isnan(p.z);
-    return ReplaceText(ScanFolder(room, index) / "pose.txt",
-                       cv::format("# scan %zu's camera -> the room (scan 1's camera): room point = turn * point + shift\n", index + 1)
-                       + "turn " + TurnText(scan.pose.turn, "%.7f") + "\n"
-                       + cv::format("shift %.6f %.6f %.6f\n", scan.pose.shift.x, scan.pose.shift.y, scan.pose.shift.z)
-                       + cv::format("excluded %d\nsuspicious %d\n", (int)scan.excluded, (int)scan.suspicious)
-                       + cv::format("# how many readings cloud.bin holds: a cloud that doesn't match is refused\npoints %zu\n", points)
-                       + "stats " + scan.stats + "\n");
+    return cv::format("# scan %zu's camera -> the room (scan 1's camera): room point = turn * point + shift\n", index + 1)
+           + "turn " + TurnText(scan.pose.turn, "%.7f") + "\n"
+           + cv::format("shift %.6f %.6f %.6f\n", scan.pose.shift.x, scan.pose.shift.y, scan.pose.shift.z)
+           + cv::format("excluded %d\nsuspicious %d\n", (int)scan.excluded, (int)scan.suspicious)
+           + cv::format("# how many readings cloud.bin holds: a cloud that doesn't match is refused\npoints %zu\n", points)
+           + "stats " + scan.stats + "\n";
+}
+
+bool WritePose(const fs::path& room, size_t index, const Scan& scan)
+{
+    return ReplaceText(ScanFolder(room, index) / "pose.txt", PoseText(index, scan));
 }
 
 bool WriteScan(const fs::path& room, size_t index, const Scan& scan)
 {
-    fs::path dir = ScanFolder(room, index);
+    // Written beside the scan's folder as scan_NNN.new, then swapped in: an older save of this number stays
+    // whole until the new one is complete, so a crash mid-save never loses it. ScanFolders reads a swap cut off half-way.
+    const fs::path folder = ScanFolder(room, index);
+    fs::path dir = folder, old = folder;
+    dir += ".new";
+    old += ".old";
     std::error_code error;
-    fs::remove_all(dir, error);   // an older scan of this number, which U took back
+    fs::remove_all(dir, error);   // left by an earlier save that was cut off
     fs::create_directories(dir, error);
     if (error) return false;
     bool ok = (bool)std::ofstream(dir / "cloud.bin", std::ios::binary).write((const char*)scan.cloud.data(), scan.cloud.size() * sizeof(cv::Point3f));
@@ -189,14 +204,39 @@ bool WriteScan(const fs::path& room, size_t index, const Scan& scan)
     }
     for (const auto& entry : fs::directory_iterator(dir, error))   // bug 4: on the disk before pose.txt says "complete"
         ok = SyncToDisk(entry.path()) && ok;
-    return ok && WritePose(room, index, scan);
+    if (!ok || !ReplaceText(dir / "pose.txt", PoseText(index, scan))) return false;
+    // The swap: folder -> .old, .new -> folder, then .old goes. Cut off between the two renames, both are whole.
+    fs::remove_all(old, error);
+    if (fs::exists(folder, error)) fs::rename(folder, old, error);
+    if (error) return false;
+    fs::rename(dir, folder, error);
+    if (error) return false;
+    fs::remove_all(old, error);
+    return true;
 }
 
-bool RemoveScan(const fs::path& room, size_t index)
+//int ScanNumber(const fs::path& folder){
+//
+//@param1 - folder: a folder path
+//
+//@brief - the number in a folder named scan_NNN (5 for scan_005), also for WriteScan's scan_NNN.new and scan_NNN.old; 0 for
+//         any other name. Sorting by it puts scan_1000 after scan_999 (bug 5). O(name length).
+static int ScanNumber(const fs::path& folder)
 {
+    const std::string name = folder.stem().string(), swap = folder.extension().string();
+    if (name.rfind("scan_", 0) != 0 || name.size() == 5 || name.find_first_not_of("0123456789", 5) != std::string::npos) return 0;
+    return swap.empty() || swap == ".new" || swap == ".old" ? std::atoi(name.c_str() + 5) : 0;
+}
+
+bool RemoveScansFrom(const fs::path& room, size_t index)
+{
+    std::vector<fs::path> doomed;
     std::error_code error;
-    fs::remove_all(ScanFolder(room, index), error);
-    return !error;
+    for (const auto& entry : fs::directory_iterator(room, error))
+        if (ScanNumber(entry.path()) > (int)index) doomed.push_back(entry.path());
+    bool ok = true;
+    for (const fs::path& path : doomed) { fs::remove_all(path, error); ok = ok && !error; }
+    return ok;
 }
 
 bool WriteLandmarks(const fs::path& room, const std::vector<Landmark>& landmarks)
@@ -233,25 +273,23 @@ bool FinishRoomFolder(const fs::path& room, RoomInfo& info, const std::vector<Sc
 
 // --- Reading ---
 
-//int ScanNumber(const fs::path& folder){
-//
-//@param1 - folder: a folder path
-//
-//@brief - the number in a folder named scan_NNN (5 for scan_005), or 0 for any other name. Sorting by it puts scan_1000
-//         after scan_999 (bug 5). O(1).
-static int ScanNumber(const fs::path& folder)
-{
-    std::string name = folder.filename().string();
-    return name.rfind("scan_", 0) == 0 ? std::atoi(name.c_str() + 5) : 0;
-}
-
 std::vector<fs::path> ScanFolders(const fs::path& room)
 {
-    std::vector<fs::path> folders;
+    // Per number: scan_NNN; after a swap cut off between its renames (WriteScan), the finished .new, else the .old.
+    auto rank = [](const fs::path& p) { return p.extension() == ".new" ? 1 : p.extension() == ".old" ? 2 : 0; };
+    std::map<int, fs::path> chosen;   // sorted by number
     std::error_code error;
     for (const auto& entry : fs::directory_iterator(room, error))
-        if (entry.is_directory(error) && ScanNumber(entry.path()) > 0) folders.push_back(entry.path());
-    std::sort(folders.begin(), folders.end(), [](const fs::path& a, const fs::path& b) { return ScanNumber(a) < ScanNumber(b); });
+    {
+        const fs::path& p = entry.path();
+        const int number = ScanNumber(p);
+        if (number <= 0 || !entry.is_directory(error)) continue;
+        if (rank(p) == 1 && !fs::exists(p / "pose.txt", error)) continue;   // a .new cut off before it was finished
+        auto it = chosen.find(number);
+        if (it == chosen.end() || rank(p) < rank(it->second)) chosen[number] = p;
+    }
+    std::vector<fs::path> folders;
+    for (const auto& [number, p] : chosen) folders.push_back(p);
     return folders;
 }
 
@@ -416,7 +454,7 @@ std::string Ask(const std::string& question)
 
 fs::path AskRoomFolder(const std::string& defaultFolder)
 {
-    std::printf("\n=== Where should this room be saved? Every scan goes there the moment it is placed. cancel quits. ===\n");
+    std::printf("\n=== Where should this room be saved? cancel quits. ===\n");
     std::string folder = Ask(cv::format("Folder [%s]: ", fs::absolute(defaultFolder).string().c_str()));
     if (folder == "cancel") return {};
     if (folder.empty()) folder = defaultFolder;

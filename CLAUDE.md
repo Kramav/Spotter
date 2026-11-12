@@ -3,8 +3,9 @@
 Learning object detection, recognition and tracking. The current focus is Kinect v2 RGB-D fusion
 (detect in colour, measure distance with depth), following `kinect_rgbd_fusion_guide.md`.
 
-**Deployment target: Raspberry Pi (Linux, CPU only, no GPU compute).** Develop on Windows for now
-(D7). Anything that needs a GPU is out (D11).
+**Deployment target: Raspberry Pi as the scanner (Linux, CPU only, no GPU compute).** It captures
+colour and depth and exports them to a PC, which does the processing (D44). No detection on the Pi.
+Develop on Windows for now (D7). Anything that needs a GPU is out on the Pi (D11).
 
 **Long-term goal: a 3D map of the space.** Staged plan: fixed camera → several fixed stations
 merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camera stays fixed for now.
@@ -70,6 +71,9 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 
 ## Status (2026-11-08)
 
+- 2026-11-11: **D45, review initiative 1 done:** room scans live in the repo's `room_scans/` (gitignored, outside `build/`; the real room moved there unopened), and a save swaps each scan in whole, so a crash mid-save never loses an earlier save. `ctest` 10/10; not run on the sensor. The user chose: legacy gets a tag + build option OFF; all six living docs stay required.
+- 2026-11-11: **D44, the user's decision:** the Pi is the scanner only (capture colour + depth, export to a PC); processing on the user's PC at first, cloud later. On-device YOLO/NCNN judged unviable; the Pi milestone now measures capture and export.
+- 2026-11-11: adversarial architecture/roadmap review ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)). Verdict: the design is sound for what's scheduled; the problem is verification (most library work never ran on the sensor, the accuracy and Pi gates were skipped, D7's Linux build never happened). Urgent: the only real room scan is in `build/examples/room_scans/`, which the README says to delete; copy it out. Seven open decisions in its §7 (none logged yet); remediation items in Housekeeping.
 - 2026-11-09: 13w's floor came out too high on the user's room (D43). `FindTwinFloor` now takes a patch under the walls' foot when it's the biggest level piece (new `check_room_twin` case: lower walls hidden, a couch seat); 13w thins to 3 cm cubes first; the `Floor:` line prints the walls' foot. Cause not confirmed on the real room: waiting for the user's console lines.
 - 2026-11-09: **13w Room Shell** (the user's ask; D42): only the room itself as a textured `.obj`. Full-height walls (BuildRoom's), FindTwinFloor's floor, the ceiling as the highest level readings over 0.5 m^2 (a fan never wins), each surface textured per 1 cm from the scans' full colour pictures (depth agreement + colour-camera check + odd colours dropped), unseen parts filled with inpainted slow colour + the surface's own pattern quilted in; K saves `.obj` + `.mtl` + `.bmp`s. A temporary harness (synthetic room: plank floor, couch, poster, fan) passed every check, and the pattern check failed with the quilting off. Not run on a real room, the view not checked by eye. `main()` 36 lines.
 - 2026-11-08: **13x Room Fill** (the user's ask): legacy Demo 6's filling as an example of its own, no Kinect. It reads a 13e room folder, fills and marks the flat surfaces' holes, G marked / unmarked / off, K saves `room_filled_<time>.ply` into the room folder. Runs on `check_room_twin`'s synthetic folder (floor -1.20 m, couch top 0.60 m, 2.9 m^2 filled in 0.2 s); K and the view not checked by eye, not run on a real room. Also: legacy builds into `build\legacy\` and the docs point to `examples/` (D41).
@@ -160,19 +164,17 @@ example, each building on the one before. Numbers are the planned example folder
       It also takes the plane's own distance, fixing 06b's tilt error (3.255 → 3.16 m at about
       14°). Radar not yet checked by eye.
 
-### Milestone — Pi bring-up (PAUSED by the user 2026-10-30; stage B goes ahead on the PC meanwhile)
+### Milestone — Pi bring-up: the scanner (PAUSED by the user 2026-10-30; scope narrowed by D44)
 
-- [ ] Build and run on Linux, then on the Raspberry Pi. Measure the depth fps with the filters on
-      and off, check the Kinect is stable on the Pi's USB 3 port, and time YOLO. Expect over 1 s
-      per frame on a Pi 5, versus about 170 ms on the Ryzen. The results decide how heavy stages B–D
-      can be. Already available: background detection (05c) and the 320 model.
-- [ ] **Lever 3, NCNN** (BSD, the usual YOLO engine on a Pi): export `yolo26n.pt` to NCNN and
-      compare its speed with OpenCV DNN on the Pi at 640 and 320. Adding it means a vcpkg
-      dependency (`ncnn`) and a second detector backend. Decide from the measurements.
-- [ ] **Lever 4, INT8 quantisation:** an 8-bit model (NCNN int8, needs a calibration image set).
-      Measure the speed gain against the accuracy loss on the same test scene.
-- [ ] If the CPU still isn't enough: the Raspberry Pi AI HAT (Hailo) is the only non-CPU option.
-      It would mean revisiting the CPU-only rule (D11).
+"Works on the Pi" = the scanner captures each spot's colour and depth, and the result exports to a
+PC and loads there (D44). Nothing else has to run on the Pi.
+
+- [ ] Build and run on Linux (a PC first), then on the Raspberry Pi.
+- [ ] Measure capture on the Pi: depth fps with the filters on and off, the Kinect's stability on the
+      USB 3 port, time per spot (the 30-frame average), time to save to the SD card.
+- [ ] Export: a folder captured on the Pi, copied to the PC, loads in 13z (and 13w).
+- [ ] Decide D44's open questions: capture format, headless control, saving as you go.
+- [-] ~~Lever 3, NCNN; lever 4, INT8; the AI HAT (Hailo)~~: dropped, no detection on the Pi (D44).
 
 ### Stage B — the room in 3D (fixed camera)
 
@@ -338,6 +340,10 @@ example, each building on the one before. Numbers are the planned example folder
 
 ### Housekeeping
 
+- [ ] **Review 2026-11-11 ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)), §8 initiatives 1, 2, 9:**
+  - [x] Data safety (D45): room scans default to the repo's `room_scans/`; `WriteScan` writes `.new` and swaps it in; K rewrites only new scans (pose.txt for the rest); `AskRoomFolder`'s false claim removed; the real room moved there. `check_room` covers cut-off saves. A real K on the sensor still to do.
+  - [ ] Exception boundaries: `AsyncDetector::Run` catches and reports; room-folder loads validate `depth_size` etc. and give reasons (13z's `LoadLandmarks`, `LoadTwinRoom`); `check_room.cpp:124` always passes.
+  - [ ] Doc and repo hygiene: ideas.md says ArUco is in our OpenCV (it isn't); the mirror note at the end of Status; "one self-check per module" (10 of 19); 13y missing from EXAMPLES.md and visualizer.html; `*.bmp` not gitignored; `zone_log.csv` tracked; licence note for the Ultralytics weights.
 - [ ] **Adversarial review 2026-11-05 ([docs/review-2026-11-05.md](docs/review-2026-11-05.md)).**
       Open bugs in `legacy/`; fix each while porting it to the `spotter` library (D34):
   - [x] ICP: a zero cross product gives a NaN normal that ruins the solve (13e:535, also 13–13d and Demos 4/6). Fixed in `spotter::Icp`/`SampleSurface` (`check_icp`); 13e ported (D38); Demos 4/6 ported on it (D40).

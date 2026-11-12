@@ -75,7 +75,7 @@ const std::string Keys = "G  filled parts tinted / true colour   K  save the .ob
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
 
-const std::string RoomsFolder = "room_scans";   // 13e's default, beside the .exe
+const std::string RoomsFolder = SPOTTER_REPO_ROOT "/room_scans";   // 13e's default (gitignored, outside build/)
 
 // --- The surfaces (new) ---
 const float CubeMeters = 0.03f;                 // the floor and ceiling searches use one point per 3 cm cube (as Demo 4's room)

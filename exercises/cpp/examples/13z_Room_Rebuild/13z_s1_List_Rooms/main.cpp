@@ -2,7 +2,7 @@
 //  13z · step 1 of 2 · Find the saved rooms                (no Kinect needed)
 //
 //  A saved room is a folder holding a room.txt (13e writes one). This
-//  looks under a folder (the first argument, or room_scans where it runs)
+//  looks under a folder (the first argument, or the repo's room_scans/)
 //  up to 3 folders deep, lists each room, then checks every scan of each:
 //  does it load (spotter::LoadScan), and if not, why not. A scan cut off
 //  by a crash has no pose.txt, or a cloud.bin that doesn't match it.
@@ -26,7 +26,7 @@
 //         Returns 0 on a normal exit.
 int main(int argc, char** argv)
 {
-    const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : "room_scans");
+    const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : SPOTTER_REPO_ROOT "/room_scans");
     std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(where);
     std::printf("%zu saved rooms in %s\n", rooms.size(), where.string().c_str());
     for (const spotter::SavedRoom& room : rooms)

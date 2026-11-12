@@ -86,7 +86,7 @@ int main()
 {
     spotter::KinectSource kinect(spotter::KinectSource::Options{});
     Room room;
-    room.folder = spotter::AskRoomFolder("room_scans");   // new: where, before anything is scanned
+    room.folder = spotter::AskRoomFolder(SPOTTER_REPO_ROOT "/room_scans");   // new: where, before anything is scanned
     if (!kinect.IsOpen() || room.folder.empty()) return 1;
     room.info.program = "13e_s3_Save_The_Folder";
     room.info.calibration = kinect.CalibrationText();
