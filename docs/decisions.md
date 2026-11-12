@@ -962,3 +962,51 @@ The user ran 13w on their room: the floor came out well above where it should be
 - **Not confirmed on the user's room.** A synthetic room scanned mostly tilted up, with cabinets
   along the walls, found the floor right with or without the thinning, so the density cause is
   unproven. The user's console lines (`Floor:`, `level readings at …`) will tell which case it was.
+
+## D44: the Pi is the scanner; processing happens on a PC (2026-11-11)
+
+The user's decision, after the 2026-11-11 review ([review-2026-11-11-architecture.md](review-2026-11-11-architecture.md)).
+
+- **No detection on the Pi for now.** The user judged on-device YOLO (OpenCV DNN, NCNN, INT8)
+  unviable at this point. The Pi milestone's levers 3 and 4 and the AI HAT are dropped, not deferred
+  to a measurement.
+- **The model:** collect scans on the Pi; process them on the user's own PC at first (the cloud is a
+  later option). Placing, merging, meshing, texturing and detection run on the PC.
+- **What "works on the Pi" means:** the scanner builds and runs on the Pi, captures each spot's colour
+  and depth, and the result can be exported to a PC, where it loads. Nothing else has to run on the
+  Pi. 13e's live placement (ORB + ICP, the anchors, the next-shot advice) is welcome there if it's
+  fast enough, but isn't required.
+- **Changes:** "Deployment target" in CLAUDE.md now means the scanner. The Pi milestone measures
+  capture (depth fps, USB stability, time per spot, saving to the SD card) instead of YOLO.
+  `FuseScans`' memory (about 2 GB) is no longer a Pi problem.
+- **Open, not decided here:**
+  - the capture format: today's room folder, or raw depth as 16-bit PNG + colour + calibration
+    (needs OpenCV's `png`; lets RTAB-Map and Open3D read the same capture);
+  - how the scanner is controlled without a desktop (screen, VNC, button, phone page);
+  - whether the PC side may use a GPU (D11 was written for the Pi);
+  - saving as you go on the Pi (power cuts, SD card) against D39's save-once;
+  - sending room scans to a cloud, a privacy question under D29.
+
+## D45: room scans outside build/, and saves that can't destroy an earlier save (2026-11-11)
+
+The review's initiative 1 ([review-2026-11-11-architecture.md](review-2026-11-11-architecture.md)); the
+user chose the folder and kept D39's save-once.
+
+- **Where:** every program's default is now the repo's `room_scans/` (`SPOTTER_REPO_ROOT "/room_scans"`,
+  gitignored): 13e and its step 3, 13w, 13x, 13y, 13z and its steps, Demos 4 and 6. Before, it was
+  relative to where the program ran, so 13e's real room landed in `build/examples/room_scans/`, which
+  the README's troubleshooting told you to delete. That room was moved, unopened.
+- **How (`WriteScan`):** a scan is written as `scan_NNN.new` (every file flushed, `pose.txt` last), then
+  swapped in: `scan_NNN` -> `.old`, `.new` -> `scan_NNN`, `.old` deleted. Before, it deleted the scan's
+  folder first, so a blue screen (D25) during a second K lost scans the first K had saved.
+  `ScanFolders` reads a swap cut off between its renames (the finished `.new`, else the `.old`), and
+  ignores an unfinished `.new`. `ScanNumber` now accepts only `scan_` + digits (+ `.new`/`.old`):
+  before, `scan_005.new` would have been read as a second scan 5.
+- **Only what changed:** 13e remembers which scans' files are on disk; K writes those that aren't, and
+  only `pose.txt` (already atomic) for the rest, since X and P change nothing else. `RemoveScan`
+  became `RemoveScansFrom` (U's scans and any `.new`/`.old` a cut-off save left).
+- `AskRoomFolder` no longer says "every scan goes there the moment it is placed" (false since D39).
+- **Checked:** `check_room` has seven new cases: a save swapped in whole; cut off while writing; a
+  first save cut off; cut off between the renames; only the `.old` left; the next save tidying up;
+  `RemoveScansFrom`. Breaking the unfinished-`.new` rule makes it fail. `ctest` 10/10. Not run on the
+  sensor: a real K is the user's check.

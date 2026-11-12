@@ -78,7 +78,7 @@ const std::string Keys = "G  fill: marked / unmarked / off   L  relearn and loca
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
 
-const std::string RoomsFolder = "room_scans";   // 13e's default, beside the .exe
+const std::string RoomsFolder = SPOTTER_REPO_ROOT "/room_scans";   // 13e's default (gitignored, outside build/)
 const float CubeMeters = 0.03f;                 // the room's points: one per 3 cm cube (13's export)
 
 // --- The doll's house ---

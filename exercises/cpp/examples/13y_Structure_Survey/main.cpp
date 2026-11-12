@@ -22,7 +22,7 @@
 //  The stored poses are 13e's own estimates (features + ICP), not ground
 //  truth: agreement means "consistent", not "accurate".
 //
-//  Run:  13y_Structure_Survey [folder]   (default: room_scans where it runs)
+//  Run:  13y_Structure_Survey [folder]   (default: the repo's room_scans/)
 //        13y_Structure_Survey room_scans view 12   one scan's Relocate answers in 3D: green = its
 //            stored pose, red = Relocate's (N steps through the candidates), grey = the other scans
 //        13y_Structure_Survey room_scans 11        sections 4 then 3, from scan 11 (resumes a long run)
@@ -457,7 +457,7 @@ void ViewScan(const Room& room, int number)
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
-    const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : "room_scans");
+    const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : SPOTTER_REPO_ROOT "/room_scans");
     std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(where);
     std::printf("%zu saved rooms in %s\n", rooms.size(), where.string().c_str());
     for (const spotter::SavedRoom& saved : rooms)

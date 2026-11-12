@@ -45,6 +45,7 @@ struct Session
     std::vector<spotter::Landmark> landmarks;
     spotter::ColourModel colourModel;  // the colour camera as seen from the depth camera (13d), from the latest scan
     bool saved = false;                // the folder holds every change
+    std::vector<bool> onDisk;          // per scan: its files are in the folder (only pose.txt may be older)
 
     // Scanning and the background jobs
     spotter::DepthAverager averager;
@@ -157,17 +158,21 @@ inline void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::P
 //
 //@param1 - s: the session
 //
-//@brief - the whole folder: StartRoomFolder, removes scan folders left from scans that U took back, every scan
-//         (pose.txt last, flushed to disk), landmarks.txt, then points.ply and room.txt with finished 1. Prints
-//         the result and the time; on failure the scans stay in memory and K tries again. True if it all saved.
-//         O(scans x pixels).
+//@brief - the whole folder: StartRoomFolder, removes scan folders left from scans that U took back, each scan
+//         not yet on disk (WriteScan: pose.txt last, swapped in whole) and the others' pose.txt (X and P change
+//         only that), landmarks.txt, then points.ply and room.txt with finished 1. A save cut off part-way leaves
+//         the earlier save whole. Prints the result and the time; on failure the scans stay in memory and K tries
+//         again. True if it all saved. O(new scans x pixels) for the scans, plus FinishRoomFolder.
 inline bool SaveAll(Session& s)
 {
     auto start = std::chrono::steady_clock::now();
     s.info.scans = (int)s.scans.size();
-    bool ok = spotter::StartRoomFolder(s.folder, s.info);
-    for (size_t i = s.scans.size(); std::filesystem::exists(spotter::ScanFolder(s.folder, i)); i++) spotter::RemoveScan(s.folder, i);
-    for (size_t i = 0; i < s.scans.size() && ok; i++) ok = spotter::WriteScan(s.folder, i, s.scans[i]);
+    bool ok = spotter::StartRoomFolder(s.folder, s.info) && spotter::RemoveScansFrom(s.folder, s.scans.size());
+    for (size_t i = 0; i < s.scans.size() && ok; i++)
+    {
+        ok = s.onDisk[i] ? spotter::WritePose(s.folder, i, s.scans[i]) : spotter::WriteScan(s.folder, i, s.scans[i]);
+        s.onDisk[i] = s.onDisk[i] || ok;
+    }
     ok = ok && spotter::WriteLandmarks(s.folder, s.landmarks);
     size_t points = 0;
     ok = ok && spotter::FinishRoomFolder(s.folder, s.info, s.scans, s.roomOptions, points);
@@ -189,6 +194,7 @@ inline void AddScan(Session& s, spotter::Scan scan)
 {
     WaitForReaders(s);   // the live check or the advice may be reading `scans` (13e didn't wait for the first scan)
     s.scans.push_back(std::move(scan));
+    s.onDisk.push_back(false);
     s.shownPoints.emplace_back();
     s.shownColours.emplace_back();
     Shown(s, s.scans.back(), s.shownPoints.back(), s.shownColours.back());
@@ -381,6 +387,7 @@ inline void OnUndo(Session& s)
     if (!Idle(s) || s.scans.empty()) return;
     WaitForReaders(s);
     s.scans.pop_back();
+    s.onDisk.pop_back();
     s.shownPoints.pop_back();
     s.shownColours.pop_back();
     if (s.selected >= (int)s.scans.size()) s.selected = -1;

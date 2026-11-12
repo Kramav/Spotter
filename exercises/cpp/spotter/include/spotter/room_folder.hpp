@@ -1,4 +1,5 @@
-// spotter/room_folder.hpp: a scanned room on disk (13e writes it as it scans, 13z reads it back).
+// spotter/room_folder.hpp: a scanned room on disk (13e writes it on K, Q or the rescue; 13z reads it back).
+// Programs keep rooms in the repo's room_scans/ (gitignored), outside build/, so a rebuild never deletes them.
 //
 //   .gitignore         "*": git never takes anything in this folder
 //   room.txt           format, program, cameras, scan count; after finishing: first_camera_turn, finished 1
@@ -79,8 +80,9 @@ bool WriteRoomInfo(const std::filesystem::path& room, const RoomInfo& info);
 //@param3 - scan: the scan to write
 //
 //@brief - every file of the scan's folder (cloud.bin, colour.bmp, colour_full.bmp, colour_index.bin,
-//         features.yml), each flushed to disk, then pose.txt last with the cloud's point count, so a
-//         scan cut off half-way is skipped on reading. False if anything fails. O(pixels).
+//         features.yml), each flushed to disk, then pose.txt last with the cloud's point count. Written as
+//         scan_NNN.new and then swapped in, so an older save of this scan stays whole until the new one is
+//         complete; ScanFolders reads a swap that was cut off. False if anything fails. O(pixels).
 bool WriteScan(const std::filesystem::path& room, size_t index, const Scan& scan);
 
 //bool WritePose(const std::filesystem::path& room, size_t index, const Scan& scan){
@@ -92,14 +94,14 @@ bool WriteScan(const std::filesystem::path& room, size_t index, const Scan& scan
 //@brief - rewrites only that scan's pose.txt, atomically. False if it fails. O(1).
 bool WritePose(const std::filesystem::path& room, size_t index, const Scan& scan);
 
-//bool RemoveScan(const std::filesystem::path& room, size_t index){
+//bool RemoveScansFrom(const std::filesystem::path& room, size_t index){
 //
 //@param1 - room: the room folder
-//@param2 - index: the scan's index, from 0
+//@param2 - index: the first scan index to delete, from 0
 //
-//@brief - deletes that scan's folder (after U). Later scans keep their numbers. False if it fails.
-//         O(files in it).
-bool RemoveScan(const std::filesystem::path& room, size_t index);
+//@brief - deletes the folders of that scan and every later one (scans U took back), with any scan_NNN.new
+//         or .old a cut-off save left. False if it fails. O(files in them).
+bool RemoveScansFrom(const std::filesystem::path& room, size_t index);
 
 //bool WriteLandmarks(const std::filesystem::path& room, const std::vector<Landmark>& landmarks){
 //
@@ -146,7 +148,8 @@ std::vector<SavedRoom> FindRooms(const std::filesystem::path& root, int maxDepth
 //
 //@param1 - room: the room folder
 //
-//@brief - its scan_NNN folders, sorted by number (scan_1000 after scan_999). O(k log k) for k folders.
+//@brief - its scan_NNN folders, sorted by number (scan_1000 after scan_999). Where a save was cut off
+//         mid-swap (WriteScan), the finished scan_NNN.new stands in, else scan_NNN.old. O(k log k) for k folders.
 std::vector<std::filesystem::path> ScanFolders(const std::filesystem::path& room);
 
 //bool ReadRoomInfo(const std::filesystem::path& room, RoomInfo& info, std::string& problem){

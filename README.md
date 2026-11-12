@@ -232,7 +232,7 @@ Change a setting and rebuild with `cmake --build --preset default` to see what i
 | `'cmake' is not recognized` | You're in a normal terminal. Use the **x64 Native Tools Command Prompt** (step 3). |
 | Build fails with very long paths | Clone to a short path such as `E:\Spotter` (step 1). |
 | The window opens and closes immediately | Run it from the command prompt instead of double-clicking, so you can read the error. |
-| Program exits silently, code `C0000135` | A DLL is missing next to the `.exe`. Delete the `build` folder and rebuild. |
+| Program exits silently, code `C0000135` | A DLL is missing next to the `.exe`. Delete the `build` folder and rebuild (room scans are safe: they live in `room_scans\` at the repo root, not in `build`). |
 | **The whole PC blue-screens** while a Kinect program runs (seen once: `ATTEMPTED_SWITCH_FROM_DPC`, 0xB8) | A kernel driver crashed, not our program. Suspects and fixes are in [D25](docs/decisions.md): first quit Microsoft's `KinectService`/`KinectMonitor`, which still run beside libusbK. 13e keeps the scans in memory until K or Q (or a lost Kinect), so press K now and then in a long scan. |
 
 More detail (Linux and Raspberry Pi setup, how the build stays reproducible, known limits) is in
@@ -247,7 +247,7 @@ the whole room. It takes about 10 minutes for a first try. Use `13e_Room_Scan`; 
 scanner.
 
 - **Before the windows open,** it asks in the console where to save: `Folder` (Enter =
-  `room_scans\`) and `Name` (Enter = `room_<date>_<time>`).
+  `room_scans\` at the repo root, outside `build`) and `Name` (Enter = `room_<date>_<time>`).
 - **Nothing is written while you scan.** The scans stay in memory. **K** (or **Q** on the way out)
   writes the folder. If the Kinect is lost or the program fails, it writes the folder by itself first,
   with no questions, so a lost Kinect or an error costs nothing already scanned. A crash or a blue
@@ -294,7 +294,7 @@ scanner.
        cmake --build --preset default --target 13e_Room_Scan
        build\examples\13e_Room_Scan.exe
 
-   The scans and the model go into the folder you name at the start (Enter = `room_scans\` in the folder you run it from).
+   The scans and the model go into the folder you name at the start (Enter = `room_scans\` at the repo root).
 
 ### Scan
 
@@ -347,8 +347,8 @@ E's `.obj` keeps one colour per 2 cm corner, averaged over every scan, so poster
 blur. The folder 13e writes (on **K**, on **Q**, or by itself when the Kinect is lost) keeps every
 scan, so you can rebuild with 13z later.
 
-1. **At the start,** 13e asks in its console window for the folder (Enter = `room_scans\` where you
-   run it, or type or paste any folder) and the name (Enter = `room_<date>_<time>`). A room folder
+1. **At the start,** 13e asks in its console window for the folder (Enter = `room_scans\` at the repo
+   root, or type or paste any folder) and the name (Enter = `room_<date>_<time>`). A room folder
    of the same name is overwritten only if you answer `y`; type `cancel` at either question to stop.
 2. The folder holds every scan's points, pictures and placement, plus **`points.ply`**. That's
    every scan's own points with their own colours, what the viewer shows, with no averaging. Open
@@ -358,7 +358,7 @@ scan, so you can rebuild with 13z later.
 
        build\examples\13z_Room_Rebuild.exe
 
-   It lists every saved room in `room_scans\` (or give a folder: `13z_Room_Rebuild D:\scans`).
+   It lists every saved room in the repo's `room_scans\` (or give a folder: `13z_Room_Rebuild D:\scans`).
    Then you choose:
    - **Which rooms:** `2`, `1,3`, or Enter for all.
    - **What to do:** view, build `.obj`, build `.ply`, or both.

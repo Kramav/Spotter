@@ -52,7 +52,7 @@ namespace fs = std::filesystem;
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
 
-const std::string SearchFolder = "room_scans";   // where 13e saves by default; relative = where it runs
+const std::string SearchFolder = SPOTTER_REPO_ROOT "/room_scans";   // where 13e saves by default (gitignored, outside build/)
 const int SearchDepth = 3;                       // how many folders deep to look for saved rooms
 const int ShowStep = 2;                          // the viewer draws every 2nd pixel of each scan
 const size_t MaxShownPoints = 600000;

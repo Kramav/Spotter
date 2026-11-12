@@ -207,6 +207,35 @@ int main()
     fs::remove_all(folder / "scan_1000", error);
     fs::remove_all(folder / "scan_999", error);
 
+    // A second save of a scan is swapped in whole; one cut off part-way leaves a whole scan to read.
+    const fs::path four = spotter::ScanFolder(folder, 3), fresh = fs::path(four) += ".new", older = fs::path(four) += ".old";
+    auto readsAs = [&](const fs::path& expected, const spotter::Scan& scan) {
+        std::vector<fs::path> now = spotter::ScanFolders(folder);
+        spotter::Scan got;
+        int n;
+        return now.size() == 5 && now[3] == expected && spotter::LoadScan(now[3], read, got, n, problem) && n == 4 && SameCloud(got.cloud, scan.cloud);
+    };
+    Check(spotter::WriteScan(folder, 3, scans[3]) && readsAs(four, scans[3]) && !fs::exists(fresh) && !fs::exists(older),
+          "saving a scan again swaps it in whole, leaving no .new or .old");
+    fs::copy(four, fresh, fs::copy_options::recursive, error);
+    fs::remove(fresh / "pose.txt", error);
+    Check(readsAs(four, scans[3]), "cut off while writing the new copy: the old save is read, the unfinished .new ignored");
+    fs::copy(fresh, folder / "scan_006.new", fs::copy_options::recursive, error);
+    Check(readsAs(four, scans[3]), "a new scan's first save cut off (an unfinished .new, nothing else): not a scan");
+    fs::remove_all(folder / "scan_006.new", error);
+    fs::remove_all(fresh, error);
+    fs::copy(four, fresh, fs::copy_options::recursive, error);
+    fs::rename(four, older, error);
+    Check(readsAs(fresh, scans[3]), "cut off between the swap's renames: the finished .new is read");
+    fs::remove_all(fresh, error);
+    Check(readsAs(older, scans[3]), "only the .old left: it is read");
+    Check(spotter::WriteScan(folder, 3, scans[3]) && readsAs(four, scans[3]) && !fs::exists(older), "the next save tidies up");
+    fs::create_directories(folder / "scan_005.old", error);
+    fs::create_directories(folder / "scan_007x", error);
+    Check(spotter::RemoveScansFrom(folder, 4) && spotter::ScanFolders(folder).size() == 4 && !fs::exists(folder / "scan_005.old") &&
+          fs::exists(folder / "scan_007x"), "RemoveScansFrom deletes scan 5 and its leftovers, and nothing that isn't a scan");
+    fs::remove_all(folder / "scan_007x", error);
+
     // A format-1 scan: what legacy 13e wrote for the same view (mirrored), must load as scan 1 is.
     const fs::path old = fs::temp_directory_path() / "spotter_check_room_format1";
     fs::remove_all(old, error);

@@ -69,7 +69,7 @@ const std::string Keys = "G  fill: marked / unmarked / off   K  save the .ply   
 //  Settings: change these and re-run
 // ---------------------------------------------------------------------
 
-const std::string RoomsFolder = "room_scans";   // 13e's default, beside the .exe
+const std::string RoomsFolder = SPOTTER_REPO_ROOT "/room_scans";   // 13e's default (gitignored, outside build/)
 const float CubeMeters = 0.03f;                 // the room's points: one per 3 cm cube
 const float CutAboveFloorMeters = 1.6f;         // walls are filled up to this; the view hides what's higher
 const float UnderFloorMeters = 0.10f;           // readings this far under the floor are noise (D33)

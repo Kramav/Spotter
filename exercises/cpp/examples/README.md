@@ -202,7 +202,7 @@ describe each idea.
 keys are shown along the bottom. Nothing is saved. The stand set-up is in
 [`../legacy/presentation/README.md`](../legacy/presentation/README.md). Differences from legacy:
 - Demos 4 and 6 load a 13e room folder: the one named on the command line, or the newest under
-  `room_scans` beside the .exe (legacy read 13's `room_scan_*.obj`).
+  the repo's `room_scans/` (legacy read 13's `room_scan_*.obj`).
 - The floor rule (D33) is one library function for both, and it now also refuses a level patch
   well under the walls' foot (the review's bug 7).
 - Demo 5 refuses a height when the top or bottom row has too few readings (the review's bug 12).

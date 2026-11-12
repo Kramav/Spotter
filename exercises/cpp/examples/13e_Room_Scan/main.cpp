@@ -7,7 +7,7 @@
 //  one go on K, on Q, when the Kinect is lost, or on any error (D39).
 //
 //    1. Folder first  asked in the console before the windows open (Enter =
-//                     room_scans, then Enter = room_<date>_<time>).
+//                     the repo's room_scans/, then Enter = room_<date>_<time>).
 //    2. SPACE scans   hold still: 60 frames averaged (07), then its colour
 //                     features (11b, near and far: 13d) and depth make a Scan.
 //    3. Placed        in the background, against the earlier scans: features
@@ -68,7 +68,7 @@ const std::string Keys = "SPACE scan here   U undo the last scan   E export   K 
 
 const int AverageFrames = 60;          // per scan: noise falls as 1 / sqrt(frames) (07)
 const float MaxDepthMeters = 6.0f;
-const std::string SaveFolder = "room_scans";   // Enter at the first question; relative = where it runs
+const std::string SaveFolder = SPOTTER_REPO_ROOT "/room_scans";   // Enter at the first question: the repo's room_scans/ (gitignored, outside build/)
 const int LiveEveryMs = 500;           // the live anchors, this often
 const int ShowStep = 2;                // the viewer draws every 2nd pixel of each scan...
 const size_t MaxShownPoints = 600000;  // ...and at most this many points in all
