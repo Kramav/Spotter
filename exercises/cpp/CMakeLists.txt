@@ -49,7 +49,8 @@ target_compile_definitions(spotter PRIVATE SPOTTER_BUILD_DIR="${CMAKE_BINARY_DIR
 add_library(spotter_console_guard OBJECT spotter/console_guard/console_guard.cpp)
 target_link_libraries(spotter_console_guard PUBLIC ${OpenCV_LIBS})
 
-# One self-check per module, on synthetic data (no Kinect). Run them all: ctest --test-dir build
+# Self-checks on synthetic data (no Kinect): one per library module, plus three that include an example's own code
+# (13e's session, 13x's fill, 13w's shell). Run them all: ctest --test-dir build
 enable_testing()
 file(GLOB spotter_checks CONFIGURE_DEPENDS spotter/checks/check_*.cpp)
 foreach(check_source ${spotter_checks})

@@ -1142,3 +1142,63 @@ crash; the user needs to see the cause, and the error must still be printed.
   write, `abort()` and `return 1` each print the right line from a terminal and return at once. Started in
   its own console, each window was still open 3 s later (then closed by the test).
 - **Known gap:** a Kinect that hangs while stopping in a destructor hangs before `atexit` runs.
+
+## D50: the temporary harnesses become checks; an example's long code goes in a header beside it (2026-11-13)
+
+**Why:** the 2026-11-11 review's initiative 6. 13e's session, the 13x/Demo 6 fill and 13w's surfaces,
+texture and fill were checked only by temporary harnesses that were then deleted, so nothing would notice
+them breaking. A check can only call code it can reach, and this code lived inside `main.cpp`s.
+
+- **Headers beside the example, as 13e's `scan_state.hpp` already was:** 13x's step 2 moved to
+  `13x_Room_Fill/fill_holes.hpp`, 13w's steps 2-4 to `13w_Room_Shell/room_shell.hpp`, with their settings
+  and with each function made `inline`. The code is unchanged. It's still the example's own code, read
+  beside its `main.cpp`. It isn't the library's (D34): an example keeps its new idea, and a check includes
+  it from the example's folder (`#include "../../examples/..."`).
+- **Demo 6's copy of the fill is gone.** The two were identical apart from one comment, so Demo 6 now
+  includes 13x's header (1,517 → 413 lines). This is the extraction the review had set for "the next time
+  it's touched". D40's "copy until it changes" no longer applies to it.
+- **Three new checks**, all on check_room's raycast box room with its couch:
+  - `check_scan_session` (13e). It places 4 scans in the background (StartPlacing + CollectJobs, each
+    within 5 mm), then runs K, X, P and U, and checks:
+    - K's folder loads back;
+    - after X, K rewrites only `pose.txt`, and `cloud.bin`'s time is unchanged (D45);
+    - after U, K removes the scan's folder.
+
+    Then the rescue: the room folder is blocked by a file and a scan is still being placed. `EndSession`
+    keeps that scan and saves to the first `RescueFolders` entry with no questions, and every scan loads
+    back. That entry is the repo's `room_scans\rescue_<time>`, deleted again afterwards, and only if it
+    wasn't there before. Dialogs go to the console with its input closed, so a broken rescue fails rather
+    than waiting on a message box.
+  - `check_fill` (13x and Demo 6). It checks four things:
+    - the floor under the couch is filled;
+    - 98% of the filled points lie within 3 cm of a true surface, and none past 11 cm;
+    - nothing seen is filled again;
+    - the walls are found, and the marking has both bands.
+
+    The 2% are the fill's own edges, legacy's and kept: the couch top runs on about 10 cm past its back,
+    and a side face about 6 cm.
+  - `check_room_shell` (13w). It checks:
+    - `FindCeiling` picks the highest *big* level surface (not a 0.09 m^2 patch above it, nor a fan
+      below), and finds none without one;
+    - `FindSurfaces` finds the floor, the ceiling at 2.5 m and the walls;
+    - 99.6% of seen texels have their true colour, 99.7% behind the couch;
+    - `Fill` leaves seen texels alone, and the filled floor's colours vary about as much as the seen
+      floor's (67 against 74).
+
+    Texels within 3 cm of another surface are left out of the colour test. Measured with none left out:
+    a strip under 3 cm wide at the couch's foot takes the couch's colour, which 13w's 4 cm + 1% depth
+    test allows (88% right behind the couch). That's how 13w behaves today; it's recorded, not fixed.
+- **Each check fails when its code breaks.** These mutations were tried, then undone:
+  - 13e's rescue loop skipped: `check_scan_session` fails in 11 s ("THE SCANS ARE NOT SAVED").
+  - The fill told nothing was seen: `check_fill` fails (35% of filled points sit on seen ones).
+  - 13w's depth test loosened to 1 m: `check_room_shell` fails (34% right behind the couch).
+  - 13w's quilting off: `check_room_shell` fails (colour spread 15 against 74).
+- **The test room's colour blocks** (`check_room_shell`'s copy) are now taken 1 mm in front of the
+  surface. At the surface itself, y = 1.2 m falls into block 11 or 12 by rounding, so two rays to one
+  spot could disagree (check_room's own copy only ever compares one ray).
+- **Not covered yet:**
+  - Sight's colour-model path: the test shots carry no full colour picture.
+  - 13e's live check, OnScanReady (it needs a Kinect frame), E's export.
+  - Demo 4's house-building (its library part is in `check_room_twin`).
+  - 13z's rebuild (its library parts are in `check_room`).
+- `ctest`: 13 checks (12 pass in 32 s; `check_structure` untouched, not re-run).

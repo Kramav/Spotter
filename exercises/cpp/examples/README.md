@@ -223,8 +223,8 @@ More ladders are added as each example is ported.
 | `11_ICP` | ICP lines the two up by itself (point-to-point, written out) | yes | built, not run |
 | `11b_Feature_Pose` | a rough pose from colour features, polished by the library's ICP | yes | built, not run |
 | `13e_Room_Scan` | the room scanner: many spots, placed in the background, live anchors, next shot; saved on K / Q / a lost Kinect / an error | yes | run on the sensor by the user (a 21-scan room, with the autosave version); the save-once version run on synthetic frames |
-| `13w_Room_Shell` | just the walls (full height), floor and ceiling, each textured from the scans' full colour pictures, unseen parts filled with the surface's own pattern; K saves `.obj` + `.mtl` + `.bmp`s | no | runs on a synthetic room with a fan, a couch and a plank floor (a temporary harness: all checks passed); the view and a real room not checked |
-| `13x_Room_Fill` | a 13e room with the holes in its flat surfaces filled and marked (legacy Demo 6's filling); K saves a `.ply` | no | runs on a synthetic room folder (floor -1.20 m, couch top 0.60 m, 2.9 m^2 filled); K and the view not checked by eye |
+| `13w_Room_Shell` | just the walls (full height), floor and ceiling, each textured from the scans' full colour pictures, unseen parts filled with the surface's own pattern; K saves `.obj` + `.mtl` + `.bmp`s | no | `check_room_shell` runs its surfaces, texture and fill on a synthetic room (the ceiling rule, every seen texel's colour, the couch never painted on the wall, the floor's pattern under the couch); the view and a real room not checked |
+| `13x_Room_Fill` | a 13e room with the holes in its flat surfaces filled and marked (legacy Demo 6's filling); K saves a `.ply` | no | `check_fill` runs its filling on a synthetic room folder (the floor under the couch filled, every filled point on a true surface, nothing seen filled again); K and the view not checked by eye |
 | `13y_Structure_Survey` | measurements for the structure-localisation study: coverage, edges, Relocate vs baselines, Continuous | no | runs (on the real room, numbers only) |
 | `13z_Room_Rebuild` | rooms rebuilt from their folders: view, exclude, `.obj`, `.ply` | no | runs (on a synthetic room) |
 | `demos/Demo1_You_In_3D` | yourself as a live, swinging 3D point cloud (08) | yes | built, not run |
@@ -232,7 +232,7 @@ More ladders are added as each example is ported.
 | `demos/Demo3_Booth_Radar` | camera with boxes and distances, plus the radar with trails and filtered walls (06c) | yes | built, not run |
 | `demos/Demo4_Room_Twin` | a 13e room as a turning doll's house, the visitors live inside it | yes | built; its library part passes `check_room_twin`, and its house was built from a synthetic room folder by a temporary harness |
 | `demos/Demo5_How_Tall` | your height over your head, from depth alone (03) | yes | built, not run |
-| `demos/Demo6_Room_Filled` | Demo 4 with the holes in flat surfaces filled and marked | yes | built; a temporary harness filled a synthetic room folder (floor at −1.20 m, couch top 0.60 m) |
+| `demos/Demo6_Room_Filled` | Demo 4 with the holes in flat surfaces filled and marked | yes | built; its fill is 13x's (`13x_Room_Fill/fill_holes.hpp`), checked by `check_fill` |
 
 13–13d are left out: 13e contains them. The flowcharts in [`../EXAMPLES.md`](../EXAMPLES.md) still
 describe each idea.
@@ -246,12 +246,13 @@ keys are shown along the bottom. Nothing is saved. The stand set-up is in
   well under the walls' foot (the review's bug 7).
 - Demo 5 refuses a height when the top or bottom row has too few readings (the review's bug 12).
 - The demos keep their legacy settings and logic. 07d's and 06c's code is copied into Demos 2
-  and 3, and legacy Demo 6's fill is copied into Demo 6 unchanged.
+  and 3. Demo 6's fill is 13x's (`13x_Room_Fill/fill_holes.hpp`: legacy Demo 6's, unchanged), not a copy.
 - Demos have no ladders: the examples they're built from have them.
 
 ## What is tested, and how
 
-- `ctest` runs one self-check per module, on synthetic data:
+- `ctest` runs self-checks on synthetic data: one per library module (none yet for `source_freenect2`, `radar`
+  or `view`), and three for an example's own code, which they include from its folder:
   - `check_frame`: `Unmirror` and `PinholeCamera` against libfreenect2's own `Registration`, with
     no device. Every 3D point equals `getPointXYZ` with X negated.
   - `check_yolo_decode`: both model output layouts, the letterbox, and the class-name lookup.
@@ -278,6 +279,14 @@ keys are shown along the bottom. Nothing is saved. The stand set-up is in
     and `DepthAverager`'s hole rule.
   - `check_box_depth`: `BoxDepthSampler` gives exactly the same answers as the old per-box loop, on
     4,000 random boxes, about 2.5× faster.
+  - `check_scan_session`: 13e's session (`scan_state.hpp`) on 4 raycast scans: placed in the background,
+    K, X (only `pose.txt` rewritten), P, U; then the rescue with the room folder blocked by a file and a
+    scan still being placed: saved to the first rescue folder with no questions, every scan loads back.
+  - `check_fill`: 13x's and Demo 6's filling (`fill_holes.hpp`) on a 3-scan room folder: the floor
+    under the couch filled, the filled points on the true surfaces, nothing seen filled again.
+  - `check_room_shell`: 13w's steps 2-4 (`room_shell.hpp`): the ceiling is the highest big level
+    surface (not a fan, not a small patch above it); floor, ceiling and walls from 5 shots; every seen
+    texel has its true colour, also behind the couch; the fill keeps the floor's pattern.
 - The tour programs without a Kinect run to completion and print what they show.
 - **Not yet confirmed on the sensor:** the programs above that need a Kinect. The first thing to
   check: run `00a_Kinect_Source` and raise your right hand. It must show on the right.
