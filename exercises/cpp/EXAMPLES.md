@@ -42,6 +42,7 @@ flowchart LR
     E13e -.->|saved folders| E13z
     E13e -->|saved folders| E13x["13x Room Fill"]
     E13e -->|saved folders| E13w["13w Room Shell"]
+    E13e -->|saved folders| E13y["13y Structure Survey"]
     E13 --> E15["15 Objects in the map"]
 
     E08 --> D1["Demo 1 You in 3D"]
@@ -699,6 +700,25 @@ flowchart LR
 
     classDef new stroke-width:3px
     class WALL,UP,LV,SEEN,PLY new
+```
+
+## 13y Structure Survey
+
+Starts from 13e's room folder; no Kinect, numbers only (clouds and poses, never the pictures).
+The measurements for the structure-localisation study
+([findings](../../docs/structure-localization-findings.md)); 13e's stored poses are the reference.
+
+```mermaid
+flowchart LR
+    FOLD["13e room folder<br/>clouds + poses"] --> EX["ExtractStructure per scan:<br/>floor, ceiling, walls"]
+    EX --> COV["1. Coverage: which surfaces<br/>each scan sees"]
+    EX --> EDGE["2. Edges between<br/>consecutive scans"]
+    EX --> REL["3. Relocate each scan in a map<br/>of the OTHER scans, from structure;<br/>vs two multi-start ICP baselines"]
+    EX --> CONT["4. Continuous: ICP from the<br/>previous scan's pose (PlaceAfter)"]
+    REL --> VIEW["view N: one scan's answers in 3D"]
+
+    classDef new stroke-width:3px
+    class EX,COV,EDGE,REL,CONT,VIEW new
 ```
 
 ## Presentation demos

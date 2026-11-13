@@ -1033,3 +1033,30 @@ The review's initiative 2 ([review-2026-11-11-architecture.md](review-2026-11-11
   needs real advice from a scan's spot, and none with no scans.
 - **Not changed:** 13e quits on `q` only, not through `IsQuitKey`, because Esc deselects there. The
   review counted it as a slip; it's deliberate.
+
+## D47: the legacy archive is opt-in; docs and repo tidied (2026-11-11)
+
+The review's initiative 9 ([review-2026-11-11-architecture.md](review-2026-11-11-architecture.md)); the
+user's choices on legacy and the living documents.
+
+- **Legacy (the user's choice):** `legacy/` (34 programs, 26k lines) builds only with
+  `cmake --preset default -DSPOTTER_BUILD_LEGACY=ON`, still into `build\legacy\`. Git tag
+  `legacy-archive` marks it as last built by default. Nothing in `legacy/` changed (D34). Both settings
+  were configured and built.
+- **The living documents stay as they are (the user's choice):** all six are kept up to date per
+  example, the visualizer included; the review had suggested freezing it. 13y, which was missing, now
+  has its EXAMPLES.md flowchart and family-tree node, and a visualizer entry with the real room's
+  numbers from the findings report (its script parses; the page not looked at).
+- **Docs that contradicted the code:** ideas.md said ArUco is already in our OpenCV (it isn't: `objdetect`
+  isn't built); CLAUDE.md still called the mirror "fix soon" (fixed by D35/D36) and claimed one check per
+  module (10 checks, none for `source_freenect2`, `radar`, `view`); the hand-off README's two tables were
+  split by blank lines (the `room_twin` row and the demos fell out), it still named `RemoveScan`
+  (D45 renamed it), and it had Windows steps only (now a Linux note, the legacy option and where room
+  scans go).
+- **Repo:** `*.bmp` is gitignored (the only image format our OpenCV writes, so room pictures and test
+  renders); `zone_log.csv` (listed in `.gitignore` but tracked) and the unused `synthetic_seen.bmp` /
+  `synthetic_filled.bmp` are untracked, the local copies kept.
+- **Licence note:** the README now says the MIT licence covers our code, not the Ultralytics weights
+  (AGPL-3.0 or a paid licence), to check before publishing or shipping them.
+- **Left for later:** 49 header comments repeat a signature that no longer matches the code (the review's
+  count). `.vscode/settings.json` now finds the CMake folder from the workspace, not an old `C:` path.

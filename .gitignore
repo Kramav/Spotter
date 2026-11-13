@@ -4,6 +4,8 @@ detections.jpg
 zone_log.csv
 *.jpg
 *.jpeg
+# BMP is the only image format our OpenCV writes (D29): room-scan pictures and test renders. Never commit them.
+*.bmp
 
 # C# build output (exercises/csharp)
 bin/

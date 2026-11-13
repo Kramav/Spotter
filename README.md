@@ -458,3 +458,8 @@ Press **Q** to quit.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The MIT licence covers our code, not the model files. `yolo26n.pt`, `yolo26n.onnx` and
+`yolo26n_320.onnx` are Ultralytics YOLO weights (and exports of them), which Ultralytics licenses
+under AGPL-3.0 or a paid enterprise licence. Check their terms before publishing or shipping these
+files, or anything that bundles them.

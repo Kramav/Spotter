@@ -23,6 +23,12 @@ build\examples\02_Detect_Distance.exe  # an example (Kinect + yolo26n.onnx)
 
 vcpkg installs libfreenect2 (our port in `ports/`) and OpenCV the first time.
 
+- **Linux:** the same commands, with `/` in the paths, after the packages in
+  [`../README.md`](../README.md)'s Linux section. Not tried yet (D7); expect a long first OpenCV build.
+- **The legacy archive** (`../legacy/`, 34 programs) builds only when asked:
+  `cmake --preset default -DSPOTTER_BUILD_LEGACY=ON`, into `build\legacy\` (D47).
+- **Room scans** go to the repo's `room_scans/` (gitignored, outside `build`), never into git.
+
 ## How a program reads
 
 Every `main.cpp` has the same parts:
@@ -72,8 +78,7 @@ There are no globals. A program's state lives in plain structs declared in that 
 | `room_scan.hpp` | `Scan` + `MakeScan`; `PlaceScan` (features against the earlier scans, ICP, a second opinion) → `Placement`; far features, `Landmark`, `AddLandmarks`; `CheckLive` (live anchors); `RecommendNext` (the next shot); `ScanOptions` = 13e's settings | 00h |
 | `room.hpp` | `FuseScans` (TSDF + surface net), `BuildRoom` (floor, ceiling, walls, furniture boxes, levelled) → `Room`; `SaveRoomObj`, `RoomPoints` | 00h |
 | `structure.hpp` | a prototype for the structure-localisation study: `ExtractStructure` (planes sorted into floor, ceiling, walls; area and density), `FindEdges`, `MergeStructures`, `Relocate` (a pose from structure alone, ranked by `ViewAgreement`, ambiguity flagged), `ColourVotes` / `OffPlaneShare` (tie-breakers), `PlaceAfter` (Continuous mode) | 13y |
-| `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScan`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; `Ask`, `AskRoomFolder` | 00h |
-
+| `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScansFrom`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; `Ask`, `AskRoomFolder` | 00h |
 | `room_twin.hpp` | for the room twin (Demos 4, 6): `LoadTwinRoom` (a room folder merged into one levelled surface), `NewestRoomFolder`, `OneViewRoom` (no room: the Kinect's own view); `FindTwinFloor` (D33's floor rule, with the review's bug 7 fixed); `LocateKinect` (ICP from several starts around scan 1's spot) | |
 
 Added with the demos: `StillBackground` in `depth.hpp` (03's empty view after a countdown, for Demos 4 and 5)
@@ -187,7 +192,6 @@ More ladders are added as each example is ported.
 | `13x_Room_Fill` | a 13e room with the holes in its flat surfaces filled and marked (legacy Demo 6's filling); K saves a `.ply` | no | runs on a synthetic room folder (floor -1.20 m, couch top 0.60 m, 2.9 m^2 filled); K and the view not checked by eye |
 | `13y_Structure_Survey` | measurements for the structure-localisation study: coverage, edges, Relocate vs baselines, Continuous | no | runs (on the real room, numbers only) |
 | `13z_Room_Rebuild` | rooms rebuilt from their folders: view, exclude, `.obj`, `.ply` | no | runs (on a synthetic room) |
-
 | `demos/Demo1_You_In_3D` | yourself as a live, swinging 3D point cloud (08) | yes | built, not run |
 | `demos/Demo2_Invisibility_Cloak` | camera and "cloaked" view side by side: people painted out (07d) | yes | built, not run |
 | `demos/Demo3_Booth_Radar` | camera with boxes and distances, plus the radar with trails and filtered walls (06c) | yes | built, not run |

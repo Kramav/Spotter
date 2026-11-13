@@ -53,8 +53,8 @@ out, never commit them, and gitignore `*.ply` / `*.pcd`.
 - Marked tripod spots plus measured angles. Simple, but expect cm/degree errors; ICP fixes them.
 - **Printed ArUco markers in the room (recommended).** The colour camera sees a marker and
   OpenCV computes the camera pose automatically (`cv::aruco`, in the core objdetect module since
-  OpenCV 4.7). It's accurate to about a centimetre, needs no tape measure, and the module is
-  already in our OpenCV.
+  OpenCV 4.7). It's accurate to about a centimetre and needs no tape measure. Our OpenCV doesn't
+  have it yet: add `objdetect` (and `calib3d`) to `vcpkg.json` (Roadmap 12).
 - No poses at all: global registration (FPFH features + RANSAC) works, but less reliably.
 
 **Tools:** Open3D's reconstruction system already does fragments → registration → refinement →
