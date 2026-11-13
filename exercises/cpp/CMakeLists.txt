@@ -38,6 +38,16 @@ file(GLOB spotter_sources CONFIGURE_DEPENDS spotter/src/*.cpp)
 add_library(spotter STATIC ${spotter_sources})
 target_include_directories(spotter PUBLIC spotter/include PRIVATE ${freenect2_INCLUDE_DIRS})
 target_link_libraries(spotter PUBLIC ${freenect2_LIBRARIES} ${OpenCV_LIBS})
+if(WIN32)
+    target_link_libraries(spotter PUBLIC ole32 shell32 uuid)   # file_dialog: the Windows Save As / Open dialogs
+endif()
+# room_folder refuses a room folder inside build/ (a clean rebuild deletes it) and knows the repo's room_scans/ (D48).
+target_compile_definitions(spotter PRIVATE SPOTTER_BUILD_DIR="${CMAKE_BINARY_DIR}" SPOTTER_REPO_ROOT="${repo_root}")
+
+# The console guard (D49): linked into every program in examples/, so its console never closes by itself on an
+# error or crash (and, double-clicked, waits for Enter at the end). OBJECT, so it always links; the checks don't use it.
+add_library(spotter_console_guard OBJECT spotter/console_guard/console_guard.cpp)
+target_link_libraries(spotter_console_guard PUBLIC ${OpenCV_LIBS})
 
 # One self-check per module, on synthetic data (no Kinect). Run them all: ctest --test-dir build
 enable_testing()
@@ -47,7 +57,7 @@ foreach(check_source ${spotter_checks})
     add_executable(${check} ${check_source})
     target_include_directories(${check} PRIVATE ${freenect2_INCLUDE_DIRS})   # check_frame compares with libfreenect2
     target_link_libraries(${check} PRIVATE spotter)
-    target_compile_definitions(${check} PRIVATE SPOTTER_REPO_ROOT="${repo_root}")
+    target_compile_definitions(${check} PRIVATE SPOTTER_REPO_ROOT="${repo_root}" SPOTTER_BUILD_DIR="${CMAKE_BINARY_DIR}")
     add_test(NAME ${check} COMMAND ${check})
 endforeach()
 

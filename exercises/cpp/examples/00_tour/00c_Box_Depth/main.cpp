@@ -114,9 +114,6 @@ int main()
                     fast ? cv::format("%.3f m", *fast).c_str() : "none   ", fastMs);
     }
     std::printf("\"none\" = fewer than 20 readings there: black, shiny, too close, or outside the depth camera's view.\n");
-    // A console program with no window: started by double-clicking, its console would close
-    // before you could read it.
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
+    // Double-clicked, its console stays open for reading: the console guard waits for Enter (D49).
     return 0;
 }

@@ -107,7 +107,5 @@ int main()
     Try(0.15f, 8, false);
     std::printf("The big move stalls: early on most guessed pairs are wrong, and the fit creeps along the walls\n"
                 "while the gate closes. ICP needs a start that's already close; 11b finds one from features.\n");
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
     return 0;
 }

@@ -40,7 +40,7 @@
 //
 //  Keys:   G  filled parts tinted / true colour   K  save the .obj
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset   Q or Esc  quit
-//  Run:    13w_Room_Shell [room folder]   (default: the newest room under RoomsFolder)
+//  Run:    13w_Room_Shell [room folder]   (none: an Open window starting in RoomsFolder, the newest room selected)
 
 #include <algorithm>
 #include <chrono>
@@ -161,20 +161,20 @@ struct Shell
 //@param2 - argv: the words: an optional room folder
 //@param3 - shell: filled with the folder, info and shots
 //
-//@brief - step 1: the room folder given, or the newest under RoomsFolder. Refuses an old (format 1, mirrored)
+//@brief - step 1: the room folder given, or one chosen in an Open window (ChooseRoom). Refuses an old (format 1, mirrored)
 //         room. Loads every included scan (LoadScan) with its full colour picture (colour_full.bmp), its colour
 //         index and the colour model fitted from them; scans without the full picture fall back to the depth
 //         grid's colour. False if nothing loaded. O(scans x pixels).
 bool LoadShell(int argc, char** argv, Shell& shell)
 {
-    shell.folder = argc > 1 ? fs::path(argv[1]) : spotter::NewestRoomFolder(RoomsFolder);
+    shell.folder = spotter::ChooseRoom(argc, argv, RoomsFolder, "13w");
     std::string problem;
     if (shell.folder.empty())
     {
-        std::printf("No room under %s. Scan one with 13e_Room_Scan, or name its folder: 13w_Room_Shell <folder>\n", RoomsFolder.c_str());
+        std::printf("No room to build. Scan one with 13e_Room_Scan, or name its folder: 13w_Room_Shell <folder>\n");
         return false;
     }
-    if (!spotter::ReadRoomInfo(shell.folder, shell.info, problem)) { std::printf("%s\n", problem.c_str()); return false; }
+    if (!spotter::ReadRoomInfo(shell.folder, shell.info, problem)) { std::printf("Can't open %s: %s\n", shell.folder.string().c_str(), problem.c_str()); return false; }
     if (shell.info.format != 2) { std::printf("An old (format 1, mirrored) room: scan it again with 13e_Room_Scan.\n"); return false; }
     int sharp = 0;
     for (const fs::path& dir : spotter::ScanFolders(shell.folder))
@@ -193,6 +193,7 @@ bool LoadShell(int argc, char** argv, Shell& shell)
     }
     std::printf("%s: %zu scans, %d with their full colour picture (the rest use the depth grid's colour)\n", shell.folder.string().c_str(),
                 shell.shots.size(), sharp);
+    if (shell.shots.empty()) std::printf("No scan in it could be used (each one's reason is above; excluded scans are left out).\n");
     return !shell.shots.empty();
 }
 

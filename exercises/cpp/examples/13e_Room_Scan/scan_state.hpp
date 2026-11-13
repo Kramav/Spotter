@@ -8,6 +8,11 @@
 //
 // Nothing is written while scanning (D39): the scans live in memory, and the whole folder is
 // written once, on K, Q, a lost Kinect or an error (the rescue).
+//
+// Where it goes (D48): chosen in a Save As window at start-up (and again on K), checked by
+// CheckRoomFolder (not inside build/, writable, room on the disk), and checked again, quickly, before
+// every scan. If the end's save fails, the rescue folders are tried in turn with no questions; only if
+// every one fails is a folder asked for, and the scans are dropped only after a yes.
 #pragma once
 
 #include <chrono>
@@ -16,6 +21,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <future>
+#include <iostream>   // std::cin: is anyone there to answer?
 #include <random>
 #include <string>
 #include <vector>
@@ -38,6 +44,9 @@ struct Session
 
     // The room
     std::filesystem::path folder;      // written once: on K, Q, a lost Kinect or an error
+    std::string roomsFolder;           // where the Save As window opens for a new room
+    std::string folderProblem;         // set when the last check says the folder can't take the scans (shown in red)
+    int scansThatFit = 0;              // the last check's free space, in scans
     spotter::RoomInfo info;
     std::vector<spotter::Scan> scans;
     std::vector<std::vector<cv::Point3f>> shownPoints;   // what the viewer draws of each scan, in the room
@@ -62,6 +71,10 @@ struct Session
     int selected = -1;                 // the scan clicked in the viewer
     bool colourByScan = false;
     std::string message = "Set the Kinect down where you'll start, then press SPACE (in a window) to scan.";
+    std::string banner;                // a big line across the camera picture after K or E, until bannerUntil
+    bool bannerOk = true;              // green, or red
+    std::chrono::steady_clock::time_point bannerUntil;
+    std::filesystem::path exportTo;    // E's chosen .obj: exported on the next frame, after "EXPORTING" is shown
 
     //explicit Session(int averageFrames){
     //
@@ -152,6 +165,67 @@ inline void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::P
         }
 }
 
+//void Banner(Session& s, const std::string& text, bool ok){
+//
+//@param1 - s: the session
+//@param2 - text: what happened (SAVED ..., EXPORTED ...)
+//@param3 - ok: green if true, red if not
+//
+//@brief - a big line across the camera picture for 8 seconds, also printed to the console. O(1).
+inline void Banner(Session& s, const std::string& text, bool ok)
+{
+    s.banner = text;
+    s.bannerOk = ok;
+    s.bannerUntil = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    std::printf("%s\n", text.c_str());
+}
+
+//std::string Stamp(){
+//
+//@brief - the local date and time as 2026-11-13_1519, for file names. O(1).
+inline std::string Stamp()
+{
+    char text[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(text, sizeof text, "%Y-%m-%d_%H%M", std::localtime(&now));
+    return text;
+}
+
+// --- Where the room goes (D48) ---
+
+//void CheckFolderNow(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - before each scan: can the folder still take every scan not yet saved, plus this one? A small test
+//         file and the free space (CheckRoomFolder, quick). A problem stays on screen in red (and is printed)
+//         until a check passes; scanning goes on regardless, as the scans are in memory. O(1) plus a small write.
+inline void CheckFolderNow(Session& s)
+{
+    int unsaved = 1;
+    for (size_t i = 0; i < s.onDisk.size(); i++) unsaved += !s.onDisk[i];
+    spotter::FolderCheck check = spotter::CheckRoomFolder(s.folder, unsaved, true);
+    s.scansThatFit = check.scansThatFit;
+    if (!check.ok && check.problem != s.folderProblem)
+        std::printf("\n!!! The room can't be saved where it should go: %s\n!!! Press K to choose another folder. The scans are safe in memory.\n", check.problem.c_str());
+    if (check.ok && !s.folderProblem.empty()) std::printf("The room folder is fine again.\n");
+    s.folderProblem = check.ok ? "" : check.problem;
+}
+
+//void SwitchFolder(Session& s, const std::filesystem::path& folder){
+//
+//@param1 - s: the session
+//@param2 - folder: the room's new folder
+//
+//@brief - the room goes to another folder from now on: every scan is written there in full at the next save. O(scans).
+inline void SwitchFolder(Session& s, const std::filesystem::path& folder)
+{
+    s.folder = folder;
+    s.onDisk.assign(s.scans.size(), false);
+    s.saved = false;
+    s.folderProblem.clear();
+}
+
 // --- Saving: once, on K, Q, a lost Kinect or an error ---
 
 //bool SaveAll(Session& s){
@@ -161,29 +235,43 @@ inline void Shown(const Session& s, const spotter::Scan& scan, std::vector<cv::P
 //@brief - the whole folder: StartRoomFolder, removes scan folders left from scans that U took back, each scan
 //         not yet on disk (WriteScan: pose.txt last, swapped in whole) and the others' pose.txt (X and P change
 //         only that), landmarks.txt, then points.ply and room.txt with finished 1. A save cut off part-way leaves
-//         the earlier save whole. Prints the result and the time; on failure the scans stay in memory and K tries
-//         again. True if it all saved. O(new scans x pixels) for the scans, plus FinishRoomFolder.
-inline bool SaveAll(Session& s)
+//         the earlier save whole. Prints the result and the time; on failure the scans stay in memory, and `problem`
+//         says which step failed and why (CheckRoomFolder's reason when it finds one). True if it all saved.
+//         O(new scans x pixels) for the scans, plus FinishRoomFolder.
+inline bool SaveAll(Session& s, std::string& problem)
 {
     auto start = std::chrono::steady_clock::now();
     s.info.scans = (int)s.scans.size();
     bool ok = false;
     size_t points = 0;
+    std::string step = "creating the folder and room.txt";
     try   // the rescue calls this outside main's try: an error here must not end the program before it reports
     {
         ok = spotter::StartRoomFolder(s.folder, s.info) && spotter::RemoveScansFrom(s.folder, s.scans.size());
         for (size_t i = 0; i < s.scans.size() && ok; i++)
         {
+            step = cv::format("writing scan %zu", i + 1);
             ok = s.onDisk[i] ? spotter::WritePose(s.folder, i, s.scans[i]) : spotter::WriteScan(s.folder, i, s.scans[i]);
             s.onDisk[i] = s.onDisk[i] || ok;
         }
+        if (ok) step = "writing landmarks.txt";
         ok = ok && spotter::WriteLandmarks(s.folder, s.landmarks);
+        if (ok) step = "writing points.ply and finishing room.txt";
         ok = ok && spotter::FinishRoomFolder(s.folder, s.info, s.scans, s.roomOptions, points);
     }
-    catch (const std::exception& e) { ok = false; std::printf("An error while saving: %s (scans written before it are whole; 13z reads them)\n", e.what()); }
+    catch (const std::exception& e) { ok = false; step += std::string(" (an error: ") + e.what() + ")"; }
     s.saved = ok;
-    std::printf("%s %s: %zu scans, points.ply %zu points, %.1f s.\n", ok ? "Saved" : "SAVING FAILED (the disk full, or the folder gone?) in",
-                s.folder.string().c_str(), s.scans.size(), points, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    if (!ok)
+    {
+        int unsaved = 0;
+        for (size_t i = 0; i < s.onDisk.size(); i++) unsaved += !s.onDisk[i];
+        spotter::FolderCheck check = spotter::CheckRoomFolder(s.folder, std::max(unsaved, 1), true);
+        problem = "Failed while " + step + ". " + (check.ok ? std::string("The folder itself looks fine; see the console.") : check.problem) +
+                  " (Scans written before it are whole; 13z reads them.)";
+    }
+    std::printf("%s %s: %zu scans, points.ply %zu points, %.1f s.\n", ok ? "Saved" : "SAVING FAILED in", s.folder.string().c_str(),
+                s.scans.size(), points, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    if (!ok) std::printf("  %s\n", problem.c_str());
     if (!ok) s.message = "SAVING FAILED - see the console. The scans are still in memory: K tries again.";
     return ok;
 }
@@ -273,15 +361,18 @@ inline void TakePlacement(Session& s, Session::Job done)
                       s.scans.back().suspicious ? " - SUSPICIOUS (red): check it" : ""));
 }
 
+inline void ExportNow(Session& s);   // E's export, below with the keys
+
 //void CollectJobs(Session& s){
 //
 //@param1 - s: the session
 //
-//@brief - background jobs that finished since the last frame: a placement is taken (and all cores are freed and
-//         the next shot worked out), a live check's anchors and the advice are picked up. O(1) unless a job
-//         finished.
+//@brief - E's export if one is waiting (ExportNow); background jobs that finished since the last frame: a
+//         placement is taken (and all cores are freed and the next shot worked out), a live check's anchors and the
+//         advice are picked up. O(1) unless a job finished.
 inline void CollectJobs(Session& s)
 {
+    if (!s.exportTo.empty()) ExportNow(s);   // E's export, now that "EXPORTING" has been on screen for a frame
     if (s.placing.valid() && !Running(s.placing))
     {
         TakePlacement(s, s.placing.get());
@@ -381,6 +472,19 @@ inline void StartLiveCheck(Session& s, const spotter::RgbdFrame& frame)
 
 // --- The keys ---
 
+//void OnSpace(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - SPACE: checks the folder can still take the scans (CheckFolderNow), then starts the scan's average
+//         (when idle). O(1) plus the check.
+inline void OnSpace(Session& s)
+{
+    if (!Idle(s)) return;
+    CheckFolderNow(s);
+    s.averager.Start();
+}
+
 //void OnUndo(Session& s){
 //
 //@param1 - s: the session
@@ -449,29 +553,50 @@ inline std::vector<const spotter::Scan*> Included(const Session& s)
 //
 //@param1 - s: the session
 //
-//@brief - E: merges every included scan (FuseScans), builds the clean model (BuildRoom), saves
-//         room_scan_<time>.obj where it runs with the far landmarks, and prints the size, time, up source, floor
-//         and ceiling, walls and boxes. O(FuseScans).
+//@brief - E (when idle, with scans): a Save As window for the .obj (opening in the room's folder,
+//         room_scan_<date>_<time>.obj suggested). The export itself runs on the next frame (ExportNow), so the
+//         camera window can say EXPORTING first. O(1) plus the wait.
 inline void OnExport(Session& s)
 {
     if (!Idle(s)) return;
     WaitForReaders(s);
+    if (Included(s).empty()) { Say(s, "Nothing to export yet: SPACE scans (excluded scans don't count)."); return; }
+    std::error_code error;
+    std::filesystem::create_directories(s.folder, error);   // so the window opens next to the scans
+    std::filesystem::path path = spotter::AskSaveAs("13e: export the room as", s.folder, "room_scan_" + Stamp() + ".obj", "Wavefront OBJ", "obj");
+    if (path.empty()) { Say(s, "Export cancelled: nothing written."); return; }
+    s.exportTo = path;
+    s.message = "EXPORTING to " + path.string() + " ... (a few seconds)";
+}
+
+//void ExportNow(Session& s){
+//
+//@param1 - s: the session
+//
+//@brief - E's export, a frame after the Save As window: merges every included scan (FuseScans), builds the clean
+//         model (BuildRoom), saves the .obj with the far landmarks, and prints the size, time, up source, floor and
+//         ceiling, walls and boxes. A green banner says where it went; a failure gets a message box. O(FuseScans).
+inline void ExportNow(Session& s)
+{
+    const std::string path = s.exportTo.string();
+    s.exportTo.clear();
     std::vector<const spotter::Scan*> included = Included(s);
-    if (included.empty()) { Say(s, "Nothing to export yet: SPACE scans (excluded scans don't count)."); return; }
     std::printf("Merging %zu scans...\n", included.size());
     auto start = std::chrono::steady_clock::now();
     float voxel;
     spotter::Room room = spotter::BuildRoom(included, spotter::FuseScans(included, s.camera, s.roomOptions, voxel), s.random, s.roomOptions);
     std::vector<cv::Point3f> landmarks;
     for (const spotter::Landmark& l : s.landmarks) landmarks.push_back(l.point);
-    std::string path = (std::filesystem::current_path() / cv::format("room_scan_%lld.obj", (long long)std::time(nullptr))).string();
     if (!spotter::SaveRoomObj(path, room, landmarks, "Spotter 13e: seen_room = every scan merged, clean_* and furniture_blocks = the tidy (partly guessed) model"))
     {
-        Say(s, "Could not write " + path);
+        Banner(s, "EXPORT FAILED: " + path, false);
+        spotter::Tell("Export failed", "Could not write " + path + ".\n\nIs the drive full, or the folder read-only? Press E again and choose another place.");
         return;
     }
-    std::printf("Saved %s (%.1f MB, %.1f s). A capture of the room: never commit it.\n", path.c_str(), std::filesystem::file_size(path) / 1e6,
-                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    std::error_code error;
+    const double megabytes = std::filesystem::file_size(path, error) / 1e6;
+    Banner(s, cv::format("EXPORTED %s (%.1f MB)", path.c_str(), megabytes), true);
+    std::printf("  %.1f s. A capture of the room: never commit it.\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
     std::printf("  merged mesh: %zu triangles, %.1f cm cubes; %zu far landmarks\n", room.mesh.groups["seen_room"].size(), voxel * 100, landmarks.size());
     std::printf("  up from %s; floor %.2f m below the first camera (%s), ceiling %.2f m above it (%s): %.2f m high\n", room.upFrom.c_str(),
                 -room.floorY, room.floorSeen ? "seen" : "guessed", room.ceilingY, room.ceilingSeen ? "seen" : "guessed", room.ceilingY - room.floorY);
@@ -480,20 +605,39 @@ inline void OnExport(Session& s)
     for (const auto& [lo, hi] : room.blocks)
         std::printf("  block %.2f wide x %.2f deep x %.2f high, at (%+.2f, %.2f) m\n", hi.x - lo.x, hi.z - lo.z, hi.y - lo.y, (lo.x + hi.x) / 2, -(lo.z + hi.z) / 2);
     std::printf("  (positions: X right, Z ahead, along the biggest wall, from the first camera)\n");
-    s.message = "Exported (see the console). Scan more and export again, or Q.";
+    s.message = "Exported to " + path + ". Scan more and export again, or Q.";
 }
 
 //void OnSave(Session& s){
 //
 //@param1 - s: the session
 //
-//@brief - K: saves the folder now (SaveAll); Q, a lost Kinect and an error do it too. O(scans x pixels).
+//@brief - K: a Save As window (AskRoomFolder, opening at the room's folder: keep it, or choose another and every
+//         scan is written there), then SaveAll. A green banner says where it went. A failure gets a message box with
+//         the reason and the window opens again, until it's saved or cancelled. Q, a lost Kinect and an error save
+//         too, with no questions. O(scans x pixels).
 inline void OnSave(Session& s)
 {
     if (!Idle(s)) return;
     WaitForReaders(s);
     if (s.scans.empty()) { s.message = "Nothing scanned yet."; return; }
-    if (SaveAll(s)) s.message = "Folder saved (see the console). Scan more, or Q.";
+    while (true)
+    {
+        const std::filesystem::path where = spotter::AskRoomFolder(s.roomsFolder, s.folder, (int)s.scans.size());
+        if (where.empty()) { Say(s, s.saved ? "Save cancelled (the folder already holds every change)." : "Save cancelled: NOT SAVED. K to try again."); return; }
+        if (where.lexically_normal() != s.folder.lexically_normal()) SwitchFolder(s, where);
+        std::string problem;
+        if (SaveAll(s, problem))
+        {
+            s.folderProblem.clear();
+            Banner(s, cv::format("SAVED %zu scans to %s", s.scans.size(), s.folder.string().c_str()), true);
+            s.message = "Saved to " + s.folder.string() + ". Scan more, or Q.";
+            return;
+        }
+        Banner(s, "SAVING FAILED: " + s.folder.string(), false);
+        spotter::Tell("Saving failed", "The room could not be saved to " + s.folder.string() + ".\n\n" + problem +
+                                       "\n\nThe scans are still in memory. Choose another folder (another drive?) in the next window.");
+    }
 }
 
 //void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at){
@@ -526,9 +670,11 @@ inline void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at)
 //@param1 - s: the session
 //@param2 - why: why it ended (Quitting, Kinect lost, an error), for the console
 //
-//@brief - the rescue, run on Q, a lost Kinect or an exception: a scan still being placed is
-//         waited for and kept, then the folder is saved with no questions if it isn't already. Called before the
-//         Kinect stops. Errors while waiting are printed, not thrown. O(SaveAll).
+//@brief - the rescue, run on Q, a lost Kinect or an exception: a scan still being placed is waited for and kept,
+//         then the folder is saved with no questions if it isn't already; if that fails, each RescueFolders entry
+//         in turn; only if all fail, a folder is asked for (Save As) until it saves or the scans are dropped
+//         after a yes. Ends with where every scan is. Called before the Kinect stops. Errors while waiting are
+//         printed, not thrown. O(SaveAll).
 inline void EndSession(Session& s, const std::string& why)
 {
     try
@@ -549,7 +695,30 @@ inline void EndSession(Session& s, const std::string& why)
     if (!s.saved)
     {
         std::printf("\n=== %s: saving the folder ===\n", why.c_str());
-        SaveAll(s);
+        std::string problem;
+        bool ok = SaveAll(s, problem);
+        for (const std::filesystem::path& rescue : spotter::RescueFolders())   // no questions (D30): the next place, then the next
+        {
+            if (ok) break;
+            std::printf("\n!!! Couldn't save to %s. Saving to %s instead.\n", s.folder.string().c_str(), rescue.string().c_str());
+            SwitchFolder(s, rescue);
+            ok = SaveAll(s, problem);
+        }
+        while (!ok)   // every place failed: only now ask, and drop the scans only after a yes
+        {
+            spotter::Tell("THE SCANS ARE NOT SAVED", "Every folder failed, the last one with:\n" + problem + "\n\nChoose a folder (another drive?) in the next window.");
+            const std::filesystem::path where = spotter::AskRoomFolder(s.roomsFolder, {}, (int)s.scans.size());
+            if (where.empty() && std::cin.eof()) { std::printf("No one can answer (the console's input is closed): THE SCANS ARE NOT SAVED.\n"); return; }
+            if (where.empty())
+            {
+                if (spotter::Confirm("Discard the scans?", cv::format("Discard all %zu scans? This can't be undone.", s.scans.size()))) { std::printf("The scans were discarded.\n"); return; }
+                continue;
+            }
+            SwitchFolder(s, where);
+            ok = SaveAll(s, problem);
+        }
     }
-    std::printf("Every scan is in %s. 13z rebuilds the room from it.\n", s.folder.string().c_str());
+    std::printf("\n=================================================================\n"
+                "Every scan is in %s\n(13z rebuilds the room from it; 13w, 13x and the demos open it.)\n"
+                "=================================================================\n", s.folder.string().c_str());
 }

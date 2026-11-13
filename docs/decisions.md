@@ -1060,3 +1060,85 @@ user's choices on legacy and the living documents.
   (AGPL-3.0 or a paid licence), to check before publishing or shipping them.
 - **Left for later:** 49 header comments repeat a signature that no longer matches the code (the review's
   count). `.vscode/settings.json` now finds the CMake folder from the workspace, not an old `C:` path.
+
+## D48: where a room goes is chosen in a window and checked; the readers open rooms in a window (2026-11-13)
+
+**Why:** the user's hour-long 13e scan (21 scans) looked lost. It wasn't: at the console question the user
+typed the folder `Ambulance`, a relative path, which `AskRoomFolder` took from the folder the .exe ran in,
+so the room landed in `exercises\cpp\build\examples\Ambulance\Ambulance_11-13-2026\` (inside `build\`,
+which the README says to delete), and E wrote its `.obj` there too. The full path was printed once and
+scrolled away. Then 13w found nothing in `room_scans\`, printed "No room" and exited, and a double-clicked
+console closes at once, so it looked like a crash (D49). The room was copied to `room_scans\` (the user's
+choice: copy, keep the original). The user asked for safeguards, checks that data collection will work,
+and a standard Save As window on E and K.
+
+- **`spotter/file_dialog` (new):** `AskSaveAs`, `AskOpenFolder`, `Confirm`, `Tell` (a message box for
+  failures), and `Ask` (moved from `room_folder`). Windows: the shell's own Save As / Select Folder windows
+  and MessageBox. Linux: zenity when there's a desktop. Otherwise, or with `SPOTTER_CONSOLE_DIALOGS=1`, the
+  console, where a relative answer is taken from the suggested folder, never the working directory. Each
+  prints what it asked and the answer, so the console keeps a record. Linking: `ole32 shell32 uuid` on
+  Windows. Not tested on Linux.
+- **`CheckRoomFolder` (room_folder):** refuses a relative path, a folder inside `build\` (CMake passes
+  `SPOTTER_BUILD_DIR`), one inside another room (13z, 13w and the demos wouldn't find it), a file in the
+  way, a path too long for Windows, a folder that can't be created, a test file (one scan, 16 MB) that
+  can't be written, synced and read back, and less free space than the scans need plus five. Warns under 60
+  scans. It removes the folders it made. `RoomBytesPerScan` = 16 MB (today's room: 11.5 MB of scan files +
+  2.8 MB of `points.ply` per scan).
+- **`AskRoomFolder`:** a Save As window (the name is the folder's), then the old clash rules (a saved room is
+  replaced only after a yes; any other folder that isn't empty is left alone), then `CheckRoomFolder`. A
+  refusal is shown and the window opens again.
+- **13e:**
+  - the folder is chosen at start-up in that window;
+  - its full path and room in scans stay on the camera window;
+  - a quick check before every scan puts a red warning on screen if the folder can't take the unsaved scans
+    (scanning goes on: they're in memory);
+  - **K** opens Save As at the room's folder (keep it, or choose another and every scan is written there);
+  - **E** opens Save As for the `.obj` in the room's folder (it used to write into the working directory);
+  - both show a green SAVED / EXPORTED banner with the path, and a failure gets a message box with the
+    reason (`SaveAll` now says which step failed, and `CheckRoomFolder` why).
+  - **The end (Q, a lost Kinect, an error) still asks nothing (D30):** if the room's folder fails, it saves
+    to `RescueFolders()` in turn (the repo's `room_scans\rescue_<time>`, then `Documents\Spotter rescue\`,
+    then the temp folder). Only if every one fails does it ask for a folder, and it drops the scans only
+    after a yes. Before, a failed save at Q exited with the scans lost. It ends with a framed "Every scan is
+    in …" line, and the console guard (D49) keeps it readable.
+- **Readers:** `ChooseRoom` (room_twin) is the folder on the command line, else a Select Folder window that
+  starts in `room_scans\` with the newest room selected. A folder that isn't a room is refused with a
+  message (one holding rooms lists them), and a `scan_NNN` picked stands for its room. 13w, 13x and Demos 4
+  and 6 use it (the demos keep their fallback on cancel). 13z opens it with `o`, or by itself when no rooms
+  are listed. 13y opens it when it finds none.
+- **Checked:** `check_room` has new cases for each refusal; a good folder passes and leaves nothing
+  behind; `RescueFolders` are absolute. A temporary harness, since deleted, ran 13e's `EndSession` with the
+  folder blocked by a file. It saved to `room_scans\rescue_…` and all 3 scans loaded back unchanged. Not run
+  on the sensor; the windows weren't seen by Claude.
+- **Not changed (the user's scope: 13e only):** 08, 08b, 09b and 09c still save into the working directory
+  (Roadmap).
+
+## D49: a program's console never closes by itself (2026-11-13, the user's rule)
+
+**Why:** 13w seemed to crash at start-up (D48). It had printed its reason and returned 1, and the
+double-clicked console closed before it could be read. The user: terminal windows should not close on a
+crash; the user needs to see the cause, and the error must still be printed.
+
+- **`spotter/console_guard/console_guard.cpp`:** a CMake OBJECT library linked into every program in
+  `examples/` by the one loop in `examples/CMakeLists.txt`. There's nothing to call: its set-up runs before
+  `main`. The `check_*` programs don't link it (ctest must never wait). `legacy/` is unchanged (D34).
+- **What it prints, to stderr, before waiting for Enter:**
+  - an uncaught exception's type and message. An exception leaving `main` reaches Windows' crash handler
+    on MSVC, so the guard reads the type and `what()` from the throw record. One on another thread reaches
+    SIGABRT (MSVC keeps `std::terminate`'s handler per thread), and the guard asks `current_exception`
+    there.
+  - a crash's code and name, the bad address and module + offset (e.g. `0xC0000005 (access violation,
+    writing address 0x0) at guard_test.exe+0x1862`);
+  - `abort()` / asserts as SIGABRT. On Linux, also SIGSEGV and SIGFPE.
+- **Any other end** (return 1, Q) prints `--- <program> has ended ---`. It waits only when the program
+  owns its console (`GetConsoleProcessList` == 1: double-clicked or started from Explorer), never in a
+  terminal. A plain `return 1`'s code can't be seen from `atexit`, so every error exit prints its own
+  reason first. The audit found the Kinect and YOLO failures print inside the library, and the others
+  already did. Added: "Could not load the model" (YOLO used to say "Loaded" for an empty network), and
+  13w's "No scan in it could be used".
+- The ten programs with their own "Press Enter to close" (00b, 00c, 00e, 00f, 00h, 06c_s2, 11_s1–s3,
+  13z_s1) lost it, so they don't wait twice.
+- **Checked:** a throwaway program linked with the guard. Thrown in `main`, thrown on a thread, a null
+  write, `abort()` and `return 1` each print the right line from a terminal and return at once. Started in
+  its own console, each window was still open 3 s later (then closed by the test).
+- **Known gap:** a Kinect that hangs while stopping in a destructor hangs before `atexit` runs.

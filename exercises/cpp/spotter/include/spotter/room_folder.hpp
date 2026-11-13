@@ -1,5 +1,6 @@
 // spotter/room_folder.hpp: a scanned room on disk (13e writes it on K, Q or the rescue; 13z reads it back).
 // Programs keep rooms in the repo's room_scans/ (gitignored), outside build/, so a rebuild never deletes them.
+// CheckRoomFolder refuses a folder that can't take a room (inside build/, relative, unwritable, no space: D48).
 //
 //   .gitignore         "*": git never takes anything in this folder
 //   room.txt           format, program, cameras, scan count; after finishing: first_camera_turn, finished 1
@@ -20,6 +21,7 @@
 // rewritten atomically; folders sort by number (scan_1000 after scan_999).
 #pragma once
 
+#include "spotter/file_dialog.hpp"   // Ask, AskSaveAs, Confirm, Tell
 #include "spotter/frame.hpp"
 #include "spotter/room.hpp"
 #include "spotter/room_scan.hpp"
@@ -194,23 +196,53 @@ bool SetExcluded(const std::filesystem::path& scanFolder, bool excluded);
 //         broken descriptor left out; it never throws. O(landmarks).
 std::vector<Landmark> LoadLandmarks(const std::filesystem::path& room, const RoomInfo& info);
 
-// --- The console ---
+// --- Where a room goes (D48) ---
 
-//std::string Ask(const std::string& question){
-//
-//@param1 - question: printed before waiting
-//
-//@brief - a line typed in the console, without spaces or quotes round it ("Copy as path" adds quotes).
-//         "cancel" at the end of input. O(answer length).
-std::string Ask(const std::string& question);
+// What one scan takes on disk, with its share of points.ply and room for the .new copies a save makes. Measured
+// on the 2026-11-13 room: 11.5 MB of scan files + 2.8 MB of points.ply per scan.
+const uintmax_t RoomBytesPerScan = 16ull * 1024 * 1024;
 
-//std::filesystem::path AskRoomFolder(const std::string& defaultFolder){
+struct FolderCheck
+{
+    bool ok = false;
+    std::string problem;     // why not, in plain words, when !ok
+    std::string warning;     // a yes-but (little free space), when ok
+    uintmax_t freeBytes = 0;
+    int scansThatFit = 0;    // freeBytes / RoomBytesPerScan
+};
+
+//FolderCheck CheckRoomFolder(const std::filesystem::path& room, int scansToWrite, bool quick){
 //
-//@param1 - defaultFolder: the folder used when Enter is pressed
+//@param1 - room: the room folder a program is about to write
+//@param2 - scansToWrite: how many scans the next save writes (default 1)
+//@param3 - quick: a small test file instead of one scan's size, for checking often (default false)
 //
-//@brief - where a new room goes: asks for a folder (Enter = defaultFolder) and a name (Enter =
-//         room_<date>_<time>). A saved room of that name is overwritten only after a yes; any other
-//         existing folder is never touched. Empty if the answer was cancel.
-std::filesystem::path AskRoomFolder(const std::string& defaultFolder);
+//@brief - can a room be saved there? Refuses a relative path (it would land wherever the program runs), a folder
+//         inside build/ (a clean rebuild deletes it), one inside another room folder (FindRooms wouldn't list it),
+//         a file in the way, a path too long for Windows, a folder that can't be created, a test file that can't
+//         be written, synced and read back (the system's reason: access denied, read-only, ...), and too little
+//         free space (under scansToWrite + 5 scans). Warns under 60 scans' room. Folders it created are removed
+//         again, so nothing is left on disk. O(1) plus writing the test file.
+FolderCheck CheckRoomFolder(const std::filesystem::path& room, int scansToWrite = 1, bool quick = false);
+
+//std::vector<std::filesystem::path> RescueFolders(){
+//
+//@brief - where a session's scans go, in this order, when its own folder can't be written at the end: the repo's
+//         room_scans/rescue_<date>_<time>, then <home>/Documents/Spotter rescue/rescue_<date>_<time>, then the
+//         system's temp folder. All absolute. O(1).
+std::vector<std::filesystem::path> RescueFolders();
+
+//std::filesystem::path AskRoomFolder(const std::string& defaultFolder, const std::filesystem::path& current, int scansToWrite){
+//
+//@param1 - defaultFolder: where the Save As window opens for a new room
+//@param2 - current: the room folder already in use (13e's K), or empty at start-up (default empty)
+//@param3 - scansToWrite: for CheckRoomFolder's free-space test (default 1)
+//
+//@brief - where a room goes, chosen in a Save As window (AskSaveAs; the name is the folder's, room_<date>_<time>
+//         suggested). Then: a file in the way is refused; a saved room of that name is deleted and replaced only
+//         after a yes; any other folder that isn't empty is left alone (choose again); `current` itself is never
+//         a clash. CheckRoomFolder last; a refusal is shown (Tell) and the window opens again, and little free
+//         space asks first. Empty if cancelled. O(1) plus the waits.
+std::filesystem::path AskRoomFolder(const std::string& defaultFolder, const std::filesystem::path& current = {}, int scansToWrite = 1);
 
 }

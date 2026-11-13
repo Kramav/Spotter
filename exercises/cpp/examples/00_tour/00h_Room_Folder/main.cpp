@@ -179,7 +179,6 @@ int main()
     Damage(folder, info);
     Rebuild(back);
     fs::remove_all(folder, error);
-    std::printf("\nDeleted %s again. Press Enter to close.\n", folder.string().c_str());
-    std::getchar();
+    std::printf("\nDeleted %s again.\n", folder.string().c_str());
     return 0;
 }

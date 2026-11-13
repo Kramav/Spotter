@@ -246,12 +246,19 @@ Scan the room from several spots; each scan is placed automatically, and E saves
 the whole room. It takes about 10 minutes for a first try. Use `13e_Room_Scan`; it is our room
 scanner.
 
-- **Before the windows open,** it asks in the console where to save: `Folder` (Enter =
-  `room_scans\` at the repo root, outside `build`) and `Name` (Enter = `room_<date>_<time>`).
-- **Nothing is written while you scan.** The scans stay in memory. **K** (or **Q** on the way out)
-  writes the folder. If the Kinect is lost or the program fails, it writes the folder by itself first,
-  with no questions, so a lost Kinect or an error costs nothing already scanned. A crash or a blue
-  screen does cost the unsaved scans, so press **K** now and then in a long scan.
+- **Before the windows open,** a Save As window asks where the room goes. It starts in `room_scans\`
+  at the repo root, with the name `room_<date>_<time>`; the name you type becomes the room's folder.
+  The folder is checked before you scan: not inside `build\` (a clean rebuild deletes it), writable,
+  and with room on the disk. A problem is shown in a message box, and the window opens again.
+- **The camera window always shows where the room goes** (its full path and how many scans fit
+  there). Before every scan the folder is checked again; if it can't take the scans any more (a full
+  disk, an unplugged drive), a red warning says so: press **K** and choose another folder.
+- **Nothing is written while you scan.** The scans stay in memory. **K** opens Save As (keep the folder
+  or choose another) and writes it; a green `SAVED ... to <folder>` line confirms it. **Q** on the way
+  out writes it too. If the Kinect is lost or the program fails, it writes the folder by itself first,
+  with no questions. If that folder fails, it tries `room_scans\rescue_<time>`, then
+  `Documents\Spotter rescue\`, then the temp folder, and the console's last lines say where every scan
+  is. A crash or a blue screen does cost the unsaved scans, so press **K** now and then in a long scan.
 - **Live anchors.** Green dots in the camera window are the details the next scan will be placed
   by: things already scanned. The counter reads `anchors: N (need 20)`. Distance was never the
   real limit; sharing enough of what's been seen is. Move as far as you like while the counter
@@ -294,7 +301,9 @@ scanner.
        cmake --build --preset default --target 13e_Room_Scan
        build\examples\13e_Room_Scan.exe
 
-   The scans and the model go into the folder you name at the start (Enter = `room_scans\` at the repo root).
+   The scans go into the folder you choose at the start (the window starts in `room_scans\` at the repo
+   root); E asks where its model goes, starting in that same folder. Double-clicked, its console stays
+   open at the end (and after any error, with the cause) until you press Enter.
 
 ### Scan
 
@@ -324,9 +333,10 @@ scanner.
 
 ### Save and look at it
 
-11. Press **E**. After a few seconds the console prints the file name (`room_scan_<number>.obj`),
-    the room's height, its walls and furniture boxes. You can keep scanning and press E again:
-    each export is a new file. **K** saves the scans (below); **Q** saves them too, then quits.
+11. Press **E**. A Save As window asks where the model goes (it starts in the room's folder, named
+    `room_scan_<date>_<time>.obj`). After a few seconds a green `EXPORTED <file>` line shows where it
+    went, and the console prints the room's height, its walls and furniture boxes. You can keep
+    scanning and press E again. **K** saves the scans (below); **Q** saves them too, then quits.
 12. **Open it in Blender** (free): File > Import > Wavefront (.obj). In the import options tick
     **Split by Group**. To see the colours: in the viewport's Solid shading menu, set Color to
     **Attribute**. Or in **MeshLab**: File > Import Mesh; colours show by themselves.
@@ -347,9 +357,9 @@ E's `.obj` keeps one colour per 2 cm corner, averaged over every scan, so poster
 blur. The folder 13e writes (on **K**, on **Q**, or by itself when the Kinect is lost) keeps every
 scan, so you can rebuild with 13z later.
 
-1. **At the start,** 13e asks in its console window for the folder (Enter = `room_scans\` at the repo
-   root, or type or paste any folder) and the name (Enter = `room_<date>_<time>`). A room folder
-   of the same name is overwritten only if you answer `y`; type `cancel` at either question to stop.
+1. **At the start,** 13e asks in a Save As window where the room goes (above). A saved room of the
+   same name is replaced only if you answer Yes; a folder holding other files is never touched.
+   Cancel to stop.
 2. The folder holds every scan's points, pictures and placement, plus **`points.ply`**. That's
    every scan's own points with their own colours, what the viewer shows, with no averaging. Open
    it in MeshLab (File > Import Mesh) or Blender (File > Import > Stanford PLY). It's about 11 MB
@@ -359,6 +369,8 @@ scan, so you can rebuild with 13z later.
        build\examples\13z_Room_Rebuild.exe
 
    It lists every saved room in the repo's `room_scans\` (or give a folder: `13z_Room_Rebuild D:\scans`).
+   `o` opens a Select Folder window instead, and so does finding no rooms. 13w, 13x and Demos 4 and 6
+   open a room the same way when started without one.
    Then you choose:
    - **Which rooms:** `2`, `1,3`, or Enter for all.
    - **What to do:** view, build `.obj`, build `.ply`, or both.

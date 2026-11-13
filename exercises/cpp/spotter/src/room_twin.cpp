@@ -21,6 +21,45 @@ std::filesystem::path NewestRoomFolder(const std::filesystem::path& root)
     return newest;
 }
 
+std::filesystem::path ChooseRoom(int argc, char** argv, const std::string& roomsFolder, const std::string& program)
+{
+    namespace fs = std::filesystem;
+    std::error_code error;
+    if (argc > 1)
+    {
+        const fs::path given = fs::absolute(fs::path(argv[1]), error);
+        if (fs::exists(given / "room.txt", error)) return given;
+        std::printf("%s holds no room.txt, so it isn't a saved room. Choose one in the window.\n", given.string().c_str());
+    }
+    fs::path startIn = fs::absolute(fs::u8path(roomsFolder), error).lexically_normal();
+    while (true)
+    {
+        const fs::path newest = NewestRoomFolder(startIn);   // opens beside it, with it selected
+        fs::path chosen = AskOpenFolder(program + ": open a room (the folder 13e saved, holding room.txt)", newest.empty() ? startIn : newest.parent_path(),
+                                        newest.empty() ? "" : newest.filename().string());
+        if (chosen.empty()) { std::printf("No room chosen.\n"); return {}; }
+        if (!fs::exists(chosen / "room.txt", error) && fs::exists(chosen.parent_path() / "room.txt", error)) chosen = chosen.parent_path();   // a scan_NNN
+        if (!fs::exists(chosen / "room.txt", error))
+        {
+            std::vector<SavedRoom> rooms = FindRooms(chosen);
+            std::string list;
+            for (size_t i = 0; i < rooms.size() && i < 12; i++)
+                list += cv::format("\n  %s  (%d scans, saved %s)", rooms[i].folder.lexically_relative(chosen).string().c_str(), rooms[i].scans, rooms[i].saved.c_str());
+            if (rooms.size() > 12) list += cv::format("\n  ... and %zu more", rooms.size() - 12);
+            Tell("Not a room folder", rooms.empty()
+                 ? chosen.string() + " holds no room.txt, so it isn't a room 13e saved.\n\nChoose the folder 13e saved: it holds room.txt and scan_001, scan_002, ..."
+                 : chosen.string() + " isn't a room itself, but it holds " + std::to_string(rooms.size()) + " of them:" + list + "\n\nOpen one of those.");
+            startIn = chosen;
+            continue;
+        }
+        RoomInfo info;
+        std::string problem;
+        if (!ReadRoomInfo(chosen, info, problem)) { Tell("Can't open that room", chosen.string() + ": " + problem); startIn = chosen.parent_path(); continue; }
+        std::printf("Opening the room %s\n", chosen.string().c_str());
+        return chosen;
+    }
+}
+
 bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoom& room, std::string& problem)
 {
     RoomInfo info;

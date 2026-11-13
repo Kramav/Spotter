@@ -20,7 +20,8 @@
 //  points_<time>.ply. Legacy rooms (format 1) were mirrored left-right; they
 //  are read back the right way round, and what's built from them is too.
 //
-//  Run:     13z_Room_Rebuild [folder]   (default: SearchFolder), then answer in the console.
+//  Run:     13z_Room_Rebuild [folder]   (default: SearchFolder), then answer in the console (o, or no rooms
+//           found: a Select Folder window).
 //  Viewer:  mouse drag / W A S D turn   wheel / Z + - zoom   R reset view
 //           C colour by scan   click a camera circle to select it
 //           X exclude / include   Esc deselect   E build .obj   K build .ply   N next room   Q quit
@@ -40,6 +41,7 @@
 
 #include "spotter/room.hpp"
 #include "spotter/room_folder.hpp"
+#include "spotter/room_twin.hpp"     // ChooseRoom: the Open window
 #include "spotter/track.hpp"   // ColourForId
 #include "spotter/view.hpp"
 
@@ -102,20 +104,30 @@ bool ParseList(const std::string& text, int count, std::vector<int>& numbers)
 //@param1 - searchIn: the folder to look for rooms in
 //
 //@brief - step 1: lists the saved rooms (FindRooms) and asks which; a number list picks them, a folder name
-//         searches there instead, q or cancel gives none (quit). Asks again on anything it doesn't understand.
-//         O(rooms).
+//         searches there instead, o opens a Select Folder window (ChooseRoom; it opens by itself when none are
+//         listed), q or cancel gives none (quit). Asks again on anything it doesn't understand. O(rooms).
 std::vector<spotter::SavedRoom> PickRooms(fs::path searchIn)
 {
     while (true)
     {
         std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(searchIn, SearchDepth);
         std::printf("\nSaved rooms in %s:\n", searchIn.string().c_str());
-        if (rooms.empty()) std::printf("  none (13e saves them; give another folder below)\n");
+        if (rooms.empty()) std::printf("  none (13e saves them): choose a room in the window\n");
         for (size_t r = 0; r < rooms.size(); r++)
             std::printf("  %2zu  %-28s %-24s %-16s  format %d  %3d scans (%d excluded)  %5.0f MB\n", r + 1, rooms[r].folder.filename().string().c_str(),
                         rooms[r].program.c_str(), rooms[r].saved.c_str(), rooms[r].format, rooms[r].scans, rooms[r].excluded, rooms[r].megabytes);
-        std::string answer = spotter::Ask(rooms.empty() ? "Folder to look in (q quits): " : "Which rooms? (2   1,3   1-4   Enter = all; or a folder to look in; q quits): ");
+        std::string answer = rooms.empty() ? "o" : spotter::Ask("Which rooms? (2   1,3   1-4   Enter = all; o = open a folder in a window; or a folder to look in; q quits): ");
         if (answer == "q" || answer == "cancel") return {};
+        if (answer == "o")   // a Select Folder window (D48)
+        {
+            char* none[] = { nullptr };
+            const fs::path room = spotter::ChooseRoom(0, none, searchIn.string(), "13z");
+            if (room.empty()) return {};
+            std::vector<spotter::SavedRoom> one = spotter::FindRooms(room, 1);
+            if (!one.empty()) return one;
+            std::printf("Couldn't read %s as a room.\n", room.string().c_str());
+            continue;
+        }
         std::error_code error;
         if (!answer.empty() && fs::is_directory(answer, error)) { searchIn = fs::absolute(answer); continue; }
         std::vector<int> picks;

@@ -102,7 +102,6 @@ int main()
     }
     std::printf("\nThe person's distance grows as it walks right (the made-up depth does too), and its speed\n"
                 "settles at +0.40 m/s. The TV coasts while missed and keeps ID #2. The unsure cup never\n"
-                "gets an ID, and the person's unsure batches don't break its ID.\n\nPress Enter to close.\n");
-    std::getchar();
+                "gets an ID, and the person's unsure batches don't break its ID.\n");
     return 0;
 }
