@@ -11,7 +11,9 @@ and everything must also build on Linux.
 
 ## Build, run, test
 
-From `exercises/cpp/`. On Windows, use the "x64 Native Tools" prompt, or call `vcvars64.bat` first:
+From `exercises/cpp/`. On Windows, use the "x64 Native Tools" prompt, or call `vcvars64.bat` first
+from `cmd` or PowerShell (not Git Bash: `vcvars64.bat` fails there with "\Microsoft was unexpected at
+this time"):
 
 ```
 cmake --preset default
@@ -19,15 +21,44 @@ cmake --build --preset default
 ctest --test-dir build                 # the library's self-checks: synthetic data, no Kinect
 build\examples\00b_Pinhole_Camera.exe  # a tour program (no Kinect)
 build\examples\02_Detect_Distance.exe  # an example (Kinect + yolo26n.onnx)
+build\examples\13e_Room_Scan.exe       # the room scanner (Kinect)
 ```
 
 vcpkg installs libfreenect2 (our port in `ports/`) and OpenCV the first time.
 
+- **The programs are in `build\examples\`.** Old `.exe`s sitting straight in `build\` (such as
+  `13e_Kinect_Room_Scan_Autosave.exe`) are leftovers of the legacy archive from before D47. Nothing
+  rebuilds them any more, so after a `git pull` they're out of date. Run the ones in
+  `build\examples\`, or delete `build\` and build again.
 - **Linux:** the same commands, with `/` in the paths, after the packages in
   [`../README.md`](../README.md)'s Linux section. Not tried yet (D7); expect a long first OpenCV build.
 - **The legacy archive** (`../legacy/`, 34 programs) builds only when asked:
   `cmake --preset default -DSPOTTER_BUILD_LEGACY=ON`, into `build\legacy\` (D47).
 - **Room scans** go to the repo's `room_scans/` (gitignored, outside `build`), never into git.
+
+### Building offline
+
+vcpkg needs the internet only for things it hasn't downloaded yet. Everything it gets once stays on
+the PC:
+
+| Where | What |
+|---|---|
+| `build\vcpkg_installed\` | the libraries this build folder uses |
+| `%LOCALAPPDATA%\vcpkg\archives\` (Linux: `~/.cache/vcpkg/archives/`) | vcpkg's binary cache: every library it has compiled, zipped |
+| `%VCPKG_ROOT%\downloads\` | source archives, plus the tools vcpkg fetched (CMake, Ninja, 7-Zip, PowerShell) |
+
+**Once, while online:** run `cmake --preset default` and `cmake --build --preset default` through to
+the end. After that, offline:
+
+| Situation | What to do |
+|---|---|
+| `build\` is there (after a `git pull` or an edit) | The usual two commands. vcpkg finds `build\vcpkg_installed\` up to date and downloads nothing. |
+| `build\` was deleted | The usual two commands. vcpkg unzips every library from its binary cache in a few minutes, without compiling. |
+| vcpkg still tries to download (the error names a URL), and `build\vcpkg_installed\` is there | Skip vcpkg: `cmake --preset default -DVCPKG_MANIFEST_INSTALL=OFF`, then build. CMake remembers this setting. Once you're back online, run `cmake --preset default -DVCPKG_MANIFEST_INSTALL=ON` to switch vcpkg back on, or a later change to `vcpkg.json` is silently ignored. |
+
+You do need the internet when `vcpkg.json`, its `builtin-baseline` or `ports/` changed in a pull
+(new library versions are compiled from new sources), or on a PC where vcpkg has never built this
+project.
 
 ## How a program reads
 
