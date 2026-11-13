@@ -69,7 +69,21 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   different YOLO model (or one the user trained) is a settings change: model path, input size,
   `.names` file, output layout. The originals in `legacy/` are never edited to fit the library.
 
-## Status (2026-11-08)
+## Status (2026-11-13)
+
+**Next session starts here (left off 2026-11-13).** Working through the 2026-11-11 review's remediation
+([§8](docs/review-2026-11-11-architecture.md)), the user's order: clean the repo first, Linux/CI later.
+- **Done:** initiatives 1 (D45, safe scan saves), 2 (D46, error boundaries), 9 (D47, docs/repo hygiene).
+- **Next, in order:** 6 = the deleted "temporary harnesses" as permanent `check_*` programs (13e's session
+  and rescue, the Demo 6/13x fill, 13w's ceiling and texture), then 8 = one floor/"up" rule +
+  `Pose::Inverse` (refactor only once 6's checks exist), then 7 = compiler warnings, then 5 =
+  record/replay. 4 (Linux build + CI) waits until the user says.
+- **Waiting on the user:** a real 13e run with K pressed twice, then 13z loads it (D45's real check);
+  open `docs/visualizer.html` and check the new 13y entry; 13w's `Floor:` console lines (D43); the
+  structure findings report; the review's §7 decisions (none logged).
+- **Not triaged yet:** the user's `things to fix on Kinect.txt` (a Gaussian noise filter when processing,
+  no compression for room scans, an information-per-pixel estimate). Ask before moving them into
+  ideas.md or the Roadmap. "No compression" fits D44's open capture-format question.
 
 - 2026-11-11: **D47, review initiative 9 done:** legacy builds only with `-DSPOTTER_BUILD_LEGACY=ON` (tag `legacy-archive`); docs that contradicted the code fixed; 13y added to EXAMPLES.md and the visualizer (the page not looked at); `*.bmp` ignored, stray files untracked; weights licence note. Review initiatives left without Linux: 6 (harnesses into checks), 8 (one floor/up rule, `Pose::Inverse`), 7 (warnings), 5 (record/replay); 3 (real-data runs) is the user's.
 - 2026-11-11: **D46, review initiative 2 done:** errors on the detector thread reach the caller; damaged room folders are refused with a reason; 13e's save can't throw mid-rescue; `check_yolo_decode` runs the real model; the always-passing `RecommendNext` check fixed. `ctest` 9/9 (check_structure untouched).
