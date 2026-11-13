@@ -1,0 +1,6 @@
+things to fix on Kinect:
+
+Gaussian noise filter when processing
+Do not compress for room scans.
+
+Add a way to estimate the information per pixel (useful metric I learned in digital image processing)
