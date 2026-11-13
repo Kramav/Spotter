@@ -6,8 +6,11 @@
 //  memory (nothing is written while you scan) and the folder is written in
 //  one go on K, on Q, when the Kinect is lost, or on any error (D39).
 //
-//    1. Folder first  asked in the console before the windows open (Enter =
-//                     the repo's room_scans/, then Enter = room_<date>_<time>).
+//    1. Folder first  a Save As window before the windows open (it starts in the
+//                     repo's room_scans/, the name room_<date>_<time>). The folder
+//                     is checked: not inside build/, writable, room on the disk
+//                     (D48). Its full path stays on the camera window, and is
+//                     checked again before every scan.
 //    2. SPACE scans   hold still: 60 frames averaged (07), then its colour
 //                     features (11b, near and far: 13d) and depth make a Scan.
 //    3. Placed        in the background, against the earlier scans: features
@@ -17,11 +20,14 @@
 //                     it again: all in memory.
 //    5. Live anchors  about twice a second: what the next scan would be placed
 //                     by (green near, magenta far), and the next shot to take.
-//    6. E / K         E merges everything into room_scan_<time>.obj (TSDF +
+//    6. E / K         E asks where (Save As, in the room's folder) and merges
+//                     everything into room_scan_<date>_<time>.obj (TSDF +
 //                     surface net + the clean model: spotter::FuseScans and
-//                     BuildRoom). K saves the folder (every scan, pose.txt
-//                     last, then points.ply); Q, a lost Kinect and any error
-//                     do it too.
+//                     BuildRoom). K asks where (Save As: keep the folder or
+//                     choose another) and saves it (every scan, pose.txt last,
+//                     then points.ply). A green banner says where each went.
+//                     Q, a lost Kinect and any error save with no questions; if
+//                     the folder fails, the rescue folders are tried in turn.
 //
 //  The scanning session (what it holds, one function per key) is in
 //  scan_state.hpp, next to this file.
@@ -30,7 +36,9 @@
 //  an error mid-scan saves the folder instead of losing it (the review's
 //  bug 6); placing a scan again leaves out its own landmarks (bug 14); the
 //  folder is flushed to disk before each pose.txt (bug 4); no saving as you
-//  go (the user, 2026-11-07: autosave was a stopgap; D39).
+//  go (the user, 2026-11-07: autosave was a stopgap; D39). Since D48: Save As windows
+//  instead of console questions, the folder checks, and E saves where you choose
+//  (it used to write into the folder the program ran from).
 //
 //  Window 1 (viewer): every scan placed in the room. Circles + 4 arrows =
 //            where each camera stood: yellow = fine, red = suspicious, grey =
@@ -43,7 +51,7 @@
 //            mouse drag / W A S D turn   wheel / Z + - zoom   R reset view   Q quit
 //
 //  Privacy: the scans are written to the folder you name at the start, with
-//  their colour pictures. E writes room_scan_<time>.obj. Both are captures of
+//  their colour pictures. E writes the .obj you name. Both are captures of
 //  the room in colour: *.obj, *.ply and room_scans/ are gitignored, and the
 //  folder gets its own .gitignore. Never commit them. Scan with nobody in view.
 // =====================================================================
@@ -60,7 +68,7 @@
 #include "scan_state.hpp"
 
 // The keys, shown in a strip below each window (spotter::WithKeys).
-const std::string Keys = "SPACE scan here   U undo the last scan   E export   K save the folder   click a camera circle to select it: X exclude / include   P place again   Esc deselect   C colour by scan   mouse drag / W A S D turn   wheel / Z + - zoom   R reset view   Q quit";
+const std::string Keys = "SPACE scan here   U undo the last scan   E export (Save As)   K save the folder (Save As)   click a camera circle to select it: X exclude / include   P place again   Esc deselect   C colour by scan   mouse drag / W A S D turn   wheel / Z + - zoom   R reset view   Q quit";
 
 // ---------------------------------------------------------------------
 //  Settings: change these and re-run
@@ -68,7 +76,7 @@ const std::string Keys = "SPACE scan here   U undo the last scan   E export   K 
 
 const int AverageFrames = 60;          // per scan: noise falls as 1 / sqrt(frames) (07)
 const float MaxDepthMeters = 6.0f;
-const std::string SaveFolder = SPOTTER_REPO_ROOT "/room_scans";   // Enter at the first question: the repo's room_scans/ (gitignored, outside build/)
+const std::string SaveFolder = SPOTTER_REPO_ROOT "/room_scans";   // where the Save As window starts: the repo's room_scans/ (gitignored, outside build/)
 const int LiveEveryMs = 500;           // the live anchors, this often
 const int ShowStep = 2;                // the viewer draws every 2nd pixel of each scan...
 const size_t MaxShownPoints = 600000;  // ...and at most this many points in all
@@ -96,7 +104,7 @@ const std::string CameraWindow = "13e room scan - camera  (SPACE scan, U undo, X
 //@param2 - key: what cv::waitKey returned
 //@param3 - view: the viewer, for clicks, zoom and its own keys
 //
-//@brief - a click in the viewer selects a camera; SPACE scans (when idle), U undoes, X excludes, P places again, E
+//@brief - a click in the viewer selects a camera; SPACE checks the folder and scans (when idle), U undoes, X excludes, P places again, E
 //         exports, K saves, C colours by scan, Esc deselects, + - zoom, anything else goes to the viewer (W A S D,
 //         Z, R). O(1).
 void HandleKey(Session& s, int key, spotter::OrbitView& view)
@@ -105,7 +113,7 @@ void HandleKey(Session& s, int key, spotter::OrbitView& view)
     if (view.TakeClick(click)) OnClick(s, view, click);
     switch (key)
     {
-    case ' ': if (Idle(s)) s.averager.Start(); break;
+    case ' ': OnSpace(s); break;
     case 'u': OnUndo(s); break;
     case 'x': OnExclude(s); break;   // not the viewer's zoom here
     case 'p': OnPlaceAgain(s); break;
@@ -168,6 +176,40 @@ void ShowRoom(const Session& s, spotter::OrbitView& view, spotter::PointRenderer
     cv::imshow(Viewer, spotter::WithKeys(image, Keys));
 }
 
+//std::string Tail(const std::string& text, size_t most){
+//
+//@param1 - text: a line, e.g. a long path
+//@param2 - most: the most characters that fit
+//
+//@brief - the line, or "..." and its end if it's too long (a path's end is the part that tells folders apart). O(length).
+std::string Tail(const std::string& text, size_t most)
+{
+    return text.size() <= most ? text : "..." + text.substr(text.size() - (most - 3));
+}
+
+//void ShowWhereItGoes(const Session& s, cv::Mat& display){
+//
+//@param1 - s: the session
+//@param2 - display: the camera picture, drawn on
+//
+//@brief - D48: the room folder's full path and its room in scans (always), a red warning while the last check
+//         says the folder can't take the scans, and K's or E's banner (green SAVED / EXPORTED, red FAILED) for 8
+//         seconds after. O(1).
+void ShowWhereItGoes(const Session& s, cv::Mat& display)
+{
+    cv::putText(display, cv::format("Room folder: %s   (room for ~%d scans)", Tail(s.folder.string(), 80).c_str(), s.scansThatFit),
+                cv::Point(10, display.rows - 42), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+    if (!s.folderProblem.empty())
+    {
+        cv::putText(display, "CAN'T SAVE TO THE ROOM FOLDER - press K to choose another", cv::Point(10, 195), cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 0, 255), 2);
+        cv::putText(display, Tail(s.folderProblem, 110), cv::Point(10, 220), cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 0, 255), 1);
+    }
+    if (s.banner.empty() || std::chrono::steady_clock::now() > s.bannerUntil) return;
+    cv::rectangle(display, cv::Rect(0, 240, display.cols, 50), cv::Scalar(0, 0, 0), cv::FILLED);
+    cv::putText(display, Tail(s.banner, 68), cv::Point(10, 274), cv::FONT_HERSHEY_SIMPLEX, 0.75,
+                s.bannerOk ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255), 2);
+}
+
 //void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::string& warning){
 //
 //@param1 - s: the session
@@ -176,8 +218,8 @@ void ShowRoom(const Session& s, spotter::OrbitView& view, spotter::PointRenderer
 //
 //@brief - the half-size colour picture with the live anchors (green near, magenta far, grey the rest) and their
 //         count in red / yellow / green against what's needed, the next-shot advice, the selected scan's keys, a
-//         status line (PLACING, HOLD STILL n / N or the scan count), the message and the warning; shown with the
-//         key strip. O(pixels + features).
+//         status line (PLACING, HOLD STILL n / N or the scan count), the message, the warning and where the room
+//         goes (ShowWhereItGoes); shown with the key strip. O(pixels + features).
 void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::string& warning = "")
 {
     cv::Mat display;
@@ -203,6 +245,7 @@ void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::st
     cv::putText(display, top, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
     cv::putText(display, s.message, cv::Point(10, display.rows - 15), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 255, 255), 1);
     if (!warning.empty()) cv::putText(display, warning, cv::Point(10, 160), cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(0, 0, 255), 2);
+    ShowWhereItGoes(s, display);
     cv::imshow(CameraWindow, spotter::WithKeys(display, Keys));
 }
 
@@ -216,17 +259,23 @@ void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::st
 //@param2 - kinect: the open Kinect
 //@param3 - frame: set to the first frame
 //
-//@brief - the folder (asked first, AskRoomFolder), then the first frame for the cameras' numbers and the device's
-//         calibration text. False if the answer was cancel or no frame came. O(1).
+//@brief - the folder (asked first in a Save As window and checked, AskRoomFolder), then the first frame for the
+//         cameras' numbers and the device's calibration text. False, with the reason printed, if the answer was
+//         cancel or no frame came. O(1).
 bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
 {
+    s.roomsFolder = SaveFolder;
     s.folder = spotter::AskRoomFolder(SaveFolder);
-    if (s.folder.empty() || !kinect.Next(frame)) return false;
+    if (s.folder.empty()) { std::printf("No folder chosen, so nothing can be saved: not starting.\n"); return false; }
+    if (!kinect.Next(frame)) { std::printf("The Kinect gave no first frame: not starting.\n"); return false; }
+    CheckFolderNow(s);
     s.camera = s.info.depthCamera = frame.depthCamera;
     s.info.colourSize = frame.colour.size();
     s.info.program = "13e_Room_Scan";
     s.info.calibration = kinect.CalibrationText();
-    std::printf("The room will be saved to %s (on K, Q, a lost Kinect or an error).\n%s\n", s.folder.string().c_str(), s.message.c_str());
+    std::printf("\n=================================================================\nThe room will be saved to\n  %s\n"
+                "(on K, Q, a lost Kinect or an error; room for about %d scans there)\n=================================================================\n%s\n",
+                s.folder.string().c_str(), s.scansThatFit, s.message.c_str());
     return true;
 }
 

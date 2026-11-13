@@ -48,8 +48,6 @@ int main(int argc, char** argv)
             else std::printf("  scan %3d  skipped: %s\n", number, problem.c_str());
         }
     }
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
     return 0;
 }
 

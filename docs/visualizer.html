@@ -2668,41 +2668,37 @@ EX.push({
 });
 
 EX.push({
-  id: '13e', name: 'Room Scan Autosave', group: 'scan', from: '13d',
-  idea: 'Our most advanced scanner, the one for real rooms: 13d, plus every scan written to disk the moment it\'s placed. A crash, a blue screen or an unplugged Kinect costs at most the scan in progress.',
+  id: '13e', name: 'Room Scan', group: 'scan', from: '13d',
+  idea: 'Our most advanced scanner, the one for real rooms: 13d, with the scans kept in memory (D39) and written in one go on K, Q, a lost Kinect or an error. Where they go is chosen in a Save As window and checked first, and checked again before every scan (D48).',
   uses: ['depth', 'colour', 'reg', 'xyz', 'ransac', 'pose', 'feat', 'icp', 'mesh', 'thread', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
-  compare: 'Synthetic: 0.027 s per scan to write, points.ply byte-identical to 13d\'s, and a scan cut off half-way skipped by 13z. On the sensor it has scanned a real room, and Demo 6 ran on it.',
+  compare: 'Synthetic: points.ply byte-identical to 13d\'s; a save cut off half-way keeps the earlier save (D45); a folder blocked at the end saved to room_scans\\rescue_ and loaded back unchanged (D48). On the sensor it has scanned real rooms (21 scans on 2026-11-13).',
   setup(st) { st.S = scans(); },
   steps: [
     {
-      name: 'The folder first', a: 'Nothing scanned yet', b: 'The console, before the windows open',
-      text: 'Where the room goes is asked at start-up, before anything is scanned (Enter = room_scans\\room_<date>_<time>). An existing room is only overwritten after a yes.',
+      name: 'The folder first, checked', a: 'Nothing scanned yet', b: 'Save As, then the check',
+      text: 'A Save As window asks where the room goes before anything is scanned (it starts in room_scans, named room_<date>_<time>). The folder is refused if it is inside build/ (a clean rebuild deletes it), can\'t be written, or the disk is nearly full; a message box says why and the window opens again.',
       A(ctx, R) { drawPlan(ctx, R, { cams: [{ x: 0, z: 0, yaw: 0, c: SCR.yellow, label: 'Kinect' }] }); },
       B(ctx, R) {
-        consoleLines(ctx, R, ['Folder for this room\'s scans', '(Enter = room_scans\\room_2026-11-04_1532):', { t: '> ', c: SCR.accent }, '', 'Saving into room_scans\\room_2026-11-04_1532', { t: 'Every scan is written there as it\'s placed.', c: SCR.dim }]);
+        consoleLines(ctx, R, ['Where should this room be saved?', { t: '  ...\\exercises\\cpp\\build\\examples\\Ambulance', c: SCR.red }, { t: 'Refused: inside the build folder, which a clean rebuild deletes.', c: SCR.red }, '', 'Where should this room be saved?', { t: '  ...\\Spotter\\room_scans\\room_2026-11-13_1420', c: SCR.green }, 'The room goes there (room for about 43000 scans).']);
       },
     },
     {
-      name: 'Each scan, saved at once', a: 'The room so far', b: 'The folder: pose.txt written last',
-      text: 'As soon as a scan is placed, its folder is written: points, pictures, features, and pose.txt last. A scan cut off half-way has no pose.txt, so 13z skips it. X, P and U update the folder too.',
+      name: 'Before each scan, checked again', a: 'The room so far', b: 'The camera window\'s folder line',
+      text: 'The scans stay in memory; nothing is written while scanning. Before every scan a quick test file and the free space say whether the folder can still take them all. If not (a full disk, an unplugged drive) a red line says so and K chooses another folder; scanning goes on.',
       A(ctx, R, st, s) { const k = Math.min(5, Math.floor(s / 1.1)); drawPlan(ctx, R, { layers: st.S.slice(0, k + 1).map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.slice(0, k + 1).map((_, j) => camOf(st.S, j)) }); },
       B(ctx, R, st, s) {
-        const k = Math.min(5, Math.floor(s / 1.1)), part = (s % 1.1) / 1.1, rows = ['room_scans\\room_2026-11-04_1532\\', '  room.txt   landmarks.txt   .gitignore'];
-        for (let j = 0; j <= k; j++) {
-          const newest = j === k, files = newest && part < 0.5 ? 'cloud.bin colour.bmp features.yml …' : 'cloud.bin colour.bmp features.yml … pose.txt';
-          rows.push({ t: `  scan_00${j + 1}\\  ${files}`, c: newest ? (part < 0.5 ? SCR.yellow : SCR.green) : SCR.text });
-        }
-        consoleLines(ctx, R, rows);
+        const k = Math.min(5, Math.floor(s / 1.1)), full = k >= 4;
+        consoleLines(ctx, R, [`${k + 1} scans (not saved yet)`, `Room folder: ...\\room_scans\\room_2026-11-13_1420   (room for ~${full ? 3 : 40} scans)`, full ? { t: 'CAN\'T SAVE TO THE ROOM FOLDER - press K to choose another', c: SCR.red } : { t: 'folder checked: fine', c: SCR.green }, '', 'K: Save As -> keep it, or another folder', { t: 'SAVED 6 scans to D:\\scans\\room_2026-11-13_1420', c: SCR.green }]);
       },
     },
     {
       name: 'Kinect lost', a: 'The camera window, frozen', b: 'The console',
-      text: 'No frame for 10 seconds (unplugged, a knocked cable, a stuck USB): the scans are already on disk, so 13e only finishes the folder (points.ply and the levelled coordinates) before touching the device again.',
+      text: 'No frame for 10 seconds (unplugged, a knocked cable, a stuck USB): every scan is saved with no questions before the device is touched again. If the folder fails, the rescue folders are tried in turn (room_scans\\rescue_, Documents, temp); the last lines say where every scan is, and the console stays open (D49).',
       A(ctx, R, st) {
         const I = show(ctx, R, paint(0, (i, px) => { colourAt(st.S[5].f, i, px); px[0] *= 0.55; px[1] *= 0.55; px[2] *= 0.55; }));
-        tag(ctx, I.x + 6, I.y + I.h / 2 - 8, 'KINECT LOST - finishing the saved folder', SCR.red, I);
+        tag(ctx, I.x + 6, I.y + I.h / 2 - 8, 'KINECT LOST - saving the folder', SCR.red, I);
       },
-      B(ctx, R) { consoleLines(ctx, R, ['No frame for 10 seconds: the Kinect is unplugged or stuck.', 'Finishing room_scans\\room_2026-11-04_1532 ...', '  points.ply (6 scans)', '  room.txt: finished 1, the levelled turn', { t: 'Saved. Nothing was lost.', c: SCR.green }]); },
+      B(ctx, R) { consoleLines(ctx, R, ['No frame from the Kinect for 10 s: unplugged?', '=== Kinect lost: saving the folder ===', { t: 'SAVING FAILED in E:\\scans\\room_... (the drive is gone)', c: SCR.red }, '!!! Saving to room_scans\\rescue_2026-11-13_142233 instead.', { t: 'Every scan is in ...\\room_scans\\rescue_2026-11-13_142233', c: SCR.green }, '--- 13e_Room_Scan.exe has ended ---  Press Enter to close.']); },
     },
   ],
 });

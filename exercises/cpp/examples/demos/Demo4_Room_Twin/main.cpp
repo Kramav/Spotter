@@ -29,7 +29,7 @@
 //          H  visitors highlighted / true colour     O  turning on/off
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset
 //          F  fullscreen on/off      Q or Esc  quit
-//  Run:    Demo4_Room_Twin [room folder]   (default: the newest room under RoomsFolder)
+//  Run:    Demo4_Room_Twin [room folder]   (none: an Open window starting in RoomsFolder, the newest room selected)
 //  No room? It takes the Kinect's own empty view as the room instead (spotter::OneViewRoom):
 //  one view only, good for rehearsing.
 //  Rooms are 13e's folders (format 2, or 13c-13e's format 1). Legacy 13's room_scan_*.obj files
@@ -156,16 +156,16 @@ struct Twin
 //@param1 - argc: how many command-line words there are
 //@param2 - argv: the words: an optional room folder
 //
-//@brief - step 1: the room folder given, or the newest under RoomsFolder. None: the room waits for the first empty
+//@brief - step 1: the room folder given, or one chosen in an Open window (ChooseRoom). None: the room waits for the first empty
 //         view (LearnAndLocate). O(LoadTwinRoom).
 Twin LoadTwin(int argc, char** argv)
 {
     Twin twin;
     std::string problem;
-    const std::filesystem::path folder = argc > 1 ? std::filesystem::path(argv[1]) : spotter::NewestRoomFolder(RoomsFolder);
+    const std::filesystem::path folder = spotter::ChooseRoom(argc, argv, RoomsFolder, "Demo4");
     if (folder.empty() || !spotter::LoadTwinRoom(folder, CubeMeters, twin.room, problem))
         std::printf("%s The Kinect's own empty view becomes the room. For the real thing, scan the room with 13e_Room_Scan.\n",
-                    folder.empty() ? ("No room under " + RoomsFolder + ".").c_str() : problem.c_str());
+                    folder.empty() ? "No room chosen." : ("Can't load " + folder.string() + ": " + problem).c_str());
     else twin.house = MakeHouse(twin.room);
     return twin;
 }

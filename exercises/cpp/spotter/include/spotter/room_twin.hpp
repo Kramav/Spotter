@@ -29,6 +29,20 @@ struct TwinRoom
 //         O(rooms) after FindRooms' walk.
 std::filesystem::path NewestRoomFolder(const std::filesystem::path& root);
 
+//std::filesystem::path ChooseRoom(int argc, char** argv, const std::string& roomsFolder, const std::string& program){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional room folder
+//@param3 - roomsFolder: where the Open window starts (the repo's room_scans/)
+//@param4 - program: the program's name, for the window's title
+//
+//@brief - which room to open (D48): the folder given on the command line, else one chosen in a Select Folder window
+//         (AskOpenFolder) that starts in roomsFolder with the newest room selected. A scan_NNN folder picked
+//         stands for its room. A folder that isn't a room is refused with a message box (one holding rooms says
+//         which) and the window opens again; so is a room.txt that can't be read. Empty if cancelled, with a line
+//         saying so. O(FindRooms) plus the waits.
+std::filesystem::path ChooseRoom(int argc, char** argv, const std::string& roomsFolder, const std::string& program);
+
 //bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoom& room, std::string& problem){
 //
 //@param1 - folder: a room folder (13e's)

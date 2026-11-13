@@ -60,8 +60,7 @@ int main()
         if (frame % 10 == 0)
             std::printf("frame %2d: raw %.3f m, filtered %.3f m (foot at X %.3f, Z %.3f)\n", frame, measured[0], cv::norm(cv::Point2d(state[0], state[1])), state[0], state[1]);
     }
-    std::printf("true: %.3f m (foot at X 1.000, Z 3.000)\n\nPress Enter to close.\n", cv::norm(trueFoot));
-    std::getchar();
+    std::printf("true: %.3f m (foot at X 1.000, Z 3.000)\n", cv::norm(trueFoot));
     return 0;
 }
 

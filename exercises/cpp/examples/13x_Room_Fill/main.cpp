@@ -38,7 +38,7 @@
 //
 //  Keys:   G  fill: marked / unmarked / off   K  save the .ply
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset   Q or Esc  quit
-//  Run:    13x_Room_Fill [room folder]   (default: the newest room under RoomsFolder)
+//  Run:    13x_Room_Fill [room folder]   (none: an Open window starting in RoomsFolder, the newest room selected)
 //  The filling is legacy Demo 6's (D31-D33), copied unchanged; Demo 6 shows it live.
 
 #include <algorithm>
@@ -1208,19 +1208,19 @@ struct Room
 //@param2 - argv: the words: an optional room folder
 //@param3 - room: filled with the points, floor and size
 //
-//@brief - step 1: the room folder given, or the newest under RoomsFolder; LoadTwinRoom and FindTwinFloor; keeps
+//@brief - step 1: the room folder given, or one chosen in an Open window (ChooseRoom); LoadTwinRoom and FindTwinFloor; keeps
 //         the points above the under-floor noise and works out the middle and the radius (90th percentile reach).
 //         False (with a message) if there is no room or it won't load. O(points).
 bool LoadRoom(int argc, char** argv, Room& room)
 {
-    room.folder = argc > 1 ? std::filesystem::path(argv[1]) : spotter::NewestRoomFolder(RoomsFolder);
+    room.folder = spotter::ChooseRoom(argc, argv, RoomsFolder, "13x");
     std::string problem;
     if (room.folder.empty())
     {
-        std::printf("No room under %s. Scan one with 13e_Room_Scan, or name its folder: 13x_Room_Fill <folder>\n", RoomsFolder.c_str());
+        std::printf("No room to fill. Scan one with 13e_Room_Scan, or name its folder: 13x_Room_Fill <folder>\n");
         return false;
     }
-    if (!spotter::LoadTwinRoom(room.folder, CubeMeters, room.twin, problem)) { std::printf("%s\n", problem.c_str()); return false; }
+    if (!spotter::LoadTwinRoom(room.folder, CubeMeters, room.twin, problem)) { std::printf("Can't load %s: %s\n", room.folder.string().c_str(), problem.c_str()); return false; }
     room.floor = spotter::FindTwinFloor(room.twin);
     for (const std::string& line : room.floor.report) std::printf("%s\n", line.c_str());
     std::vector<float> reach;

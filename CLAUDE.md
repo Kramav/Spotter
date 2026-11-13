@@ -35,7 +35,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); an archive: unchanged, built into `build\legacy\` only with `-DSPOTTER_BUILD_LEGACY=ON` (D34, D41, D47), git tag `legacy-archive`, and the docs point to `examples/` instead. `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (synthetic self-checks run by `ctest`, e.g. `build\check_box_depth.exe`; 10 checks, none for `source_freenect2`, `radar` or `view`). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`, `structure` (a prototype for the localisation study), `room_twin` (Demos 4 and 6). `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z, and the six demos in `examples/demos/` (D40), built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); an archive: unchanged, built into `build\legacy\` only with `-DSPOTTER_BUILD_LEGACY=ON` (D34, D41, D47), git tag `legacy-archive`, and the docs point to `examples/` instead. `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (synthetic self-checks run by `ctest`, e.g. `build\check_box_depth.exe`; 10 checks, none for `source_freenect2`, `radar` or `view`). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`, `structure` (a prototype for the localisation study), `room_twin` (Demos 4 and 6; `ChooseRoom`), `file_dialog` (Save As / Open windows, D48). `console_guard/` = the console guard every example links (D49). `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z, and the six demos in `examples/demos/` (D40), built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -59,7 +59,10 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   example that collects scans over a session (13-style) keeps them in memory and writes nothing
   while scanning (no autosave, D39). It still has the rescue: on K, Q, a lost Kinect (the frame
   timeout) or any exception, it saves everything with no questions, before touching the device
-  again. The folder is asked at start-up.
+  again. The folder is chosen at start-up in a Save As window (`AskRoomFolder`), checked by
+  `CheckRoomFolder` (not inside `build/`, writable, room on the disk), shown on screen all session and
+  checked again before every scan. If the end's save fails, `RescueFolders()` are tried in turn; scans
+  are dropped only after an explicit yes. K and E ask where with Save As and show where it went (D48).
 
   Build new ones from **13e, our most advanced scanner** (`examples/13e_Room_Scan`), not from 13–13d.
 - **Shared code lives in the `spotter` CMake library (D34, the user's choice).** Examples are still
@@ -68,6 +71,13 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   `detector_yolo_opencvdnn`, `features_orb`), so it can be swapped by adding a sibling file. A
   different YOLO model (or one the user trained) is a settings change: model path, input size,
   `.names` file, output layout. The originals in `legacy/` are never edited to fit the library.
+- **A console window never closes by itself (D49, the user's rule).** Every program in `examples/`
+  links the console guard (automatically, through `examples/CMakeLists.txt`): an uncaught exception or
+  crash prints its cause, and a double-clicked program waits for Enter at any end. Every error exit
+  must still print its own reason first (the guard can't see a `return 1`'s code). Programs no longer
+  add their own "Press Enter to close".
+- **Never save into the folder the program runs from.** Choose with `AskSaveAs` / `AskOpenFolder`
+  (`spotter/file_dialog.hpp`), and take a typed relative path from a known folder (D48).
 
 ## Status (2026-11-13)
 
@@ -78,13 +88,19 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   and rescue, the Demo 6/13x fill, 13w's ceiling and texture), then 8 = one floor/"up" rule +
   `Pose::Inverse` (refactor only once 6's checks exist), then 7 = compiler warnings, then 5 =
   record/replay. 4 (Linux build + CI) waits until the user says.
+- **Waiting on the user (D48/D49, new):** a 13e run on the sensor: the start-up Save As window, a
+  folder inside `build\` refused with a reason, K's Save As + green banner, E's Save As + `.obj` where
+  chosen, Q after K; double-click a program and see its console stay open. The original
+  `Ambulance_11-13-2026` is still in `build\examples\Ambulance\` (the user copied it, didn't move it):
+  it goes if `build\` is deleted; the copy is in `room_scans\`.
 - **Waiting on the user:** a real 13e run with K pressed twice, then 13z loads it (D45's real check);
-  open `docs/visualizer.html` and check the new 13y entry; 13w's `Floor:` console lines (D43); the
+  open `docs/visualizer.html` and check the new 13y entry and the rewritten 13e entry; 13w's `Floor:` console lines (D43); the
   structure findings report; the review's §7 decisions (none logged).
 - **Not triaged yet:** the user's `things to fix on Kinect.txt` (a Gaussian noise filter when processing,
   no compression for room scans, an information-per-pixel estimate). Ask before moving them into
   ideas.md or the Roadmap. "No compression" fits D44's open capture-format question.
 
+- 2026-11-13: **D48 + D49 (the user's asks after a scare):** the user's 21-scan 13e room wasn't lost: a relative folder typed at the console put it in `build\examples\Ambulance\`; 13w then found no room and its console closed at once. Copied to `room_scans\`. Now: `spotter/file_dialog` (Save As / Open / message boxes, console fallback); `CheckRoomFolder` (refuses build/, relative, unwritable, no space; `check_room` cases) and `RescueFolders`; 13e chooses its folder in Save As, shows it all session, re-checks before each scan, K/E use Save As with a SAVED/EXPORTED banner, and a failed end save falls through the rescue folders (a temporary harness passed). 13w, 13x, 13y, 13z and Demos 4/6 open rooms with `ChooseRoom` (a Select Folder window; 13w seen waiting in it, and loading the real room). D49: the console guard in every example (crash/exception cause printed, a double-clicked console waits for Enter); tested on a throwaway program. `ctest` 10/10. Not run on the sensor.
 - 2026-11-11: **D47, review initiative 9 done:** legacy builds only with `-DSPOTTER_BUILD_LEGACY=ON` (tag `legacy-archive`); docs that contradicted the code fixed; 13y added to EXAMPLES.md and the visualizer (the page not looked at); `*.bmp` ignored, stray files untracked; weights licence note. Review initiatives left without Linux: 6 (harnesses into checks), 8 (one floor/up rule, `Pose::Inverse`), 7 (warnings), 5 (record/replay); 3 (real-data runs) is the user's.
 - 2026-11-11: **D46, review initiative 2 done:** errors on the detector thread reach the caller; damaged room folders are refused with a reason; 13e's save can't throw mid-rescue; `check_yolo_decode` runs the real model; the always-passing `RecommendNext` check fixed. `ctest` 9/9 (check_structure untouched).
 - 2026-11-11: **D45, review initiative 1 done:** room scans live in the repo's `room_scans/` (gitignored, outside `build/`; the real room moved there unopened), and a save swaps each scan in whole, so a crash mid-save never loses an earlier save. `ctest` 10/10; not run on the sensor. The user chose: legacy gets a tag + build option OFF; all six living docs stay required.
@@ -356,6 +372,9 @@ PC and loads there (D44). Nothing else has to run on the Pi.
 
 ### Housekeeping
 
+- [ ] **Save As for the other savers (D48 left them, the user's scope):** 08 (`.ply`), 08b, 09b and 09c
+      (`.obj`) still write into the folder the program runs from (`build\examples\`). Give each
+      `AskSaveAs`, like 13e's E.
 - [ ] **Review 2026-11-11 ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)), §8 initiatives 1, 2, 9:**
   - [x] Data safety (D45): room scans default to the repo's `room_scans/`; `WriteScan` writes `.new` and swaps it in; K rewrites only new scans (pose.txt for the rest); `AskRoomFolder`'s false claim removed; the real room moved there. `check_room` covers cut-off saves. A real K on the sensor still to do.
   - [x] Exception boundaries (D46): `AsyncDetector` hands its thread's errors to `TryTake`; room-folder loads refuse damage with a reason; `LoadTwinRoom` prints skipped scans; 13e's `SaveAll` catches; the always-true `RecommendNext` check fixed. Checks for each.

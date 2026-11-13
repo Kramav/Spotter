@@ -62,7 +62,5 @@ int main()
     Print("Kabsch, 10% wrong pairs", spotter::Kabsch(b, a));
     std::printf("A few wrong pairs pull the whole answer off, so ICP drops pairs that are too far apart,\n"
                 "and 11b's RANSAC throws the wrong ones out before fitting.\n");
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
     return 0;
 }

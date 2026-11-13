@@ -1,8 +1,11 @@
 #include "spotter/room_folder.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -446,46 +449,188 @@ std::vector<Landmark> LoadLandmarks(const fs::path& room, const RoomInfo& info)
     return landmarks;
 }
 
-// --- The console ---
+// --- Where a room goes (D48) ---
 
-std::string Ask(const std::string& question)
+//std::string Comparable(const fs::path& path){
+//
+//@param1 - path: a path
+//
+//@brief - the path made full and tidy (as far as it exists), with / separators, lower case on Windows (its file
+//         names ignore case), for comparing paths. O(depth).
+static std::string Comparable(const fs::path& path)
 {
-    std::printf("%s", question.c_str());
-    std::string answer;
-    if (!std::getline(std::cin, answer)) return "cancel";
-    while (!answer.empty() && (answer.back() == ' ' || answer.back() == '"' || answer.back() == '\r')) answer.pop_back();
-    size_t start = answer.find_first_not_of(" \"");
-    return start == std::string::npos ? "" : answer.substr(start);
+    std::error_code error;
+    fs::path full = fs::weakly_canonical(fs::absolute(path, error), error);
+    if (error) full = fs::absolute(path, error);
+    std::string text = full.lexically_normal().generic_string();
+    while (text.size() > 1 && text.back() == '/') text.pop_back();
+#ifdef _WIN32
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+#endif
+    return text;
 }
 
-fs::path AskRoomFolder(const std::string& defaultFolder)
+//bool Inside(const fs::path& path, const fs::path& folder){
+//
+//@param1 - path: a path
+//@param2 - folder: a folder
+//
+//@brief - true if the path is the folder or anywhere inside it. O(depth).
+static bool Inside(const fs::path& path, const fs::path& folder)
 {
-    std::printf("\n=== Where should this room be saved? cancel quits. ===\n");
-    std::string folder = Ask(cv::format("Folder [%s]: ", fs::absolute(defaultFolder).string().c_str()));
-    if (folder == "cancel") return {};
-    if (folder.empty()) folder = defaultFolder;
-    const std::string stamp = Now("room_%Y-%m-%d_%H%M");
+    const std::string p = Comparable(path), f = Comparable(folder);
+    return p == f || (p.size() > f.size() && p.compare(0, f.size(), f) == 0 && p[f.size()] == '/');
+}
+
+//FolderCheck Refused(FolderCheck check, const std::string& problem){
+//
+//@brief - the check, refused for that reason. O(1).
+static FolderCheck Refused(FolderCheck check, const std::string& problem)
+{
+    check.ok = false;
+    check.problem = problem;
+    return check;
+}
+
+//std::string WriteTestFile(const fs::path& file, uintmax_t bytes){
+//
+//@param1 - file: the test file to create
+//@param2 - bytes: how big
+//
+//@brief - writes that many bytes, pushes them to the disk and reads the size back. Empty if all went well, else
+//         the system's reason. The file is left for the caller to remove. O(bytes).
+static std::string WriteTestFile(const fs::path& file, uintmax_t bytes)
+{
+#ifdef _WIN32
+    FILE* out = _wfopen(file.c_str(), L"wb");
+#else
+    FILE* out = std::fopen(file.c_str(), "wb");
+#endif
+    if (!out) return std::string("a file can't be created there (") + std::strerror(errno) + ")";
+    std::vector<char> block(1 << 20, 0);
+    std::string problem;
+    for (uintmax_t left = bytes; left > 0 && problem.empty(); )
+    {
+        const size_t n = (size_t)std::min<uintmax_t>(left, block.size());
+        if (std::fwrite(block.data(), 1, n, out) != n) problem = std::string("writing failed (") + std::strerror(errno) + ")";
+        left -= n;
+    }
+#ifdef _WIN32
+    if (problem.empty() && (std::fflush(out) != 0 || _commit(_fileno(out)) != 0)) problem = std::string("it can't be pushed to the disk (") + std::strerror(errno) + ")";
+#else
+    if (problem.empty() && (std::fflush(out) != 0 || fsync(fileno(out)) != 0)) problem = std::string("it can't be pushed to the disk (") + std::strerror(errno) + ")";
+#endif
+    if (std::fclose(out) != 0 && problem.empty()) problem = std::string("closing the file failed (") + std::strerror(errno) + ")";
+    std::error_code error;
+    if (problem.empty() && fs::file_size(file, error) != bytes) problem = "the test file came back the wrong size";
+    return problem;
+}
+
+FolderCheck CheckRoomFolder(const fs::path& room, int scansToWrite, bool quick)
+{
+    FolderCheck check;
+    std::error_code error;
+    if (room.empty() || !room.is_absolute())
+        return Refused(check, "\"" + room.string() + "\" isn't a full path, so it would land in whatever folder the program runs from. Choose a full path, e.g. in the repo's room_scans folder.");
+    const fs::path full = room.lexically_normal();
+#ifdef SPOTTER_BUILD_DIR
+    if (Inside(full, fs::u8path(SPOTTER_BUILD_DIR)))
+        return Refused(check, full.string() + " is inside the build folder (" + fs::u8path(SPOTTER_BUILD_DIR).make_preferred().string() +
+                              "), which a clean rebuild deletes. Choose a folder outside it, e.g. the repo's room_scans folder.");
+#endif
+    for (fs::path above = full.parent_path(); !above.empty(); above = above.parent_path())
+    {
+        if (fs::exists(above / "room.txt", error))
+            return Refused(check, full.string() + " is inside the saved room " + above.string() + ", where 13z, 13w and the demos wouldn't find it. Choose a folder outside it.");
+        if (above == above.parent_path()) break;
+    }
+    if (fs::exists(full, error) && !fs::is_directory(full, error))
+        return Refused(check, "There's a file called " + full.string() + " already. Choose another name.");
+#ifdef _WIN32
+    const size_t longest = full.native().size() + std::wstring(L"\\scan_1000.new\\colour_index.bin").size();
+    if (longest >= 260)
+        return Refused(check, cv::format("The path is too long for Windows: its files would need %zu characters (the limit is 259). Choose a shorter folder or name.", longest));
+#endif
+    std::vector<fs::path> created;   // deepest first, removed again at the end
+    for (fs::path p = full; !p.empty() && !fs::exists(p, error); p = p.parent_path())
+    {
+        created.push_back(p);
+        if (p == p.parent_path()) break;
+    }
+    fs::create_directories(full, error);
+    if (error) return Refused(check, "The folder " + full.string() + " can't be created (" + error.message() + "). Is the drive there, and may you write to it?");
+    const fs::path test = full / ".spotter_write_test";
+    const std::string problem = WriteTestFile(test, quick ? 64 * 1024 : RoomBytesPerScan);
+    fs::remove(test, error);
+    const fs::space_info space = fs::space(full, error);
+    check.freeBytes = error ? 0 : space.available;
+    for (const fs::path& p : created) fs::remove(p, error);   // only removes empty folders
+    if (!problem.empty())
+        return Refused(check, "A test save into " + full.string() + " failed: " + problem + ". Choose another folder (or drive).");
+    check.scansThatFit = (int)std::min<uintmax_t>(check.freeBytes / RoomBytesPerScan, 1000000);
+    const double megabytes = check.freeBytes / 1e6;
+    if (check.scansThatFit < scansToWrite + 5)
+        return Refused(check, cv::format("Only %.0f MB free on that drive: room for %d scans, and this needs %d plus some to spare (about %.0f MB a scan). Free some space or choose another drive.",
+                                         megabytes, check.scansThatFit, scansToWrite, RoomBytesPerScan / 1e6));
+    if (check.scansThatFit < 60)
+        check.warning = cv::format("Only %.0f MB free on that drive: room for about %d scans.", megabytes, check.scansThatFit);
+    check.ok = true;
+    return check;
+}
+
+std::vector<fs::path> RescueFolders()
+{
+    const std::string stamp = Now("%Y-%m-%d_%H%M%S");
+    std::vector<fs::path> folders;
+#ifdef SPOTTER_REPO_ROOT
+    folders.push_back((fs::u8path(SPOTTER_REPO_ROOT) / "room_scans" / ("rescue_" + stamp)).make_preferred());
+#endif
+#ifdef _WIN32
+    const char* home = std::getenv("USERPROFILE");
+#else
+    const char* home = std::getenv("HOME");
+#endif
+    if (home && *home) folders.push_back(fs::u8path(home) / "Documents" / "Spotter rescue" / ("rescue_" + stamp));
+    std::error_code error;
+    const fs::path temp = fs::temp_directory_path(error);
+    if (!error) folders.push_back(temp / ("spotter_rescue_" + stamp));
+    return folders;
+}
+
+fs::path AskRoomFolder(const std::string& defaultFolder, const fs::path& current, int scansToWrite)
+{
+    fs::path folder = current.empty() ? fs::absolute(fs::u8path(defaultFolder)).lexically_normal() : current.parent_path();
+    std::string name = current.empty() ? Now("room_%Y-%m-%d_%H%M") : current.filename().string();
+    const std::string title = current.empty() ? "Where should this room be saved?" : "Save the room as";
     while (true)
     {
-        std::string name = Ask(cv::format("Name [%s]: ", stamp.c_str()));
-        if (name == "cancel") return {};
-        if (name.empty()) name = stamp;
-        if (name.find_first_of("\\/:*?\"<>|") != std::string::npos) { std::printf("A name can't hold \\ / : * ? \" < > |. Again.\n"); continue; }
-        fs::path where = fs::absolute(fs::path(folder) / name);
+        fs::path where = AskSaveAs(title, folder, name, "Spotter room folder", "");
+        if (where.empty()) return {};
+        where = where.lexically_normal();
+        folder = where.parent_path();   // a second try opens where the first one was
+        name = where.filename().string();
         std::error_code error;
-        if (!fs::exists(where)) return where;
-        if (!fs::exists(where / "room.txt"))
+        const bool same = !current.empty() && Comparable(where) == Comparable(current);
+        if (!same && fs::exists(where, error))
         {
-            if (fs::is_directory(where) && fs::is_empty(where, error)) return where;
-            std::printf("%s is there already and isn't a saved room, so it's left alone. Another name.\n", where.string().c_str());
-            continue;
+            if (!fs::is_directory(where, error)) { Tell("Can't save the room there", "There's a file called " + where.string() + " already. Choose another name."); continue; }
+            if (fs::exists(where / "room.txt", error))
+            {
+                if (!Confirm("Replace a saved room?", where.string() + " is a saved room already.\n\nDelete it and save this room there instead?")) continue;
+                fs::remove_all(where, error);
+                if (error) { Tell("Couldn't delete the old room", where.string() + ": " + error.message() + ". Choose another name."); continue; }
+            }
+            else if (!fs::is_empty(where, error))
+            {
+                Tell("Can't save the room there", where.string() + " is there already and holds other files (it isn't a saved room), so it's left alone. Choose a new name.");
+                continue;
+            }
         }
-        if (Ask(cv::format("%s is a saved room already. Overwrite it? [y/N]: ", where.string().c_str())) == "y")
-        {
-            fs::remove_all(where, error);
-            if (!error) return where;
-            std::printf("Couldn't remove it (%s). Another name.\n", error.message().c_str());
-        }
+        const FolderCheck check = CheckRoomFolder(where, scansToWrite);
+        if (!check.ok) { Tell("Can't save the room there", check.problem); continue; }
+        if (!check.warning.empty() && !Confirm("Little free space", check.warning + "\n\nSave there anyway?")) continue;
+        std::printf("The room goes to %s (room for about %d scans there).\n", where.string().c_str(), check.scansThatFit);
+        return where;
     }
 }
 

@@ -6,6 +6,9 @@
 //   3. The room folder: written and read back unchanged; SetExcluded; a zeroed cloud.bin refused
 //      (bug 4); folders sorted by number (bug 5); a format-1 (mirrored) scan comes back unmirrored;
 //      FinishRoomFolder writes points.ply and finished 1.
+//   4. Where a room may go (D48): CheckRoomFolder refuses a relative path, a folder inside build/, one
+//      inside another room, a file in the way, too many scans for the drive, a path too long for Windows;
+//      passes a good folder and leaves nothing behind. RescueFolders are absolute, the first in room_scans.
 // Run: build\check_room.exe. Exit code 0 = passed. Writes only in the system's temp folder.
 
 #include "spotter/room.hpp"
@@ -290,6 +293,44 @@ int main()
           spotter::ReadRoomInfo(folder, read, problem) && read.finished, "FinishRoomFolder writes points.ply and finished 1");
     std::printf("   points.ply: %zu points\n", points);
     fs::remove_all(folder, error);
+
+    // 4. Where a room may go (D48): CheckRoomFolder and RescueFolders.
+    const fs::path base = fs::temp_directory_path() / "spotter_check_folder";
+    fs::remove_all(base, error);
+    fs::create_directories(base / "a_room", error);
+    std::ofstream(base / "a_room" / "room.txt") << "format 2\n";
+    std::ofstream(base / "a_file") << "in the way\n";
+    spotter::FolderCheck check = spotter::CheckRoomFolder("relative_room");
+    Check(!check.ok && check.problem.find("full path") != std::string::npos, "a relative path is refused (it would land wherever the program runs)");
+    const fs::path inBuild = fs::u8path(SPOTTER_BUILD_DIR) / "check_room_never_made" / "room";
+    check = spotter::CheckRoomFolder(inBuild);
+    Check(!check.ok && check.problem.find("build folder") != std::string::npos && !fs::exists(inBuild.parent_path()),
+          "a folder inside build/ is refused, and not created (D48's cause)");
+    check = spotter::CheckRoomFolder(base / "a_room" / "inner");
+    Check(!check.ok && check.problem.find("inside the saved room") != std::string::npos, "a folder inside another room is refused");
+    check = spotter::CheckRoomFolder(base / "a_file");
+    Check(!check.ok && check.problem.find("file called") != std::string::npos, "a file where the folder should be is refused");
+    check = spotter::CheckRoomFolder(base / "a_file" / "room");
+    Check(!check.ok && check.problem.find("can't be created") != std::string::npos, "a file where a folder above should be: refused, with the system's reason");
+    std::printf("   e.g. \"%s\"\n", check.problem.c_str());
+    const fs::path good = base / "new" / "deeper" / "room";
+    check = spotter::CheckRoomFolder(good);
+    Check(check.ok && check.freeBytes > 0 && check.scansThatFit > 0, "a good folder passes, with the free space in scans");
+    Check(!fs::exists(base / "new"), "and the check leaves nothing behind (the folders it made are gone)");
+    std::printf("   temp drive: %.1f GB free = room for %d scans\n", check.freeBytes / 1e9, check.scansThatFit);
+    Check(spotter::CheckRoomFolder(good, 1, true).ok, "the quick check (before each scan) passes too");
+    check = spotter::CheckRoomFolder(good, 100000000);
+    Check(!check.ok && check.problem.find("free on that drive") != std::string::npos, "more scans than the drive holds: refused");
+#ifdef _WIN32
+    check = spotter::CheckRoomFolder(base / std::string(240, 'x'));
+    Check(!check.ok && check.problem.find("too long") != std::string::npos, "a path too long for Windows is refused");
+#endif
+    std::vector<fs::path> rescue = spotter::RescueFolders();
+    bool absolute = rescue.size() >= 2;
+    for (const fs::path& p : rescue) absolute = absolute && p.is_absolute();
+    Check(absolute && rescue[0].parent_path().lexically_normal() == (fs::u8path(SPOTTER_REPO_ROOT) / "room_scans").make_preferred().lexically_normal(),
+          "RescueFolders: all absolute, the first in the repo's room_scans");
+    fs::remove_all(base, error);
 
     std::printf(failures ? "check_room: %d FAILED\n" : "check_room: all passed\n", failures);
     return failures ? 1 : 0;

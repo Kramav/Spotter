@@ -22,7 +22,7 @@
 //  The stored poses are 13e's own estimates (features + ICP), not ground
 //  truth: agreement means "consistent", not "accurate".
 //
-//  Run:  13y_Structure_Survey [folder]   (default: the repo's room_scans/)
+//  Run:  13y_Structure_Survey [folder]   (default: the repo's room_scans/); no rooms there: a Select Folder window
 //        13y_Structure_Survey room_scans view 12   one scan's Relocate answers in 3D: green = its
 //            stored pose, red = Relocate's (N steps through the candidates), grey = the other scans
 //        13y_Structure_Survey room_scans 11        sections 4 then 3, from scan 11 (resumes a long run)
@@ -39,6 +39,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include "spotter/room_folder.hpp"
+#include "spotter/room_twin.hpp"     // ChooseRoom: the Open window
 #include "spotter/stats.hpp"
 #include "spotter/structure.hpp"
 #include "spotter/view.hpp"
@@ -460,6 +461,12 @@ int main(int argc, char** argv)
     const std::filesystem::path where = std::filesystem::absolute(argc > 1 ? argv[1] : SPOTTER_REPO_ROOT "/room_scans");
     std::vector<spotter::SavedRoom> rooms = spotter::FindRooms(where);
     std::printf("%zu saved rooms in %s\n", rooms.size(), where.string().c_str());
+    if (rooms.empty())   // none there: choose one in a Select Folder window (D48)
+    {
+        char* none[] = { nullptr };
+        const std::filesystem::path room = spotter::ChooseRoom(0, none, where.string(), "13y");
+        if (!room.empty()) rooms = spotter::FindRooms(room, 1);
+    }
     for (const spotter::SavedRoom& saved : rooms)
     {
         std::printf("\n=== %s (format %d, %s, saved %s) ===\n", saved.folder.filename().string().c_str(), saved.format, saved.program.c_str(), saved.saved.c_str());

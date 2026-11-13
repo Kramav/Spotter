@@ -35,6 +35,9 @@ vcpkg installs libfreenect2 (our port in `ports/`) and OpenCV the first time.
 - **The legacy archive** (`../legacy/`, 34 programs) builds only when asked:
   `cmake --preset default -DSPOTTER_BUILD_LEGACY=ON`, into `build\legacy\` (D47).
 - **Room scans** go to the repo's `room_scans/` (gitignored, outside `build`), never into git.
+  13e chooses the folder in a Save As window and refuses one inside `build` (D48).
+- **Every program's console stays open** after an error or crash, with the cause printed, and waits for
+  Enter at the end when double-clicked (the console guard, D49, linked by `CMakeLists.txt` here).
 
 ### Building offline
 
@@ -109,8 +112,9 @@ There are no globals. A program's state lives in plain structs declared in that 
 | `room_scan.hpp` | `Scan` + `MakeScan`; `PlaceScan` (features against the earlier scans, ICP, a second opinion) → `Placement`; far features, `Landmark`, `AddLandmarks`; `CheckLive` (live anchors); `RecommendNext` (the next shot); `ScanOptions` = 13e's settings | 00h |
 | `room.hpp` | `FuseScans` (TSDF + surface net), `BuildRoom` (floor, ceiling, walls, furniture boxes, levelled) → `Room`; `SaveRoomObj`, `RoomPoints` | 00h |
 | `structure.hpp` | a prototype for the structure-localisation study: `ExtractStructure` (planes sorted into floor, ceiling, walls; area and density), `FindEdges`, `MergeStructures`, `Relocate` (a pose from structure alone, ranked by `ViewAgreement`, ambiguity flagged), `ColourVotes` / `OffPlaneShare` (tie-breakers), `PlaceAfter` (Continuous mode) | 13y |
-| `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScansFrom`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; `Ask`, `AskRoomFolder` | 00h |
-| `room_twin.hpp` | for the room twin (Demos 4, 6): `LoadTwinRoom` (a room folder merged into one levelled surface), `NewestRoomFolder`, `OneViewRoom` (no room: the Kinect's own view); `FindTwinFloor` (D33's floor rule, with the review's bug 7 fixed); `LocateKinect` (ICP from several starts around scan 1's spot) | |
+| `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScansFrom`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; where a room may go (D48): `CheckRoomFolder` (not in build/, writable, room on the disk), `RescueFolders`, `AskRoomFolder` (Save As + checks) | 00h |
+| `room_twin.hpp` | for the room twin (Demos 4, 6): `LoadTwinRoom` (a room folder merged into one levelled surface), `NewestRoomFolder`, `ChooseRoom` (the command line, else an Open window, D48), `OneViewRoom` (no room: the Kinect's own view); `FindTwinFloor` (D33's floor rule, with the review's bug 7 fixed); `LocateKinect` (ICP from several starts around scan 1's spot) | |
+| `file_dialog.hpp` | asking the user with the system's own windows (D48): `AskSaveAs`, `AskOpenFolder`, `Confirm`, `Tell`; `Ask` (the console). Windows: the shell's dialogs; Linux: zenity; else, or with `SPOTTER_CONSOLE_DIALOGS=1`, the console | |
 
 Added with the demos: `StillBackground` in `depth.hpp` (03's empty view after a countdown, for Demos 4 and 5)
 and `OpenExhibitWindow` / `ToggleFullscreen` in `view.hpp`. The wall filter stays inline in 06c, and

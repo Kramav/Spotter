@@ -62,7 +62,5 @@ int main()
     std::printf("Every point: %.1f ms.  k-d tree: built in %.1f ms, searched in %.2f ms.\n", everyMs, buildMs, searchMs);
     std::printf("Same answer for %d of %zu questions. The rest got a point almost as near: the tree opens\n"
                 "at most 32 boxes, so it's approximate. ICP doesn't mind; it repeats anyway.\n", same, questions.size());
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
     return 0;
 }

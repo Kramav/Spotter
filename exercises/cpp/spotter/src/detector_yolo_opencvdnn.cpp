@@ -80,6 +80,7 @@ YoloDetector::YoloDetector(const Options& options) : options(options), classes(o
     }
     net = cv::dnn::readNetFromONNX(options.modelPath);
     ready = !net.empty();
+    if (!ready) { std::printf("Could not load the model %s (OpenCV DNN gave an empty network).\n", options.modelPath.c_str()); return; }
     std::printf("Loaded %s (%d x %d input, %zu classes)\n", options.modelPath.c_str(), options.inputSize,
                 options.inputSize, classes.Size());
 }

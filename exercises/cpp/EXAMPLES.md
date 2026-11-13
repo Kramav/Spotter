@@ -643,18 +643,25 @@ flowchart LR
 Starts from 13d. **Our room scanner.** The scans stay in memory and nothing is written while
 scanning (D39). K, Q, a lost Kinect or an error writes the whole folder at once, with no questions,
 before the Kinect is touched again, so a lost Kinect or an error costs nothing. From here on, every
-multi-scan example has this rescue (D30, D39).
+multi-scan example has this rescue (D30, D39). Where the room goes is chosen in a Save As window and
+checked, at the start and before every scan; if the end's save fails, the rescue folders are tried
+in turn; K and E ask with Save As and say where it went (D48).
 
 ```mermaid
 flowchart LR
-    ASK["Folder + name,<br/>asked at the start"] --> MEM
-    SP["SPACE: scan, placed (13d)"] --> MEM["Scans in memory<br/>(U, X, P change them)"]
-    KQ["K, Q, Kinect lost<br/>or an error"] --> SAVE["Every scan_NNN folder, room.txt,<br/>points.ply, levelled turn"]
+    ASK["Save As window at the start;<br/>CheckRoomFolder: not in build/,<br/>writable, room on the disk"] --> MEM
+    SP["SPACE: quick folder check<br/>(red warning if it fails),<br/>then scan, placed (13d)"] --> MEM["Scans in memory<br/>(U, X, P change them)"]
+    K["K: Save As<br/>(keep or move the folder)"] --> SAVE
+    KQ["Q, Kinect lost<br/>or an error"] --> SAVE["Every scan_NNN folder, room.txt,<br/>points.ply, levelled turn;<br/>green SAVED banner"]
     MEM --> SAVE
-    SAVE --> Z["13z reads it"]
+    SAVE -- "fails at the end" --> RES["Rescue folders in turn:<br/>room_scans/rescue_, Documents, temp"]
+    E["E: Save As .obj<br/>in the room's folder"] --> OBJ["room_scan_date_time.obj;<br/>green EXPORTED banner"]
+    MEM --> OBJ
+    SAVE --> Z["13z, 13w, 13x, demos<br/>open it (Open window)"]
+    RES --> Z
 
     classDef new stroke-width:3px
-    class ASK,SAVE new
+    class ASK,SP,K,SAVE,RES,E new
 ```
 
 ## 13w Room Shell
@@ -666,6 +673,7 @@ its own pattern (D42).
 
 ```mermaid
 flowchart LR
+    OPEN["Open window<br/>(ChooseRoom; or the<br/>command line)"] --> FOLD
     FOLD["13e room folder<br/>+ full colour pictures"] --> BR["BuildRoom: walls,<br/>levelled"]
     FOLD --> FL["Floor (FindTwinFloor)"]
     FOLD --> CE["Ceiling: the HIGHEST level<br/>readings over 0.5 m²<br/>(a fan hangs lower)"]
@@ -678,7 +686,7 @@ flowchart LR
     FILL --> OBJ["K: .obj + .mtl + .bmp per surface"]
 
     classDef new stroke-width:3px
-    class CE,SURF,TEX,FILL,OBJ new
+    class OPEN,CE,SURF,TEX,FILL,OBJ new
 ```
 
 ## 13x Room Fill

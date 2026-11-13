@@ -176,7 +176,5 @@ int main()
     std::vector<cv::Point3f> seenByA = Photograph(spotter::Pose()), seenByB = Photograph(b);
     Planes(seenByA);
     IcpBetweenViews(seenByA, seenByB, b);
-    std::printf("\nPress Enter to close.\n");
-    std::getchar();
     return 0;
 }
