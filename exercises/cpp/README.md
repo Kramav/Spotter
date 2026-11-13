@@ -14,7 +14,8 @@ library (D34, D35). Each builds as `build\examples\<folder name>.exe`; the six d
 `examples/demos/`. 13e is the scanner for real rooms. Their README is the hand-off page.
 
 **The table below is the archive: the original programs in [legacy/](legacy/), unchanged and no
-longer developed.** They still build, into `build\legacy\` under their old `.exe` names, and the
+longer developed.** They build only when asked (`cmake --preset default -DSPOTTER_BUILD_LEGACY=ON`,
+D47; git tag `legacy-archive`), into `build\legacy\` under their old `.exe` names, and the
 Status column records what was measured on the sensor. The re-written versions have the same
 numbers (except 13–13d, which 13e replaces, and 07b, which is a setting of 07). Legacy 13z and Demos
 4 and 6 don't read the new room folders (format 2); the new ones do.

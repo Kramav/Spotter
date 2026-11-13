@@ -2791,6 +2791,40 @@ EX.push({
   ],
 });
 
+EX.push({
+  id: '13y', name: 'Structure Survey', group: 'scan', from: '13e',
+  idea: 'No Kinect needed: measurements for the structure-localisation study. It reads a saved room\'s clouds and poses (never its pictures) and asks: which surfaces does each scan see, do the floor-wall and wall-wall edges agree between scans, can a scan be placed from walls, floor and ceiling alone (Relocate), and does ICP from the previous scan\'s pose work (Continuous)?',
+  uses: ['xyz', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'The user\'s real 21-scan room (docs/structure-localization-findings.md): Relocate right and unique on 8, confidently wrong on 6; Continuous from the last pose agreed on 0 of 20 pairs (turns of about 40°). 13e\'s stored poses are the reference, not ground truth.',
+  setup(st) { st.S = scans(); },
+  steps: [
+    {
+      name: 'Coverage', a: 'The scans, from above', b: 'Which surfaces the scans see (real room)',
+      text: 'Each scan\'s planes are sorted into floor, ceiling and walls. Walls are in almost every scan; the floor and ceiling in fewer than half, so they can\'t be relied on alone.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { bars(ctx, R, [{ label: 'walls', frac: 20 / 21, value: '20 of 21', c: SCR.green }, { label: 'floor', frac: 9 / 21, value: '9 of 21', c: SCR.faint }, { label: 'ceiling', frac: 8 / 21, value: '8 of 21', c: SCR.faint }, { label: '2+ walls', frac: 12 / 21, value: '12 of 21' }, { label: 'corner + floor', frac: 4 / 21, value: '4 of 21' }], { title: 'Scans that see it' }); },
+    },
+    {
+      name: 'Edges', a: 'From above', b: 'Edges seen again by the next scan',
+      text: 'Where two planes meet (floor-wall, wall-wall) is an edge. Consecutive scans mostly look different ways, so few edges were seen twice, and those disagreed by 8-15 cm: edges add nothing beyond their planes.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.5 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { consoleLines(ctx, R, ['2. Edges   found  again  offset  angle', '  floor-wall    34      3  109 mm   6.4 deg', '  ceiling-wall  15      3   77 mm   3.7 deg', '  wall-wall     16      5  153 mm   3.6 deg']); },
+    },
+    {
+      name: 'Relocate', a: 'Each scan against the other 20', b: 'Placed from structure alone',
+      text: 'Each scan is placed in a map of all the OTHER scans from structure alone, and compared with where 13e put it. Real rooms have many wall-like faces (cabinets), so it was confidently wrong on 6. Two multi-start ICP searches are the baselines. "view N" shows one scan\'s answers in 3D.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { bars(ctx, R, [{ label: 'right, unique', frac: 8 / 21, value: '8', c: SCR.green }, { label: 'ambiguous', frac: 1 / 21, value: '1' }, { label: 'no answer', frac: 6 / 21, value: '6', c: SCR.faint }, { label: 'WRONG, unique', frac: 6 / 21, value: '6', c: SCR.red }], { title: 'Relocate, 21 real scans' }); },
+    },
+    {
+      name: 'Continuous', a: 'Scan N against scan N-1', b: 'ICP from the previous pose',
+      text: 'Each scan is placed by ICP against the previous one only, starting from its pose. On synthetic rooms that works up to about 30 cm and 20 deg with a corner in view; the real shots turned about 40 deg between scans, and none of the 20 pairs agreed.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.slice(0, 2).map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: [camOf(st.S, 0), camOf(st.S, 1)] }); },
+      B(ctx, R) { consoleLines(ctx, R, ['4. Continuous (from the last pose)', '  pairs agreeing with 13e: 0 of 20', { t: '  turns between shots: about 40 deg', c: SCR.red }, '  -> needs Relocate or visual odometry (16)']); },
+    },
+  ],
+});
+
 // =====================================================================
 //  Setup: the page around the stage
 // =====================================================================
