@@ -256,6 +256,11 @@ bool WriteScan(const fs::path& room, size_t index, const Scan& scan)
     if (error) return Failed(folder, "renaming to .old", error);
     fs::rename(dir, folder, error);
     if (error) return Failed(dir, "renaming into place", error);
+#ifndef _WIN32
+    // The renames live in the room folder's own entry: pushed to the disk too, or a power cut on ext4 or an SD
+    // card can undo them (NTFS keeps its own log). ScanFolders reads a half-done swap either way.
+    if (FILE* entries = std::fopen(room.c_str(), "r")) { fsync(fileno(entries)); std::fclose(entries); }
+#endif
     fs::remove_all(old, error);
     return true;
 }
@@ -279,7 +284,7 @@ bool RemoveScansFrom(const fs::path& room, size_t index)
     std::error_code error;
     for (const auto& entry : fs::directory_iterator(room, error))
         if (ScanNumber(entry.path()) > (int)index) doomed.push_back(entry.path());
-    bool ok = true;
+    bool ok = !error;   // a folder that can't be listed isn't "nothing to remove"
     for (const fs::path& path : doomed) { fs::remove_all(path, error); ok = ok && !error; }
     return ok;
 }

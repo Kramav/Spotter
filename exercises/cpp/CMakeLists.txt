@@ -61,8 +61,10 @@ add_library(spotter_console_guard OBJECT spotter/console_guard/console_guard.cpp
 target_link_libraries(spotter_console_guard PUBLIC ${OpenCV_LIBS})
 target_compile_options(spotter_console_guard PRIVATE ${spotter_warnings})
 
-# Self-checks on synthetic data (no Kinect): one per library module, plus three that include an example's own code
-# (13e's session, 13x's fill, 13w's shell). Run them all: ctest --test-dir build
+# Self-checks on synthetic data (no Kinect): 10 for library modules (not every module has its own: stats, detection,
+# walls, features_orb, room_scan and room_folder are exercised through check_room; source_freenect2, radar, view and
+# file_dialog have none), plus three that include an example's own code (13e's session, 13x's fill, 13w's shell).
+# The room checks share spotter/checks/test_room.hpp. Run them all: ctest --test-dir build
 enable_testing()
 file(GLOB spotter_checks CONFIGURE_DEPENDS spotter/checks/check_*.cpp)
 foreach(check_source ${spotter_checks})

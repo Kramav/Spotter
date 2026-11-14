@@ -27,6 +27,10 @@ them to a PC, and there is no detection on the Pi. This changes several items be
 - initiative 11 measures capture and export, not YOLO;
 - the dense merge's memory (finding 7) is no longer a Pi problem.
 
+**Audited 2026-11-14:** [review-2026-11-14-audit.md](review-2026-11-14-audit.md) checks this review and the
+work done on it, and recommends revising decisions 3, 4 and 5 and initiatives 4, 5, 8, 10, 11, and removing 12
+(D44 voided its gate). Those are recommendations, not decisions.
+
 ## 1. Ground truth
 
 | | Fact |

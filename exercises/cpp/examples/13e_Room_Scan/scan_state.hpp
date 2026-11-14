@@ -15,7 +15,9 @@
 // every one fails is a folder asked for, and the scans are dropped only after a yes.
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <ctime>
 #include <thread>
 #include <cstdio>
@@ -505,7 +507,6 @@ inline void OnUndo(Session& s)
     s.shownPoints.pop_back();
     s.shownColours.pop_back();
     if (s.selected >= (int)s.scans.size()) s.selected = -1;
-    // ponytail: landmarks made with the removed scan stay (as in 13e); rebuild them if that matters.
     s.saved = false;
     Say(s, cv::format("Removed scan %zu. %zu left.", s.scans.size() + 1, s.scans.size()));
     Recommend(s);

@@ -35,7 +35,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 |---|---|
 | `exercises/python/` | Webcam/OpenCV/YOLO exercises (no Kinect). Complete. |
 | `exercises/csharp/` | Kinect v2 examples 01–03 on the Microsoft Kinect SDK 2.0. Windows only, frozen (see D5). |
-| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); an archive: unchanged, built into `build\legacy\` only with `-DSPOTTER_BUILD_LEGACY=ON` (D34, D41, D47), git tag `legacy-archive`, and the docs point to `examples/` instead. `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (synthetic self-checks run by `ctest`, e.g. `build\check_box_depth.exe`; 13 checks: one per module, none for `source_freenect2`, `radar` or `view`; plus `check_scan_session`, `check_fill` and `check_room_shell`, which include 13e's, 13x's and 13w's own headers from their folders, D50). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`, `structure` (a prototype for the localisation study), `room_twin` (Demos 4 and 6; `ChooseRoom`), `file_dialog` (Save As / Open windows, D48). `console_guard/` = the console guard every example links (D49). `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z, and the six demos in `examples/demos/` (D40), built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
+| `exercises/cpp/` | Kinect v2 examples on libfreenect2 + OpenCV, in C++ (D8). The active track. Builds with two commands from its README (D14). `legacy/` = the original examples 01–13z, and `legacy/presentation/` = six fullscreen exhibition demos (D22, D31); an archive: unchanged, built into `build\legacy\` only with `-DSPOTTER_BUILD_LEGACY=ON` (D34, D41, D47), git tag `legacy-archive`, and the docs point to `examples/` instead. `spotter/` = the shared CMake library the re-implemented examples use (D34): `include/spotter/`, `src/`, and `checks/` (synthetic self-checks run by `ctest`, e.g. `build\check_box_depth.exe`; 13 checks: 10 for library modules (several modules only through `check_room`; none for `source_freenect2`, `radar`, `view` or `file_dialog`), plus `check_scan_session`, `check_fill` and `check_room_shell`, which include 13e's, 13x's and 13w's own headers from their folders, D50; the room checks share `checks/test_room.hpp`, D54). Modules so far: `frame`, `source_freenect2`, `depth`, `stats`, `detection`, `detector_yolo_opencvdnn`, `track`, `geometry`, `walls`, `radar`, `view`, `mesh`, `register`, `features_orb`, `room_scan`, `room`, `room_folder`, `structure` (a prototype for the localisation study), `room_twin` (Demos 4 and 6; `ChooseRoom`), `file_dialog` (Save As / Open windows, D48). `console_guard/` = the console guard every example links (D49). `examples/` = the examples re-written on the library (D35): `00_tour/` (one program per module), then 01–13z, and the six demos in `examples/demos/` (D40), built as `build\examples\<folder>.exe`; its README is the hand-off page for a software team. `ports/` = our vcpkg recipe for libfreenect2. `EXAMPLES.md` = a flowchart per example. |
 | `docs/` | Living documents: `decisions.md` and `ideas.md`, plus `visualizer.html` (animated examples). |
 | `yolo26n.onnx` / `.pt` | Detector model. The ONNX file was exported with `nms=False` and outputs 1x300x6. |
 | `kinect_rgbd_fusion_guide.md` | Background reading: the method and the accuracy tests (§7). |
@@ -81,14 +81,20 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 
 ## Status (2026-11-13)
 
-**Next session starts here (left off 2026-11-13).** Working through the 2026-11-11 review's remediation
+**Next session starts here (left off 2026-11-14).** Working through the 2026-11-11 review's remediation
 ([§8](docs/review-2026-11-11-architecture.md)), the user's order: clean the repo first, Linux/CI later.
+The 2026-11-14 audit ([docs/review-2026-11-14-audit.md](docs/review-2026-11-14-audit.md)) checked it;
+its fixes that needed no decision are done (D53, D54).
 - **Done:** initiatives 1 (D45, safe scan saves), 2 (D46, error boundaries), 9 (D47, docs/repo hygiene),
-  6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`), 7 (D52, warnings: 0 at /W4).
-- **Next:** 5 = record/replay, but it needs the user's call first: the review's §7 decision 3 (how
-  replay works) and which streams may be recorded (privacy: colour only of empty rooms, D29). 8's other
-  half (one floor/"up" rule) waits for 13w's `Floor:` lines on the real room (D43, D51). 4 (Linux build +
-  CI) waits until the user says.
+  6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`; D54 compares the floor rules), 7 (D52,
+  D53: 0 warnings in the whole build).
+- **Waiting on the user's decisions (the audit's list):** purge `alert_*.jpg` from git history (rewrites
+  history and the `legacy-archive` tag, force-push, re-clone on the other PC); the privacy rules for capture
+  and recording (which streams, depth-only by default?, encryption, retention), which gate 5 and the Pi
+  export; whether to log the freeze and the revised decisions 3-5 (replay as a capture format +
+  `ReplaySource`; teaching code; a header used outside its folder moves to the library).
+- **Next work:** the real-data sprint (initiative 3, the user's runs) gates choosing the floor rule (8) and
+  the RTAB-Map reference (10). 4 (one WSL build, then CI) waits until the user says.
 - **Waiting on the user (D48/D49, new):** a 13e run on the sensor: the start-up Save As window, a
   folder inside `build\` refused with a reason, K's Save As + green banner, E's Save As + `.obj` where
   chosen, Q after K; double-click a program and see its console stay open. The original
@@ -102,6 +108,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   no compression for room scans, an information-per-pixel estimate). Ask before moving them into
   ideas.md or the Roadmap. "No compression" fits D44's open capture-format question.
 
+- 2026-11-14: **Audit of the review + D53, D54** ([docs/review-2026-11-14-audit.md](docs/review-2026-11-14-audit.md)): six reviewers; the diagnosis holds, the remediation mostly holds, but it repeated the "synthetic only" pattern and D44 made parts of the review stale. Fixed (the user: all but the WSL build): check_scan_session no longer writes into `room_scans\` (`SPOTTER_RESCUE_FOLDER`); 13e catches any error and exits 2 when the scans aren't saved; failed saves name the file and reason, every write checked after closing, non-ASCII folder names work; any build folder (CMakeCache.txt) refused, the repo rescue folder only if the repo is there; Save As in 08, 08b, 09b, 09c and four ladder steps (tour 00g writes to temp); /W4 on the examples (26 fixed, 0 in the build); one shared test room (`checks/test_room.hpp`, outputs identical); the floor/up rules compared in check_room_shell; placement limit 1 mm / 0.1 deg; crash output that survives a broken heap; more of `.gitignore`. New rules shown to fail with their code broken. Built, not run on the sensor (the Save As programs only built).
 - 2026-11-13: **D52, review initiative 7 done:** `/W4` (MSVC) / `-Wall -Wextra` on the library, the console guard and the checks; 22 warnings fixed or silenced with a reason (the CRT `_s` functions aren't on Linux), now 0. `ctest` 12/12.
 - 2026-11-13: **D51:** `Pose::Inverse()`; the hand-written inverses and "angle between two poses" use it (no change in results; `check_icp` case). The one floor/up rule (8's other half) waits for D43's real-room lines.
 - 2026-11-13: **D50, review initiative 6 done:** the deleted harnesses are now checks. `check_scan_session` (13e: place, K, X, P, U, the rescue to a rescue folder), `check_fill` (13x and Demo 6) and `check_room_shell` (13w: ceiling, texture, fill); each fails with its code broken (4 mutations tried). 13x's fill and 13w's steps 2-4 moved, unchanged, into headers beside them (`fill_holes.hpp`, `room_shell.hpp`); Demo 6 includes 13x's instead of its copy (1,517 → 413 lines). Found: 13w paints a strip under 3 cm wide at furniture's foot with its colour (the 4 cm depth test), and the fill runs a top ~10 cm past its edge; recorded, not fixed. `ctest` 12/12 (check_structure not re-run). 13w wasn't relinked: it was open.
@@ -377,9 +384,14 @@ PC and loads there (D44). Nothing else has to run on the Pi.
 
 ### Housekeeping
 
-- [ ] **Save As for the other savers (D48 left them, the user's scope):** 08 (`.ply`), 08b, 09b and 09c
-      (`.obj`) still write into the folder the program runs from (`build\examples\`). Give each
-      `AskSaveAs`, like 13e's E.
+- [x] **Save As for the other savers (D48 left them; done in D53):** 08, 08b, 09b, 09c and the ladder steps
+      08b_s3, 09b_s2, 09c_s3, 13e_s2 ask with `AskSaveAs` (opening in `room_scans\`); tour 00g writes to temp.
+      Built, not run.
+- [ ] **The 2026-11-14 audit's leftovers ([docs/review-2026-11-14-audit.md](docs/review-2026-11-14-audit.md)):**
+      checks still missing (a save interrupted at each step, far features + landmarks, 13w's full-colour path,
+      a second test scene); a run log beside each room before the first unattended run; a lock against two
+      programs saving to one room; the ~75 build-time paths in examples (model, default rooms folder);
+      06c/Demo 3 and Demo 4/6 duplication (waits for decision 5).
 - [ ] **Review 2026-11-11 ([docs/review-2026-11-11-architecture.md](docs/review-2026-11-11-architecture.md)), §8 initiatives 1, 2, 9, 6:**
   - [x] Data safety (D45): room scans default to the repo's `room_scans/`; `WriteScan` writes `.new` and swaps it in; K rewrites only new scans (pose.txt for the rest); `AskRoomFolder`'s false claim removed; the real room moved there. `check_room` covers cut-off saves. A real K on the sensor still to do.
   - [x] Exception boundaries (D46): `AsyncDetector` hands its thread's errors to `TryTake`; room-folder loads refuse damage with a reason; `LoadTwinRoom` prints skipped scans; 13e's `SaveAll` catches; the always-true `RecommendNext` check fixed. Checks for each.

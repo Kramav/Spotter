@@ -457,6 +457,7 @@ bool SaveRoomObj(const std::string& path, Room room, const std::vector<cv::Point
     std::ofstream file(path, std::ios::app);
     file << cv::format("# first camera turn: %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n", t(0, 0), t(0, 1), t(0, 2), t(1, 0),
                        t(1, 1), t(1, 2), t(2, 0), t(2, 1), t(2, 2));
+    file.close();
     return (bool)file;
 }
 

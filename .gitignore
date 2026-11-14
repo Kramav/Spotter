@@ -6,6 +6,12 @@ zone_log.csv
 *.jpeg
 # BMP is the only image format our OpenCV writes (D29): room-scan pictures and test renders. Never commit them.
 *.bmp
+# Other picture and capture formats: a PNG capture format (D44) or a recording (review initiative 5) would
+# write these. The .mtl is 13w's texture list.
+*.png
+*.tif
+*.tiff
+*.mtl
 
 # C# build output (exercises/csharp)
 bin/
@@ -23,3 +29,4 @@ vcpkg_installed/
 # Room-scan folders from 13c/13d's K (D29): colour pictures of a room. Each also holds its own
 # .gitignore, for folders saved anywhere else.
 room_scans/
+rescue_*/

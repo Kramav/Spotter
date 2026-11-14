@@ -1276,3 +1276,41 @@ except the WSL build.
   with explicit float casts (the same numbers), and one double-to-float in 11_s2. Now 0 in the whole build.
 - Each new assertion was shown to fail with its rule broken (the CMakeCache refusal, EndSession's false).
   `ctest` 12/12 (check_structure not re-run here).
+
+## D54: the 2026-11-14 audit's fixes, part 2: one test room, the floor rules compared, safer crash output (2026-11-14)
+
+**Why:** the rest of the audit's fixes that need no decision from the user ([docs/review-2026-11-14-audit.md](review-2026-11-14-audit.md)).
+
+- **One test room.** The box room, its raycaster, `Photograph`, `Spot` and `Check()` were copied into five
+  checks (check_room, check_room_twin, check_fill, check_room_shell, check_scan_session; three copies came
+  with D50). They're now `spotter/checks/test_room.hpp`. check_room_shell's colour taken 1 mm in front of the
+  surface is a parameter (`frontMeters`), not a copy. Every check printed exactly what it printed before
+  (compared line by line, timings aside). The header says what the room can't test: holes, plain walls,
+  slanted walls. A second scene is still to do.
+- **The three floor/"up" rules are compared** (review initiative 8, the half that changes no result):
+  check_room_shell's new step 2b runs BuildRoom (floor, ceiling, up), FindTwinFloor, 13w's FindCeiling and
+  ExtractStructure (up, per shot) on the same five shots and needs them to agree: floors -1.200 / -1.200,
+  ceilings 1.305 / 1.299, up off by 0.03 deg (BuildRoom) and up to 0.16 deg (ExtractStructure). A 3 cm shift
+  in BuildRoom's floor fails it. Choosing one rule still waits for D43's real-room lines. FindCeiling stays in
+  13w (its own idea, D34) until then: moving it now would only move it.
+- **Tighter:** check_room's placement limit is 1 mm / 0.1 deg (was 5 mm / 0.2; measured 0.2 mm / 0.03).
+- **Smaller save fixes:** `SaveObj`, `SavePly` and `SaveRoomObj` check the file after closing it;
+  `RemoveScansFrom` reports a folder it can't list instead of "nothing to remove"; on Linux, `WriteScan`
+  pushes the room folder's entry to the disk after the swap (not compiled on Linux yet: D7).
+- **Crash output that survives a broken heap.** The console guard's crash handlers (a Windows crash, a Linux
+  SIGSEGV or SIGFPE) first write the code or signal with no heap and no stdio lock, then the friendlier line.
+  Tried on a throwaway program (an access violation: both lines, exit code 0xC0000005), since deleted. A stack
+  overflow on a thread other than main still has no reserved stack for the handler.
+- **`.gitignore`:** `*.png`, `*.tif`, `*.tiff`, `*.mtl` and stray `rescue_*/` folders, before a PNG capture
+  format (D44) or recordings exist.
+- **Docs:** "one check per module" corrected (10 module checks for 20 modules) in CLAUDE.md and CMakeLists.
+- **Left, with the reason:**
+  - 06c and Demo 3 share 242 lines (the wall filter), Demo 4 and Demo 6 196: the wall filter is 06c's own
+    lesson. Moving it to a header beside 06c repeats what the audit criticised in D50; moving it to the
+    library is the user's decision 5 (as is 13x's fill).
+  - Namespaces for the example headers: no file includes two of them yet.
+  - A run log file next to each room: wanted before the first unattended (Pi) run; nothing runs unattended yet.
+  - A lock against two programs saving to one room folder; the other ~75 build-time paths in examples.
+  - Missing checks: a save interrupted at each step (fault injection), far features and landmarks, 13w's
+    full-colour-picture path, a second scene.
+- `ctest` 12/12 plus check_structure (see the Status line); 0 warnings in the whole build.

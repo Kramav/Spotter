@@ -10,87 +10,32 @@
 
 #include "spotter/room_folder.hpp"
 #include "spotter/room_twin.hpp"
+#include "test_room.hpp"
 
 #include <chrono>
 #include <cstdio>
 
 namespace fs = std::filesystem;
 
-int failures = 0;
-void Check(bool ok, const char* what)
-{
-    if (!ok) { std::printf("FAILED: %s\n", what); failures++; }
-}
 
-const float Low[3] = { -1.5f, -1.3f, -1.0f }, High[3] = { 2.0f, 1.2f, 3.0f };            // the room (Y down), as check_room
-const float CouchLow[3] = { 0.2f, 0.6f, 2.0f }, CouchHigh[3] = { 1.0f, 1.2f, 2.5f };
-const spotter::PinholeCamera Camera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
-
-float Raycast(const cv::Point3f& from, const cv::Point3f& ray, cv::Vec3b& colour)
+// Photographed, with its pose (the truth) and the full picture, as a room folder holds them.
+spotter::Scan Taken(const spotter::Pose& pose, int seed)
 {
-    const float o[3] = { from.x, from.y, from.z }, d[3] = { ray.x, ray.y, ray.z };
-    float best = 1e9f;
-    int face = 0;
-    for (int a = 0; a < 3; a++)
-        if (d[a] != 0)
-        {
-            float t = ((d[a] > 0 ? High[a] : Low[a]) - o[a]) / d[a];
-            if (t < best) { best = t; face = 2 * a + (d[a] > 0); }
-        }
-    float enter = 0, leave = 1e9f;
-    int enterFace = 0;
-    for (int a = 0; a < 3; a++)
-    {
-        float t1 = (CouchLow[a] - o[a]) / d[a], t2 = (CouchHigh[a] - o[a]) / d[a];
-        if (std::min(t1, t2) > enter) { enter = std::min(t1, t2); enterFace = 6 + a; }
-        leave = std::min(leave, std::max(t1, t2));
-    }
-    if (enter < leave && enter > 0 && enter < best) { best = enter; face = enterFace; }
-    cv::Point3f p = from + ray * best;
-    unsigned h = (unsigned)(face * 73856093) ^ (unsigned)((int)std::floor(p.x / 0.1f) * 19349663) ^ (unsigned)((int)std::floor(p.y / 0.1f) * 83492791) ^
-                 (unsigned)((int)std::floor(p.z / 0.1f) * 2654435761u);
-    h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15;
-    colour = cv::Vec3b((uchar)(h & 255), (uchar)((h >> 8) & 255), (uchar)((h >> 16) & 255));
-    return best;
-}
-
-spotter::Scan Photograph(const spotter::Pose& pose, int seed)
-{
-    cv::RNG noise(seed);
-    std::vector<cv::Point3f> cloud(512 * 424);
-    cv::Mat picture(424, 512, CV_8UC3);
-    for (int row = 0; row < 424; row++)
-        for (int column = 0; column < 512; column++)
-        {
-            cv::Point3f ray = Camera.Unproject(cv::Point2f((float)column, (float)row), 1.0f);
-            cv::Vec3b colour;
-            float t = Raycast(pose.shift, pose.turn * ray, colour);
-            cloud[row * 512 + column] = ray * (t * (1 + (float)noise.gaussian(0.0005)));
-            picture.at<cv::Vec3b>(row, column) = colour;
-        }
-    spotter::Scan scan = spotter::MakeScan(cloud, picture, spotter::ScanOptions());
-    scan.colourIndex.assign(512 * 424, -1);
-    scan.fullPicture = picture;
+    spotter::Scan scan = Photograph(pose, seed);
+    scan.fullPicture = scan.picture.clone();
     scan.pose = pose;
     return scan;
-}
-
-// Turned left about the camera's up, then down, as check_room's Spot.
-spotter::Pose Spot(float right, float forward, float leftDegrees, float downDegrees)
-{
-    return { spotter::TurnAbout(cv::Vec3d(0, -leftDegrees * CV_PI / 180, 0)) * spotter::TurnAbout(cv::Vec3d(-downDegrees * CV_PI / 180, 0, 0)),
-             cv::Point3f(right, 0, forward) };
 }
 
 int main()
 {
     // The room folder: 3 scans at their true poses, tilted 15 deg down to see the floor.
     const fs::path folder = fs::temp_directory_path() / "spotter_check_room_twin";
-    fs::remove_all(folder);
+    { std::error_code ignored; fs::remove_all(folder, ignored); }
     spotter::RoomInfo info;
     info.program = "check_room_twin";
     info.depthCamera = Camera;
-    std::vector<spotter::Scan> scans = { Photograph(Spot(0, 0, 0, 15), 1), Photograph(Spot(0.3f, 0.2f, 40, 15), 2), Photograph(Spot(-0.3f, 0.3f, -50, 15), 3) };
+    std::vector<spotter::Scan> scans = { Taken(Spot(0, 0, 0, 0, 15), 1), Taken(Spot(0.3f, 0, 0.2f, 40, 15), 2), Taken(Spot(-0.3f, 0, 0.3f, -50, 15), 3) };
     size_t points;
     bool written = spotter::StartRoomFolder(folder, info);
     for (size_t k = 0; k < scans.size(); k++) written = written && spotter::WriteScan(folder, k, scans[k]);
@@ -145,9 +90,9 @@ int main()
     Check(low.seen && std::abs(low.y + 1.2f) < 0.03f, "the walls' lower part hidden: the floor is still at -1.2 m, not the seat (D43)");
 
     // 3. Locate the Kinect put back off scan 1's spot: near (one start does it), and far (needs the other starts).
-    for (const spotter::Pose& truth : { Spot(0.2f, 0.2f, 20, 15), Spot(-0.5f, 0.4f, -30, 15) })
+    for (const spotter::Pose& truth : { Spot(0.2f, 0, 0.2f, 20, 15), Spot(-0.5f, 0, 0.4f, -30, 15) })
     {
-        spotter::Scan now = Photograph(truth, 9);
+        spotter::Scan now = Taken(truth, 9);
         std::vector<cv::Point3f> view;
         for (int row = 0; row < 424; row += 8)   // every 8th pixel each way, as the demos
             for (int column = 0; column < 512; column += 8)
@@ -169,7 +114,7 @@ int main()
     std::printf("4. one view: %zu points; %s\n", one.points.size(), oneFloor.report[0].c_str());
     Check(oneFloor.seen && std::abs(oneFloor.y + 1.2f) < 0.03f, "OneViewRoom stands level: the floor at -1.2 m");
 
-    fs::remove_all(folder);
+    { std::error_code ignored; fs::remove_all(folder, ignored); }
     std::printf(failures ? "check_room_twin: %d FAILED\n" : "check_room_twin: all passed\n", failures);
     return failures ? 1 : 0;
 }

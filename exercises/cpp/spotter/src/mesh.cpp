@@ -91,6 +91,7 @@ bool SaveObj(const std::string& path, const Mesh& mesh, const std::string& comme
         file << "g " << name << "\n";
         for (const cv::Vec3i& f : faces) file << cv::format("f %d %d %d\n", f[0] + 1, f[1] + 1, f[2] + 1);
     }
+    file.close();   // checked after closing: a full disk on the last block shows
     return (bool)file;
 }
 
@@ -112,6 +113,7 @@ bool SavePly(const std::string& path, const std::vector<cv::Point3f>& points, co
         const unsigned char rgb[3] = { colours[i][2], colours[i][1], colours[i][0] };
         file.write((const char*)rgb, 3);
     }
+    file.close();
     return (bool)file;
 }
 

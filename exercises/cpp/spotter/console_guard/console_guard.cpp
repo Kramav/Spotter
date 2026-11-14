@@ -41,6 +41,22 @@ namespace
 
 std::atomic<bool> crashed{ false };   // the first crash handler to run prints; the rest stay quiet
 
+//void RawLine(const char* text){
+//
+//@brief - writes the text to stderr with no heap and no stdio lock: the crash handlers print the cause with it
+//         FIRST, so it shows even when the crash broke the heap and the friendlier message below hangs. O(length).
+void RawLine(const char* text)
+{
+    size_t length = 0;
+    while (text[length]) length++;
+#ifdef _WIN32
+    DWORD written;
+    WriteFile(GetStdHandle(STD_ERROR_HANDLE), text, (DWORD)length, &written, nullptr);
+#else
+    if (write(2, text, length) < 0) {}
+#endif
+}
+
 //std::string ProgramName(){
 //
 //@brief - this program's file name (13e_Room_Scan.exe), or "the program". O(1).
@@ -141,6 +157,7 @@ void OnSignal(int signal)
     {
         const char* name = signal == SIGABRT ? "SIGABRT (abort() or a failed assert)" : signal == SIGSEGV ? "SIGSEGV (a bad memory access)"
                          : signal == SIGFPE ? "SIGFPE (e.g. an integer divide by zero)" : "an unexpected signal";
+        if (signal != SIGABRT) { RawLine("\n=== CRASHED: signal "); RawLine(name); RawLine(" ===\n"); }   // before anything that allocates
         const std::string what = CurrentException();   // an exception that left another thread ends here on MSVC
         WaitForEnter("=== " + ProgramName() + " CRASHED: " + (what.empty() ? std::string("signal ") + name : what + " (on another thread)") + " ===");
     }
@@ -228,6 +245,12 @@ LONG WINAPI OnCrash(EXCEPTION_POINTERS* info)
     if (!crashed.exchange(true))
     {
         const EXCEPTION_RECORD& record = *info->ExceptionRecord;
+        if (record.ExceptionCode != 0xE06D7363)   // a real crash may have broken the heap: the code first, with none
+        {
+            char first[64];
+            std::snprintf(first, sizeof first, "\n=== CRASHED: exception code 0x%08lX ===\n", (unsigned long)record.ExceptionCode);
+            RawLine(first);
+        }
         const std::string thrown = record.ExceptionCode == 0xE06D7363 ? CppException(record) : "";
         if (!thrown.empty())   // a C++ exception: its type and message say more than where Windows raised it
         {

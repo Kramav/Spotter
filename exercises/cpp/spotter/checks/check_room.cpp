@@ -14,6 +14,7 @@
 #include "spotter/room.hpp"
 #include "spotter/room_folder.hpp"
 #include "spotter/stats.hpp"
+#include "test_room.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -22,70 +23,6 @@
 
 namespace fs = std::filesystem;
 
-int failures = 0;
-void Check(bool ok, const char* what)
-{
-    if (!ok) { std::printf("FAILED: %s\n", what); failures++; }
-}
-
-const float Low[3] = { -1.5f, -1.3f, -1.0f }, High[3] = { 2.0f, 1.2f, 3.0f };            // the room (Y down)
-const float CouchLow[3] = { 0.2f, 0.6f, 2.0f }, CouchHigh[3] = { 1.0f, 1.2f, 2.5f };     // 0.6 m tall, on the floor
-const spotter::PinholeCamera Camera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
-
-// The nearest surface along a ray: distance, and the colour of the 10 cm block it hits.
-float Raycast(const cv::Point3f& from, const cv::Point3f& ray, cv::Vec3b& colour)
-{
-    const float o[3] = { from.x, from.y, from.z }, d[3] = { ray.x, ray.y, ray.z };
-    float best = 1e9f;
-    int face = 0;
-    for (int a = 0; a < 3; a++)
-        if (d[a] != 0)
-        {
-            float t = ((d[a] > 0 ? High[a] : Low[a]) - o[a]) / d[a];
-            if (t < best) { best = t; face = 2 * a + (d[a] > 0); }
-        }
-    float enter = 0, leave = 1e9f;
-    int enterFace = 0;
-    for (int a = 0; a < 3; a++)
-    {
-        float t1 = (CouchLow[a] - o[a]) / d[a], t2 = (CouchHigh[a] - o[a]) / d[a];
-        if (std::min(t1, t2) > enter) { enter = std::min(t1, t2); enterFace = 6 + a; }
-        leave = std::min(leave, std::max(t1, t2));
-    }
-    if (enter < leave && enter > 0 && enter < best) { best = enter; face = enterFace; }
-    cv::Point3f p = from + ray * best;
-    int i = (int)std::floor(p.x / 0.1f), j = (int)std::floor(p.y / 0.1f), k = (int)std::floor(p.z / 0.1f);
-    unsigned h = (unsigned)(face * 73856093) ^ (unsigned)(i * 19349663) ^ (unsigned)(j * 83492791) ^ (unsigned)(k * 2654435761u);
-    h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15;
-    colour = cv::Vec3b((uchar)(h & 255), (uchar)((h >> 8) & 255), (uchar)((h >> 16) & 255));
-    return best;
-}
-
-// What a depth camera at `pose` (its coordinates -> the room's) sees: cloud and colour picture.
-spotter::Scan Photograph(const spotter::Pose& pose, int seed, const spotter::ScanOptions& options)
-{
-    cv::RNG noise(seed);
-    std::vector<cv::Point3f> cloud(512 * 424);
-    cv::Mat picture(424, 512, CV_8UC3);
-    for (int row = 0; row < 424; row++)
-        for (int column = 0; column < 512; column++)
-        {
-            cv::Point3f ray = Camera.Unproject(cv::Point2f((float)column, (float)row), 1.0f);
-            cv::Vec3b colour;
-            float t = Raycast(pose.shift, pose.turn * ray, colour);
-            cloud[row * 512 + column] = ray * (t * (1 + (float)noise.gaussian(0.0005)));   // about 1 mm at 2 m (07's average)
-            picture.at<cv::Vec3b>(row, column) = colour;
-        }
-    spotter::Scan scan = spotter::MakeScan(cloud, picture, options);
-    scan.colourIndex.assign(512 * 424, -1);
-    return scan;
-}
-
-spotter::Pose Spot(float right, float down, float forward, float leftDegrees, float downDegrees)
-{
-    return { spotter::TurnAbout(cv::Vec3d(0, -leftDegrees * CV_PI / 180, 0)) * spotter::TurnAbout(cv::Vec3d(-downDegrees * CV_PI / 180, 0, 0)),
-             cv::Point3f(right, down, forward) };
-}
 
 bool SameCloud(const std::vector<cv::Point3f>& a, const std::vector<cv::Point3f>& b)
 {
@@ -116,7 +53,7 @@ int main()
             std::printf("1. scan %zu: %zu features; %s, %.1f mm / %.3f deg off, %.2f s%s\n", k + 1, scan.near.keypoints.size(),
                         placed.placed ? "placed" : "NOT placed", mm, degrees, seconds, placed.suspicious ? " (suspicious)" : "");
             if (!placed.placed) std::printf("   %s\n", placed.report.c_str());
-            Check(placed.placed && mm < 5 && degrees < 0.2, "PlaceScan puts each scan within 5 mm and 0.2 deg");
+            Check(placed.placed && mm < 1 && degrees < 0.1, "PlaceScan puts each scan within 1 mm and 0.1 deg (measured: 0.2 mm, 0.03 deg)");
             Check(!placed.suspicious, "and doesn't call a good placement suspicious");
             scan.pose = placed.pose;
         }

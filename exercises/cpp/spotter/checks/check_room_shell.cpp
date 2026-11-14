@@ -4,6 +4,8 @@
 //      win; with no big level surface above 1.8 m there is none.
 //   2. FindSurfaces on check_room's patterned box room (couch included), from 5 shots at their true poses:
 //      the floor 1.2 m below the first camera, the ceiling 2.5 m above the floor, the walls.
+//      2b. The three floor/"up" rules side by side on those shots: BuildRoom's floor, ceiling and up,
+//      FindTwinFloor's floor, FindCeiling's ceiling, ExtractStructure's up per shot. They must agree.
 //   3. Texture: every seen texel has its true surface's colour, also on the wall and floor behind the couch
 //      (the depth must agree: the couch's colour never lands on the wall).
 //   4. Fill: seen texels are left alone; the floor under the couch is filled with the floor's own pattern,
@@ -12,73 +14,19 @@
 // Run: build\check_room_shell.exe. Exit code 0 = passed. Writes nothing.
 
 #include "../../examples/13w_Room_Shell/room_shell.hpp"
+#include "test_room.hpp"
+#include "spotter/room.hpp"
+#include "spotter/structure.hpp"
 
 #include <cstdio>
 
-int failures = 0;
-void Check(bool ok, const char* what)
+// A shot of the room, its colour taken 1 mm in front of each surface (test_room.hpp's Raycast says why).
+Shot TakeShot(const spotter::Pose& pose, int seed)
 {
-    if (!ok) { std::printf("FAILED: %s\n", what); failures++; }
-}
-
-const float Low[3] = { -1.5f, -1.3f, -1.0f }, High[3] = { 2.0f, 1.2f, 3.0f };            // the room (Y down), as check_room
-const float CouchLow[3] = { 0.2f, 0.6f, 2.0f }, CouchHigh[3] = { 1.0f, 1.2f, 2.5f };
-const spotter::PinholeCamera Camera{ 365.5f, 365.5f, 256.0f, 212.0f, 512, 424 };
-
-float Raycast(const cv::Point3f& from, const cv::Point3f& ray, cv::Vec3b& colour)
-{
-    const float o[3] = { from.x, from.y, from.z }, d[3] = { ray.x, ray.y, ray.z };
-    float best = 1e9f;
-    int face = 0;
-    for (int a = 0; a < 3; a++)
-        if (d[a] != 0)
-        {
-            float t = ((d[a] > 0 ? High[a] : Low[a]) - o[a]) / d[a];
-            if (t < best) { best = t; face = 2 * a + (d[a] > 0); }
-        }
-    float enter = 0, leave = 1e9f;
-    int enterFace = 0;
-    for (int a = 0; a < 3; a++)
-    {
-        float t1 = (CouchLow[a] - o[a]) / d[a], t2 = (CouchHigh[a] - o[a]) / d[a];
-        if (std::min(t1, t2) > enter) { enter = std::min(t1, t2); enterFace = 6 + a; }
-        leave = std::min(leave, std::max(t1, t2));
-    }
-    if (enter < leave && enter > 0 && enter < best) { best = enter; face = enterFace; }
-    // The block from 1 mm in front of the surface (check_room's uses the hit point itself, where y = 1.2 falls in
-    // block 11 or 12 by rounding: two rays to one spot could disagree, and step 3 compares two rays).
-    cv::Point3f p = from + ray * (best - 0.001f / (float)cv::norm(ray));
-    int i = (int)std::floor(p.x / 0.1f), j = (int)std::floor(p.y / 0.1f), k = (int)std::floor(p.z / 0.1f);
-    unsigned h = (unsigned)(face * 73856093) ^ (unsigned)(i * 19349663) ^ (unsigned)(j * 83492791) ^ (unsigned)(k * 2654435761u);
-    h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15;
-    colour = cv::Vec3b((uchar)(h & 255), (uchar)((h >> 8) & 255), (uchar)((h >> 16) & 255));
-    return best;
-}
-
-Shot Photograph(const spotter::Pose& pose, int seed)
-{
-    cv::RNG noise(seed);
-    std::vector<cv::Point3f> cloud(512 * 424);
-    cv::Mat picture(424, 512, CV_8UC3);
-    for (int row = 0; row < 424; row++)
-        for (int column = 0; column < 512; column++)
-        {
-            cv::Point3f ray = Camera.Unproject(cv::Point2f((float)column, (float)row), 1.0f);
-            cv::Vec3b colour;
-            float t = Raycast(pose.shift, pose.turn * ray, colour);
-            cloud[row * 512 + column] = ray * (t * (1 + (float)noise.gaussian(0.0005)));
-            picture.at<cv::Vec3b>(row, column) = colour;
-        }
     Shot shot;
-    shot.scan = spotter::MakeScan(cloud, picture, spotter::ScanOptions());
+    shot.scan = Photograph(pose, seed, spotter::ScanOptions(), 0.001f);
     shot.scan.pose = pose;
     return shot;   // no full colour picture: Sight takes the depth grid's colour
-}
-
-spotter::Pose Spot(float right, float forward, float leftDegrees, float downDegrees)
-{
-    return { spotter::TurnAbout(cv::Vec3d(0, -leftDegrees * CV_PI / 180, 0)) * spotter::TurnAbout(cv::Vec3d(-downDegrees * CV_PI / 180, 0, 0)),
-             cv::Point3f(right, 0, forward) };
 }
 
 // Texels this close to another surface (a corner, the couch's foot) are left out of step 3: the depth test's
@@ -113,14 +61,38 @@ int main()
     // 2. The surfaces, from 5 shots: 3 looking down at the floor, one up at the ceiling, one back.
     Shell shell;
     shell.info.depthCamera = Camera;
-    const spotter::Pose spots[] = { Spot(0, 0, 0, 15), Spot(0.3f, 0.2f, 40, 15), Spot(-0.3f, 0.3f, -50, 15), Spot(0, 0.5f, 0, -30), Spot(0.3f, 1.0f, 180, 10) };
+    const spotter::Pose spots[] = { Spot(0, 0, 0, 0, 15), Spot(0.3f, 0, 0.2f, 40, 15), Spot(-0.3f, 0, 0.3f, -50, 15), Spot(0, 0, 0.5f, 0, -30), Spot(0.3f, 0, 1.0f, 180, 10) };
     int seed = 1;
-    for (const spotter::Pose& pose : spots) shell.shots.push_back(Photograph(pose, seed++));
+    for (const spotter::Pose& pose : spots) shell.shots.push_back(TakeShot(pose, seed++));
     found = FindSurfaces(shell);
     std::printf("2. floor %.3f, ceiling %.3f (%.3f above the floor), %zu surfaces\n", shell.floorY, shell.ceilingY, shell.ceilingY - shell.floorY, shell.surfaces.size());
     Check(found && std::abs(shell.floorY + 1.2f) < 0.03f, "the floor 1.2 m below the first camera");
     Check(std::abs(shell.ceilingY - shell.floorY - 2.5f) < 0.03f, "the ceiling 2.5 m above the floor");
     Check(shell.surfaces.size() >= 5, "the floor, the ceiling and at least 3 walls");
+
+    // 2b. The floor and "up" rules side by side, on the same 5 shots (review initiative 8: there are three,
+    // and D43 came from mixing two). Which one wins waits for the real room (D43); until then they must agree
+    // here. Up is compared in each camera's own coordinates; the truth is the room's -Y.
+    {
+        std::vector<const spotter::Scan*> scans;
+        for (const Shot& shot : shell.shots) scans.push_back(&shot.scan);
+        std::mt19937 buildRandom(1);
+        const spotter::Room built = spotter::BuildRoom(scans, spotter::Mesh(), buildRandom, spotter::RoomOptions());
+        const auto Degrees = [](cv::Point3f a, cv::Point3f b) { return std::acos(std::min(1.0, std::abs((double)a.dot(b)) / cv::norm(a) / cv::norm(b))) * 180 / CV_PI; };
+        const double buildUpOff = Degrees(built.firstCamera.t() * cv::Point3f(0, 1, 0), cv::Point3f(0, -1, 0));   // the poses map into the raycast room: its -Y
+        double structureUpOff = 0;
+        std::mt19937 structureRandom(1);
+        for (size_t k = 0; k < shell.shots.size(); k++)
+        {
+            const spotter::ScanStructure s = spotter::ExtractStructure(shell.shots[k].scan.cloud, Camera, cv::Point3f(0, 0, 0), spotter::StructureOptions(), structureRandom);
+            structureUpOff = std::max(structureUpOff, Degrees(s.up, spots[k].turn.t() * cv::Point3f(0, -1, 0)));
+        }
+        std::printf("2b. floor: BuildRoom %.3f, FindTwinFloor %.3f; ceiling: BuildRoom %.3f, FindCeiling %.3f; up off: BuildRoom %.2f deg, ExtractStructure up to %.2f deg\n",
+                    built.floorY, shell.floorY, built.ceilingY, shell.ceilingY, buildUpOff, structureUpOff);
+        Check(std::abs(built.floorY - shell.floorY) < 0.02f && std::abs(built.ceilingY - shell.ceilingY) < 0.02f,
+              "BuildRoom's floor and ceiling agree with FindTwinFloor's and FindCeiling's within 2 cm");
+        Check(buildUpOff < 1 && structureUpOff < 1, "BuildRoom's and ExtractStructure's up agree with the truth within 1 deg");
+    }
 
     // 3. Texture: each seen texel against its true colour. The levelled room -> the raycast room is
     // firstCamera.t(); the truth is what a ray from 2 cm inside the room hits, straight at the surface, at the
@@ -155,7 +127,7 @@ int main()
                     {
                         cv::Vec3b truth;
                         const cv::Point3f nudge = shell.firstCamera.t() * (s.across * (a * 0.015f) + s.down * (b * 0.015f));
-                        Raycast(w + nudge + in * 0.02f, -in, truth);
+                        Raycast(w + nudge + in * 0.02f, -in, truth, 0.001f);
                         match = cv::norm(cv::Vec3i(truth) - cv::Vec3i(s.colour.at<cv::Vec3b>(row, column)), cv::NORM_INF) <= 2;
                     }
                 seen++;
