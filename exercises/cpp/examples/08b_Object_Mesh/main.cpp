@@ -19,7 +19,7 @@
 //    5. The camera only sees the FRONT. The back is GUESSED (mirrored or
 //       flat), coloured grey and kept in its own group, so what was seen
 //       and what was made up never mix.
-//    6. Save object_<class>_<time>.obj in the folder you ran from.
+//    6. Save object_<class>_<time>.obj where a Save As window says.
 //
 //  Window: colour (half size) with YOLO's boxes. After a capture, the
 //          pixels that went into the mesh are tinted green.

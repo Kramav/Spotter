@@ -79,7 +79,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 - **Never save into the folder the program runs from.** Choose with `AskSaveAs` / `AskOpenFolder`
   (`spotter/file_dialog.hpp`), and take a typed relative path from a known folder (D48).
 
-## Status (2026-11-13)
+## Status (2026-11-14)
 
 **Next session starts here (left off 2026-11-14).** Working through the 2026-11-11 review's remediation
 ([§8](docs/review-2026-11-11-architecture.md)), the user's order: clean the repo first, Linux/CI later.
@@ -89,7 +89,7 @@ its fixes that needed no decision are done (D53, D54).
   6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`; D54 compares the floor rules), 7 (D52,
   D53: 0 warnings in the whole build).
 - **Waiting on the user's decisions (the audit's list):** purge `alert_*.jpg` from git history (rewrites
-  history and the `legacy-archive` tag, force-push, re-clone on the other PC); the privacy rules for capture
+  history and both tags, `legacy-archive` and `v1.0`; force-push; re-clone on the other PC); the privacy rules for capture
   and recording (which streams, depth-only by default?, encryption, retention), which gate 5 and the Pi
   export; whether to log the freeze and the revised decisions 3-5 (replay as a capture format +
   `ReplaySource`; teaching code; a header used outside its folder moves to the library).
@@ -108,7 +108,7 @@ its fixes that needed no decision are done (D53, D54).
   no compression for room scans, an information-per-pixel estimate). Ask before moving them into
   ideas.md or the Roadmap. "No compression" fits D44's open capture-format question.
 
-- 2026-11-14: **Audit of the review + D53, D54** ([docs/review-2026-11-14-audit.md](docs/review-2026-11-14-audit.md)): six reviewers; the diagnosis holds, the remediation mostly holds, but it repeated the "synthetic only" pattern and D44 made parts of the review stale. Fixed (the user: all but the WSL build): check_scan_session no longer writes into `room_scans\` (`SPOTTER_RESCUE_FOLDER`); 13e catches any error and exits 2 when the scans aren't saved; failed saves name the file and reason, every write checked after closing, non-ASCII folder names work; any build folder (CMakeCache.txt) refused, the repo rescue folder only if the repo is there; Save As in 08, 08b, 09b, 09c and four ladder steps (tour 00g writes to temp); /W4 on the examples (26 fixed, 0 in the build); one shared test room (`checks/test_room.hpp`, outputs identical); the floor/up rules compared in check_room_shell; placement limit 1 mm / 0.1 deg; crash output that survives a broken heap; more of `.gitignore`. New rules shown to fail with their code broken. Built, not run on the sensor (the Save As programs only built).
+- 2026-11-14: **Audit of the review + D53, D54** ([docs/review-2026-11-14-audit.md](docs/review-2026-11-14-audit.md)): six reviewers; the diagnosis holds, the remediation mostly holds, but it repeated the "synthetic only" pattern and D44 made parts of the review stale. Fixed (the user: all but the WSL build): check_scan_session no longer writes into `room_scans\` (`SPOTTER_RESCUE_FOLDER`); 13e catches any error and exits 2 when the scans aren't saved; failed saves name the file and reason, every write checked after closing (a folder name outside the code page is still not supported end to end); any build folder (CMakeCache.txt) refused, the repo rescue folder only if the repo is there; Save As in 08, 08b, 09b, 09c and four ladder steps (tour 00g writes to temp); /W4 on the examples (26 fixed, 0 in the build); one shared test room (`checks/test_room.hpp`, outputs identical); the floor/up rules compared in check_room_shell; placement limit 1 mm / 0.1 deg; crash output that survives a broken heap; more of `.gitignore`. New rules shown to fail with their code broken. Built, not run on the sensor (the Save As programs only built).
 - 2026-11-13: **D52, review initiative 7 done:** `/W4` (MSVC) / `-Wall -Wextra` on the library, the console guard and the checks; 22 warnings fixed or silenced with a reason (the CRT `_s` functions aren't on Linux), now 0. `ctest` 12/12.
 - 2026-11-13: **D51:** `Pose::Inverse()`; the hand-written inverses and "angle between two poses" use it (no change in results; `check_icp` case). The one floor/up rule (8's other half) waits for D43's real-room lines.
 - 2026-11-13: **D50, review initiative 6 done:** the deleted harnesses are now checks. `check_scan_session` (13e: place, K, X, P, U, the rescue to a rescue folder), `check_fill` (13x and Demo 6) and `check_room_shell` (13w: ceiling, texture, fill); each fails with its code broken (4 mutations tried). 13x's fill and 13w's steps 2-4 moved, unchanged, into headers beside them (`fill_holes.hpp`, `room_shell.hpp`); Demo 6 includes 13x's instead of its copy (1,517 → 413 lines). Found: 13w paints a strip under 3 cm wide at furniture's foot with its colour (the 4 cm depth test), and the fill runs a top ~10 cm past its edge; recorded, not fixed. `ctest` 12/12 (check_structure not re-run). 13w wasn't relinked: it was open.

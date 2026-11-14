@@ -40,8 +40,8 @@ still the user's.
 ## Findings, ranked
 
 1. **Photos in the git history.** `alert_*.jpg` (four files, commit `057eb9b`) were removed from the files by
-   `6e5bc02` but stay in history, and `main` is pushed. Purging means rewriting history and the
-   `legacy-archive` tag and re-cloning on the other PC: the user's decision. The cost grows with each clone.
+   `6e5bc02` but stay in history, and `main` is pushed. Purging means rewriting history and both tags
+   (`legacy-archive`, `v1.0`), force-pushing, and re-cloning on the other PC: the user's decision. The cost grows with each clone.
 2. **A test wrote into the real `room_scans\`** (`check_scan_session`'s rescue, every `ctest`). Fixed (D53):
    `SPOTTER_RESCUE_FOLDER`.
 3. **13e could lose scans silently:** it caught only `std::exception` and returned 0 when nothing was saved.
@@ -86,7 +86,8 @@ can't save safely; catching any exception type is enough). The count of "not run
 
 ## Decisions waiting on the user
 
-1. Purge `alert_*.jpg` from history (rewrites history and the `legacy-archive` tag; force-push; re-clone).
+1. Purge `alert_*.jpg` from history (rewrites history and both tags, `legacy-archive` and `v1.0`; force-push;
+   re-clone on the other PC).
 2. The privacy rules for capture and recording.
 3. Log the freeze (decision 2) and decisions 3, 4, 5 as revised above, or not.
 4. Then: the real-data sprint (13e with K twice, then 13z; 13w's `Floor:` lines; one known-size measurement),

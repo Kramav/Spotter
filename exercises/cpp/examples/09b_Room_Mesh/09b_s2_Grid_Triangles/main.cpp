@@ -5,7 +5,7 @@
 //  a grid, so neighbouring points are neighbours in 3D too: each 2x2
 //  square of points (every 2nd pixel) becomes two triangles. No jump rule
 //  yet: every square with four points is joined, also from the edge of a
-//  chair to the wall behind it. Saved as room_<time>.obj.
+//  chair to the wall behind it. Saved as room_<time>.obj where a Save As window says.
 //
 //  New in this step: a grid of points -> triangles.
 //  Keys:  S  scan and save     Q or Esc  quit

@@ -8,7 +8,7 @@
 //  sign (spotter::FuseScans, a TSDF and a surface net). Then 09c's clean
 //  model across all the scans: floor, ceiling, walls joined at corners,
 //  furniture as boxes, the room stood up straight (spotter::BuildRoom).
-//  Saved as room_scan_<time>.obj where it runs.
+//  Saved as room_scan_<time>.obj where a Save As window says.
 //
 //  New in this step: merging scans (TSDF), the clean model from many scans.
 //  Keys:  SPACE scan here   E merge and save   drag / W A S D turn   wheel / Z X zoom   R reset   Q quit
@@ -67,7 +67,7 @@ void AddScan(Room& room, spotter::Scan scan, const spotter::PinholeCamera& camer
 //@param3 - random: the random number generator
 //
 //@brief - new: merges every scan into one mesh (FuseScans), builds the clean model (BuildRoom), writes
-//         room_scan_<time>.obj and prints the triangle, floor, ceiling, wall and box counts. O(FuseScans).
+//         room_scan_<time>.obj (Save As) and prints the triangle, floor, ceiling, wall and box counts. O(FuseScans).
 void Merge(const Room& room, const spotter::PinholeCamera& camera, std::mt19937& random)
 {
     std::vector<const spotter::Scan*> all;

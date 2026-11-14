@@ -199,7 +199,7 @@ More ladders are added as each example is ported.
 | `00_tour/00d_Yolo_Detector` | detection, class names, swapping the model | yes / a BMP | built, not run |
 | `00_tour/00e_Tracker` | IDs, coasting, two thresholds on made-up boxes | no | runs (synthetic) |
 | `00_tour/00f_Pose_Planes_Icp` | a pose, Kabsch, the planes of a raycast room, ICP between two views, a bare wall's weak directions | no | runs (synthetic) |
-| `00_tour/00g_Mesh_And_Viewer` | a made-up depth picture → mesh → `tour_00g.obj`; the viewer's maths by hand | no (a window) | runs (synthetic) |
+| `00_tour/00g_Mesh_And_Viewer` | a made-up depth picture → mesh → `tour_00g.obj` (in the temp folder); the viewer's maths by hand | no (a window) | runs (synthetic) |
 | `00_tour/00h_Room_Folder` | 3 made-up scans written as a room folder, read back, a zeroed cloud refused, the room rebuilt | no | runs (synthetic) |
 | `01_Depth_Peek` | what a depth picture holds | yes | built, not run |
 | `02_Detect_Distance` | YOLO + depth: the four steps of late fusion | yes | built, not run |

@@ -92,7 +92,7 @@ Cloud MakeCloud(const spotter::RgbdFrame& frame)
 //
 //@param1 - cloud: the cloud to write
 //
-//@brief - writes a cloud_<time>.ply in the current folder with Y up and Z towards the viewer (the camera's frame
+//@brief - writes a cloud_<time>.ply where a Save As window says with Y up and Z towards the viewer (the camera's frame
 //         turned 180 degrees about X, as PLY files usually are); prints the path or the failure. O(points).
 void Save(const Cloud& cloud)
 {

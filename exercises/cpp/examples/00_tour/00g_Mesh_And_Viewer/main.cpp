@@ -15,7 +15,7 @@
 //  pinhole maths of tour 00b. A z-buffer keeps the nearest point per pixel.
 //
 //  This program makes a depth picture by hand (a wall, a box in front, a
-//  dome), meshes it, saves tour_00g.obj where it runs (made-up shapes, no
+//  dome), meshes it, saves tour_00g.obj in the temp folder (made-up shapes, no
 //  camera picture), checks one viewer projection by hand, then opens the viewer.
 //  Keys:  mouse drag / W A S D  turn    wheel / Z X  zoom    R  reset    Q or Esc  quit
 // =====================================================================
@@ -77,7 +77,7 @@ spotter::Mesh MeshIt(const std::vector<cv::Point3f>& cloud)
 //
 //@param1 - mesh: the mesh (a copy: it is turned here)
 //
-//@brief - part 2: TurnToYUp, then SaveObj to tour_00g.obj; prints whether it was written. O(points + triangles).
+//@brief - part 2: TurnToYUp, then SaveObj to tour_00g.obj in the temp folder; prints whether it was written. O(points + triangles).
 void Save(spotter::Mesh mesh)
 {
     spotter::TurnToYUp(mesh);   // Blender and MeshLab expect Y up

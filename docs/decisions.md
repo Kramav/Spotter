@@ -1262,8 +1262,10 @@ except the WSL build.
   (`SaveAll`'s message already pointed to the console, which said nothing). `features.yml` is now checked
   (it wasn't), streams are checked after they close (a full disk on the last block), the `.gitignore` too.
   BMPs and `features.yml` are written through our own checked file write (encoded in memory), and
-  `colour.bmp` is read the same way, so a folder name outside the system's code page (Küche) works.
-  `SaveAll`'s report and `EndSession`'s messages can't throw mid-rescue on such a name.
+  `colour.bmp` is read the same way, so the scan files no longer go through OpenCV's narrow path. A folder
+  name outside the system's code page is still NOT supported end to end, and untested: `points.ply`
+  (`SavePly` takes a narrow path), the folder checks' messages, and 13w/13x/13z. What did change: `SaveAll`'s
+  report and `EndSession`'s messages can't throw mid-rescue on such a name.
 - **Two safety rules no longer depend on paths baked in at build time.** `CheckRoomFolder` also refuses any
   folder with a `CMakeCache.txt` above it (a second build folder, another PC's); the repo's rescue folder is
   used only if the repo is on this PC (a copied program skips it). New `check_room` case. The other ~75 uses
@@ -1273,7 +1275,9 @@ except the WSL build.
   gitignored); tour 00g writes into the temp folder. Built, not run.
 - **Warnings on the examples too** (`/W4`, same flags as D52). 26 came up: 25 were OpenCV's deprecated
   `Mat_ <<` in the Kalman examples (05, its three steps, 05b_s2), now `Mat_<float>({rows, cols}, {...})`
-  with explicit float casts (the same numbers), and one double-to-float in 11_s2. Now 0 in the whole build.
+  with explicit float casts (the same numbers, to float rounding; each list's length matched to its size by a
+  script, since the constructor only checks it at run time; built, not run), and one double-to-float in 11_s2.
+  Now 0 in the whole build.
 - Each new assertion was shown to fail with its rule broken (the CMakeCache refusal, EndSession's false).
   `ctest` 12/12 (check_structure not re-run here).
 

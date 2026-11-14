@@ -117,6 +117,17 @@ int main()
     info.scans = (int)scans.size();
     ok = spotter::WriteRoomInfo(folder, info) && spotter::WriteLandmarks(folder, {}) && ok;
     Check(ok, "the folder is written");
+    try   // features.yml (written from memory since D53; nothing in the library reads it back, so check it here)
+    {
+        cv::FileStorage features((spotter::ScanFolder(folder, 1) / "features.yml").string(), cv::FileStorage::READ);
+        cv::Mat descriptors;
+        std::vector<cv::KeyPoint> keypoints;
+        if (features.isOpened()) { features["descriptors"] >> descriptors; cv::read(features["keypoints"], keypoints); }
+        Check(features.isOpened() && descriptors.rows == scans[1].near.descriptors.rows && descriptors.rows > 0 &&
+              cv::norm(descriptors, scans[1].near.descriptors, cv::NORM_HAMMING) == 0 && keypoints.size() == scans[1].near.keypoints.size(),
+              "features.yml reads back: the same keypoints and descriptors");
+    }
+    catch (const cv::Exception& e) { std::printf("   %s\n", e.what()); Check(false, "features.yml reads back (it doesn't parse)"); }
     std::vector<spotter::SavedRoom> found = spotter::FindRooms(folder.parent_path() / "spotter_check_room");
     Check(found.size() == 1 && found[0].scans == 5 && found[0].format == 2, "FindRooms lists it: format 2, 5 scans");
     spotter::RoomInfo read;

@@ -73,7 +73,7 @@ static bool ReplaceText(const fs::path& path, const std::string& text)
 //@brief - prints which file of a save failed and why (13e's SaveAll points to the console for it). Always false. O(1).
 static bool Failed(const fs::path& file, const std::string& what, const std::error_code& error = {})
 {
-    std::printf("Saving failed: %s %s%s\n", what.c_str(), file.string().c_str(), error ? (" (" + error.message() + ")").c_str() : "");
+    std::printf("Saving failed: %s %s%s\n", what.c_str(), file.u8string().c_str(), error ? (" (" + error.message() + ")").c_str() : "");
     return false;
 }
 
@@ -90,8 +90,8 @@ static bool WriteBytes(const fs::path& path, const void* data, size_t bytes)
 
 //bool WritePicture(const fs::path& path, const cv::Mat& picture){
 //
-//@brief - a BMP, encoded in memory and written with WriteBytes: imwrite takes a narrow path, which loses a folder
-//         name outside the system's code page (Küche) on Windows. O(pixels).
+//@brief - a BMP, encoded in memory and written with WriteBytes (checked after closing). imwrite takes a narrow
+//         path on Windows; this doesn't (points.ply still does: SavePly). O(pixels).
 static bool WritePicture(const fs::path& path, const cv::Mat& picture)
 {
     std::vector<uchar> bytes;

@@ -427,7 +427,7 @@ std::vector<std::pair<cv::Point, cv::Scalar>> Dots(const Room& room, const spott
 //@param2 - frame: the last frame, for its colour
 //@param3 - random: the random number generator
 //
-//@brief - builds the room model (BuildRoom), writes room_model_<time>.obj and reports it; returns the dots to
+//@brief - builds the room model (BuildRoom), writes room_model_<time>.obj (Save As) and reports it; returns the dots to
 //         show. Says so and returns nothing if there were no depth readings. O(BuildRoom).
 std::vector<std::pair<cv::Point, cv::Scalar>> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame, std::mt19937& random)
 {

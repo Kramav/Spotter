@@ -12,7 +12,7 @@
 //    4. Mesh: the depth picture is already a grid. Each square of points
 //       becomes two triangles (08b), unless its corners jump in depth:
 //       that's an edge (a chair in front of a wall), not a surface.
-//    5. Save room_<time>.obj in the folder you ran from.
+//    5. Save room_<time>.obj where a Save As window says.
 //
 //  You'll see the room from where the camera stood, and HOLES behind
 //  everything: the camera can't see behind a chair. Those holes are why
@@ -113,7 +113,7 @@ spotter::Mesh MeshFromCloud(const std::vector<cv::Point3f>& cloud, const std::ve
 //@param2 - frame: the last frame, for its colour
 //
 //@brief - steps 3-5: the colour comes from the last frame (black where the colour camera doesn't reach); builds
-//         the mesh, turns it to Y up, writes room_<time>.obj and prints its size and the share of the view with no
+//         the mesh, turns it to Y up, writes room_<time>.obj (Save As) and prints its size and the share of the view with no
 //         depth. Returns the colour pixels that had depth, for the tint. O(pixels).
 std::vector<cv::Point> ScanAndSave(const cv::Mat& averageMm, const spotter::RgbdFrame& frame)
 {

@@ -59,7 +59,7 @@ bool FindFloor(const std::vector<cv::Point3f>& cloud, std::mt19937& random, spot
 //
 //@brief - new: the room axes from the floor (up = its normal, "towards" = straight back with the up part dropped,
 //         right = up x towards); the mesh (MeshFromGrid) is expressed in them, so it stands straight with Y up.
-//         Prints the camera's height, tilt and roll and writes room_level_<time>.obj. O(pixels).
+//         Prints the camera's height, tilt and roll and writes room_level_<time>.obj (Save As). O(pixels).
 void SaveLevelled(const std::vector<cv::Point3f>& cloud, const cv::Mat& registered, const spotter::Plane& floor)
 {
     cv::Point3f up = floor.normal;

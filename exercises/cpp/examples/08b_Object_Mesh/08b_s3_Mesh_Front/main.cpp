@@ -129,7 +129,7 @@ spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& 
 //
 //@param1 - mesh: the mesh; turned to Y up
 //
-//@brief - TurnToYUp, then SaveObj to object_<time>.obj; prints the triangle count (never commit it). O(points +
+//@brief - TurnToYUp, then SaveObj where a Save As window says (object_<time>.obj suggested); prints the triangle count (never commit it). O(points +
 //         triangles).
 void Save(spotter::Mesh& mesh)
 {
