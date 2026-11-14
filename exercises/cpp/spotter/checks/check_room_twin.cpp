@@ -156,7 +156,7 @@ int main()
         spotter::Located located = spotter::LocateKinect(view, room);
         seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         spotter::Pose inRoom{ room.firstCamera * truth.turn, room.firstCamera * truth.shift };
-        double cm = cv::norm(located.pose.shift - inRoom.shift) * 100, degrees = spotter::Pose{ located.pose.turn.t() * inRoom.turn, cv::Point3f() }.Degrees();
+        double cm = cv::norm(located.pose.shift - inRoom.shift) * 100, degrees = located.pose.Inverse().Then(inRoom).Degrees();
         std::printf("3. put back %.2f m / %.0f deg off: located from %d starts in %.1f s, %.0f%% matched, %.1f cm / %.2f deg off%s\n%s",
                     cv::norm(truth.shift), truth.Degrees(), located.tried, seconds, located.share * 100, cm, degrees, located.twoAlike ? " (two alike)" : "",
                     located.report.c_str());

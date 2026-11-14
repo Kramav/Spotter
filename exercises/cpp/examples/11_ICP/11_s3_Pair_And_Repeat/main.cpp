@@ -84,7 +84,7 @@ spotter::Pose Icp(cv::flann::Index& tree, const std::vector<cv::Point3f>& a, con
 void Try(float rightMeters, float leftDegrees, bool print)
 {
     const spotter::Pose truth{ spotter::TurnAbout(cv::Vec3d(0, -leftDegrees * CV_PI / 180, 0)), cv::Point3f(rightMeters, 0, 0) };
-    const spotter::Pose undo{ truth.turn.t(), -(truth.turn.t() * truth.shift) };
+    const spotter::Pose undo = truth.Inverse();
     cv::RNG random(1);
     std::vector<cv::Point3f> a = Sample(random), b = Sample(random);
     for (cv::Point3f& p : b) p = undo(p);   // B's sample, in B's coordinates

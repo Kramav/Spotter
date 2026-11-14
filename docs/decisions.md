@@ -1202,3 +1202,25 @@ them breaking. A check can only call code it can reach, and this code lived insi
   - Demo 4's house-building (its library part is in `check_room_twin`).
   - 13z's rebuild (its library parts are in `check_room`).
 - `ctest`: 13 checks (12 pass in 32 s; `check_structure` untouched, not re-run).
+
+## D51: Pose::Inverse now; the one floor/"up" rule waits for the real room (2026-11-13)
+
+**Why:** the 2026-11-11 review's initiative 8 has two halves.
+
+- **`Pose::Inverse()` (geometry.hpp), done.** The review counted 17 rotations transposed by hand. Two
+  patterns are now one call each:
+  - the full inverse `Pose{ t.turn.t(), -(t.turn.t() * t.shift) }` becomes `t.Inverse()` (check_icp, 11_s2,
+    11_s3);
+  - "how far b turns from a", `Pose{ a.turn.t() * b.turn, {} }.Degrees()`, becomes
+    `a.Inverse().Then(b).Degrees()`. The angle is unchanged: trace(a^T b) = trace(b a^T). This touches
+    room_scan, structure, 13y and four checks.
+
+  The precomputed `back = pose.turn.t()` in the hot loops (room, room_scan, structure) stays as it is:
+  each is commented, and building a Pose per point would only add work. `check_icp` has a new case:
+  `Inverse` undoes a pose.
+- **One floor/"up" rule, waiting.** Today there are three: `BuildRoom`, `ExtractStructure`, and
+  `FindTwinFloor` plus 13w's `FindCeiling`. The review makes this depend on the real-data runs
+  (initiative 3) and sets the acceptance as "D43 and the real room agree". D43 (13w's floor too high)
+  still waits for the user's `Floor:` console lines. Merging the rules first would change the answer
+  before the cause is known. It starts once those lines are in. `check_room_shell` and `check_fill` (D50)
+  now guard 13w and the fill when it does.

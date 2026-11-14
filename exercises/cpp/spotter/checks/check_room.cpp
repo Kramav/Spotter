@@ -112,7 +112,7 @@ int main()
             spotter::Placement placed = spotter::PlaceScan(scan, scans, Camera, random, -1, {}, options);
             double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
             double mm = cv::norm(placed.pose.shift - truth[k].shift) * 1000;
-            double degrees = spotter::Pose{ placed.pose.turn.t() * truth[k].turn, cv::Point3f() }.Degrees();
+            double degrees = placed.pose.Inverse().Then(truth[k]).Degrees();
             std::printf("1. scan %zu: %zu features; %s, %.1f mm / %.3f deg off, %.2f s%s\n", k + 1, scan.near.keypoints.size(),
                         placed.placed ? "placed" : "NOT placed", mm, degrees, seconds, placed.suspicious ? " (suspicious)" : "");
             if (!placed.placed) std::printf("   %s\n", placed.report.c_str());

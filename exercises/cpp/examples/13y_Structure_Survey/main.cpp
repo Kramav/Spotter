@@ -247,7 +247,7 @@ spotter::RoomMap MapWithout(const Room& room, size_t skip)
 //@brief - true if the poses are within AgreeMeters and AgreeDegrees of each other. O(1).
 bool Agrees(const spotter::Pose& a, const spotter::Pose& b)
 {
-    return cv::norm(a.shift - b.shift) < AgreeMeters && spotter::Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees() < AgreeDegrees;
+    return cv::norm(a.shift - b.shift) < AgreeMeters && a.Inverse().Then(b).Degrees() < AgreeDegrees;
 }
 
 //spotter::Pose MultiStart(const spotter::Scan& scan, const spotter::RoomMap& map, const std::vector<spotter::Pose>& starts, int& tried){
@@ -366,9 +366,9 @@ void ContinuousAll(const Room& room)
         spotter::Recommendation next = spotter::RecommendNext(sofar, room.info.depthCamera, spotter::ScanOptions());
         spotter::IcpResult fromLast = spotter::PlaceAfter(scan, previous, previous.pose);
         spotter::IcpResult fromNext = spotter::PlaceAfter(scan, previous, next.found ? next.pose : previous.pose);
-        double moved = cv::norm(scan.pose.shift - previous.pose.shift) * 100, turned = spotter::Pose{ previous.pose.turn.t() * scan.pose.turn, cv::Point3f() }.Degrees();
+        double moved = cv::norm(scan.pose.shift - previous.pose.shift) * 100, turned = previous.pose.Inverse().Then(scan.pose).Degrees();
         double fromAdvice = next.found ? cv::norm(scan.pose.shift - next.pose.shift) * 100 : -1;
-        double adviceTurn = next.found ? spotter::Pose{ next.pose.turn.t() * scan.pose.turn, cv::Point3f() }.Degrees() : -1;
+        double adviceTurn = next.found ? next.pose.Inverse().Then(scan.pose).Degrees() : -1;
         bool a = Agrees(fromLast.pose, scan.pose), b = Agrees(fromNext.pose, scan.pose);
         agree[0] += a;
         agree[1] += b;
@@ -431,7 +431,7 @@ void ViewScan(const Room& room, int number)
         renderer.Draw(placed, cv::Vec3b(0, 0, 255), 2, 2);
         spotter::DrawCamera(image, view, scan.pose, room.info.depthCamera, cv::Scalar(0, 200, 0), 2, "13e");
         spotter::DrawCamera(image, view, c.pose, room.info.depthCamera, cv::Scalar(0, 0, 255), 2, "Relocate #" + std::to_string(shown + 1));
-        double off = cv::norm(c.pose.shift - scan.pose.shift), turned = spotter::Pose{ c.pose.turn.t() * scan.pose.turn, cv::Point3f() }.Degrees();
+        double off = cv::norm(c.pose.shift - scan.pose.shift), turned = c.pose.Inverse().Then(scan.pose).Degrees();
         cv::putText(image, "green = where 13e placed it, red = Relocate's answer, grey = the other scans", cv::Point(10, 22), cv::FONT_HERSHEY_SIMPLEX, 0.5,
                     cv::Scalar(255, 255, 255), 1);
         cv::putText(image, cv::format("#%zu of %zu: agreement %.2f, paired %.0f%%, %.2f m / %.0f deg from green%s%s", shown + 1, r.candidates.size(), c.agreement,

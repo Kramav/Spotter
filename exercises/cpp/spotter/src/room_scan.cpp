@@ -382,7 +382,7 @@ Placement PlaceScan(const Scan& scan, const std::vector<Scan>& earlier, const Pi
     IcpResult fit = Icp(scan.surface.points, target, targetNormals, rough, icp);
     result.pose = fit.pose;
     float icpMoved = (float)cv::norm(fit.pose.shift - rough.shift);
-    float icpTurned = Pose{ rough.turn.t() * fit.pose.turn, cv::Point3f() }.Degrees();
+    float icpTurned = rough.Inverse().Then(fit.pose).Degrees();
     result.report = cv::format("matched scan %zu (%d features agree: %d near, %d far, %zu landmarks); ICP: %.0f%% of points overlap, "
                                "%.1f mm apart, moved %.1f cm and %.1f deg from the features' guess",
                                bestScan + 1, best.count, best.near, (int)best.farPairs.size(), best.landmarkPairs.size(),
@@ -412,7 +412,7 @@ Placement PlaceScan(const Scan& scan, const std::vector<Scan>& earlier, const Pi
     wide.startPairMeters = options.checkStartPairMeters;
     IcpResult check = others.empty() ? IcpResult{ fit.pose } : Icp(few, others, otherNormals, fit.pose, wide);
     float checkMoved = (float)cv::norm(check.pose.shift - fit.pose.shift);
-    float checkTurned = Pose{ fit.pose.turn.t() * check.pose.turn, cv::Point3f() }.Degrees();
+    float checkTurned = fit.pose.Inverse().Then(check.pose).Degrees();
     bool roomDisagrees = check.pairedShare >= options.checkMinOverlap &&
                          (checkMoved > options.suspiciousMoveMeters || checkTurned > options.suspiciousDegrees);
     if (roomDisagrees)

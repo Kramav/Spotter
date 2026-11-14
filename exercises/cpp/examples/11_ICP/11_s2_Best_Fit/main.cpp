@@ -41,7 +41,7 @@ int main()
 {
     // Camera B: 30 cm right, 10 cm forward, turned 12 degrees left (about the vertical axis).
     const spotter::Pose truth{ spotter::TurnAbout(cv::Vec3d(0, -12 * CV_PI / 180, 0)), cv::Point3f(0.30f, 0, 0.10f) };
-    const spotter::Pose undo{ truth.turn.t(), -(truth.turn.t() * truth.shift) };   // A's coordinates -> B's
+    const spotter::Pose undo = truth.Inverse();   // A's coordinates -> B's
 
     cv::RNG random(1);
     std::vector<cv::Point3f> a, b;   // a[i] and b[i] are the same spot, seen by A and by B

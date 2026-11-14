@@ -264,7 +264,7 @@ static cv::Matx33f YawOnto(const cv::Point3f& a, const cv::Point3f& b, const cv:
 //@brief - true if the poses differ by more than meters or more than degrees, i.e. they are two different fits and not one. O(1).
 static bool Distinct(const Pose& a, const Pose& b, float meters, float degrees)
 {
-    return cv::norm(a.shift - b.shift) > meters || Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees() > degrees;
+    return cv::norm(a.shift - b.shift) > meters || a.Inverse().Then(b).Degrees() > degrees;
 }
 
 float ViewAgreement(const Scan& scan, const Pose& pose, const RoomMap& map, const PinholeCamera& camera)

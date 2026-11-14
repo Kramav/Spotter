@@ -1,5 +1,5 @@
 // Self-check for Pose/Kabsch (geometry.hpp) and register.hpp, with no Kinect:
-//   1. Kabsch recovers a known turn + shift from exact pairs.
+//   1. Kabsch recovers a known turn + shift from exact pairs; Pose::Inverse undoes a pose.
 //   2. ICP lines up two raycast views of a made-up room, taken from camera spots 12 cm and 6 deg apart.
 //   3. Bug 2: a NaN normal (one bad target point) mustn't make the whole pose NaN, and
 //      SampleSurface never hands out one.
@@ -25,7 +25,7 @@ const float NaN = std::numeric_limits<float>::quiet_NaN();
 void Off(const spotter::Pose& a, const spotter::Pose& b, double& mm, double& degrees)
 {
     mm = cv::norm(a.shift - b.shift) * 1000;
-    degrees = spotter::Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees();
+    degrees = a.Inverse().Then(b).Degrees();
 }
 
 // The room in camera A's coordinates (Y down): a box from x -1.5 to 2.0, y -1.3 (ceiling) to 1.2
@@ -81,6 +81,8 @@ int main()
     Off(spotter::Kabsch(from, to), truth, mm, degrees);
     std::printf("1. Kabsch: %.4f mm, %.5f deg off\n", mm, degrees);
     Check(mm < 0.01 && degrees < 0.001, "Kabsch recovers an exact move");
+    Off(truth.Then(truth.Inverse()), spotter::Pose(), mm, degrees);
+    Check(mm < 1e-3 && degrees < 0.1 && cv::norm(truth.Inverse()(to[0]) - from[0]) < 1e-5, "Pose::Inverse undoes the pose");
 
     // 2. ICP between two raycast views: B stands 10 cm right, 5 cm forward and 3 cm up, turned
     //    5 deg left and tipped 2 deg down. ICP starts from "not moved" (as 11 does).
@@ -124,7 +126,7 @@ int main()
             }
     spotter::Pose nudge{ spotter::TurnAbout(cv::Vec3d(0.6, -1.0, 0.8) * (1.5 * CV_PI / 180 / std::sqrt(2.0))),
                          cv::Point3f(0.004f, -0.003f, 0.003f) };
-    spotter::Pose back{ nudge.turn.t(), -(nudge.turn.t() * nudge.shift) };   // nudge undone
+    spotter::Pose back = nudge.Inverse();   // nudge undone
     for (cv::Point3f& p : moved) p = back(p);
     fit = spotter::Icp(moved, corner, cornerNormals, spotter::Pose());
     Off(fit.pose, nudge, mm, degrees);

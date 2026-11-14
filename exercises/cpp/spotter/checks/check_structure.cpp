@@ -103,7 +103,7 @@ spotter::Pose Spot(float x, float z, float leftDegrees, float upDegrees = 0)
 void Off(const spotter::Pose& a, const spotter::Pose& b, double& cm, double& degrees)
 {
     cm = cv::norm(a.shift - b.shift) * 100;
-    degrees = spotter::Pose{ a.turn.t() * b.turn, cv::Point3f() }.Degrees();
+    degrees = a.Inverse().Then(b).Degrees();
 }
 
 struct Scene

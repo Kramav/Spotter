@@ -31,6 +31,13 @@ struct Pose
     //         shift = next.turn * shift + next.shift. O(1).
     Pose Then(const Pose& next) const { return { next.turn * turn, next.turn * shift + next.shift }; }
 
+    //Pose Inverse(){
+    //
+    //@brief - the pose that undoes this one (the other's coordinates -> this camera's): turn' = turn
+    //         transposed, shift' = -(turn' * shift). a.Inverse().Then(b).Degrees() is how far b turns from a.
+    //         O(1).
+    Pose Inverse() const { return { turn.t(), -(turn.t() * shift) }; }
+
     //float Degrees(){
     //
     //@brief - how far it turns, whatever the axis: acos((trace - 1) / 2), in degrees. O(1).
