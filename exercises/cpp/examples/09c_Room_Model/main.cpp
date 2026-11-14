@@ -46,6 +46,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/geometry.hpp"
 #include "spotter/mesh.hpp"
@@ -433,7 +434,9 @@ std::vector<std::pair<cv::Point, cv::Scalar>> ScanAndSave(const cv::Mat& average
     std::vector<cv::Vec3b> colours = frame.registered.reshape(0, 1);
     Room room = BuildRoom(frame.depthCamera.Cloud(averageMm), colours, random);
     if (room.mesh.points.empty()) { std::printf("Nothing to model: no depth readings.\n"); return {}; }
-    std::string path = (std::filesystem::current_path() / cv::format("room_model_%lld.obj", (long long)std::time(nullptr))).string();
+    std::string path = spotter::AskSaveAs("09c: save the room model as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("room_model_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+    if (path.empty()) { std::printf("Not saved (cancelled).\n"); return Dots(room, frame); }
     if (spotter::SaveObj(path, room.mesh, "Spotter 09c: seen_room = scanned, clean_* and furniture_blocks = the tidy (partly guessed) model")) Report(room, path);
     else std::printf("Could not write %s\n", path.c_str());
     return Dots(room, frame);

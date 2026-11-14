@@ -329,8 +329,10 @@ int main()
         }
     }
     catch (const std::exception& e) { ending = std::string("An error (") + e.what() + ")"; }   // bug 6: the folder is saved anyway
-    EndSession(s, ending);   // before the Kinect stops: stopping one that is gone may hang
-    return 0;
+    catch (...) { ending = "An error of an unknown kind"; }   // not a std::exception: still saved (a crash can't be: D39)
+    if (EndSession(s, ending)) return 0;   // before the Kinect stops: stopping one that is gone may hang
+    std::printf("Exiting with code 2: the scans were NOT saved.\n");
+    return 2;
 }
 
 // ---------------------------------------------------------------------

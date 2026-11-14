@@ -20,6 +20,7 @@
 #include <ctime>
 #include <opencv2/highgui.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/room.hpp"
 #include "spotter/source_freenect2.hpp"
@@ -75,8 +76,9 @@ void Merge(const Room& room, const spotter::PinholeCamera& camera, std::mt19937&
     float voxel;
     spotter::Mesh seen = spotter::FuseScans(all, camera, options, voxel);
     spotter::Room model = spotter::BuildRoom(all, seen, random, options);
-    std::string path = cv::format("room_scan_%lld.obj", (long long)std::time(nullptr));
-    bool saved = spotter::SaveRoomObj(path, model, {}, "Spotter 13e step 2");
+    std::string path = spotter::AskSaveAs("13e step 2: save the room as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("room_scan_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+    bool saved = !path.empty() && spotter::SaveRoomObj(path, model, {}, "Spotter 13e step 2");
     std::printf("%s %s: %zu triangles merged from %zu scans; floor %.2f m below, ceiling %.2f m above the first camera; %zu walls, %zu boxes\n",
                 saved ? "Saved" : "Could NOT save", path.c_str(), seen.groups["seen_room"].size(), all.size(), -model.floorY, model.ceilingY,
                 model.walls.size(), model.blocks.size());

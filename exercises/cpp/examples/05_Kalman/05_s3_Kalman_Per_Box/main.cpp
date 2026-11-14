@@ -49,13 +49,13 @@ struct Track
 cv::KalmanFilter NewFilter(cv::Point2d start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
-    kalman.transitionMatrix = (cv::Mat_<float>(4, 4) << 1, 0, Dt, 0,   0, 1, 0, Dt,   0, 0, 1, 0,   0, 0, 0, 1);
-    kalman.measurementMatrix = (cv::Mat_<float>(2, 4) << 1, 0, 0, 0,   0, 1, 0, 0);
+    kalman.transitionMatrix = cv::Mat_<float>({ 4, 4 }, { 1, 0, (float)Dt, 0,   0, 1, 0, (float)Dt,   0, 0, 1, 0,   0, 0, 0, 1 });
+    kalman.measurementMatrix = cv::Mat_<float>({ 2, 4 }, { 1, 0, 0, 0,   0, 1, 0, 0 });
     cv::setIdentity(kalman.measurementNoiseCov, cv::Scalar(NoisePixels * NoisePixels));
-    double p = AccelerationPixels * Dt * Dt / 2, v = AccelerationPixels * Dt;
-    kalman.processNoiseCov = cv::Mat::diag((cv::Mat_<float>(4, 1) << p * p, p * p, v * v, v * v));
-    kalman.statePost = (cv::Mat_<float>(4, 1) << start.x, start.y, 0, 0);
-    kalman.errorCovPost = cv::Mat::diag((cv::Mat_<float>(4, 1) << NoisePixels * NoisePixels, NoisePixels * NoisePixels, 1e6, 1e6));
+    const float p = (float)(AccelerationPixels * Dt * Dt / 2), v = (float)(AccelerationPixels * Dt);
+    kalman.processNoiseCov = cv::Mat::diag(cv::Mat_<float>({ 4, 1 }, { p * p, p * p, v * v, v * v }));
+    kalman.statePost = cv::Mat_<float>({ 4, 1 }, { (float)start.x, (float)start.y, 0, 0 });
+    kalman.errorCovPost = cv::Mat::diag(cv::Mat_<float>({ 4, 1 }, { (float)(NoisePixels * NoisePixels), (float)(NoisePixels * NoisePixels), 1e6f, 1e6f }));
     return kalman;
 }
 
@@ -107,7 +107,7 @@ void Update(std::vector<Track>& tracks, const std::vector<spotter::Detection>& d
         trackUsed[bestTrack] = detectionUsed[bestDetection] = true;
         Track& track = tracks[bestTrack];
         cv::Point2d c = Centre(detections[bestDetection].box);
-        track.kalman.correct((cv::Mat_<float>(2, 1) << c.x, c.y));   // new: blend in the measurement
+        track.kalman.correct(cv::Mat_<float>({ 2, 1 }, { (float)c.x, (float)c.y }));   // new: blend in the measurement
         track.size = detections[bestDetection].box.size();
         track.missedFrames = 0;
     }

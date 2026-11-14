@@ -23,6 +23,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/detector_yolo_opencvdnn.hpp"
 #include "spotter/mesh.hpp"
@@ -132,9 +133,10 @@ spotter::Mesh MeshFromMask(const cv::Mat& mask, const std::vector<cv::Point3f>& 
 //         triangles).
 void Save(spotter::Mesh& mesh)
 {
-    std::string path = cv::format("object_%lld.obj", (long long)std::time(nullptr));
+    std::string path = spotter::AskSaveAs("08b step 3: save the object as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("object_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
     spotter::TurnToYUp(mesh);
-    if (spotter::SaveObj(path, mesh, "Spotter 08b step 3: the front only")) std::printf("Saved %zu triangles to %s (never commit it)\n", mesh.groups["seen_front"].size(), path.c_str());
+    if (!path.empty() && spotter::SaveObj(path, mesh, "Spotter 08b step 3: the front only")) std::printf("Saved %zu triangles to %s (never commit it)\n", mesh.groups["seen_front"].size(), path.c_str());
 }
 
 //int main(){

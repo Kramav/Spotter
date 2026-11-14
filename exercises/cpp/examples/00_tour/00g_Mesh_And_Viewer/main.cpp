@@ -26,6 +26,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <filesystem>
 #include "spotter/frame.hpp"
 #include "spotter/mesh.hpp"
 #include "spotter/view.hpp"
@@ -80,8 +81,9 @@ spotter::Mesh MeshIt(const std::vector<cv::Point3f>& cloud)
 void Save(spotter::Mesh mesh)
 {
     spotter::TurnToYUp(mesh);   // Blender and MeshLab expect Y up
-    bool ok = spotter::SaveObj("tour_00g.obj", mesh, "Spotter tour 00g: made-up shapes");
-    std::printf("2. SaveObj: %s tour_00g.obj (Y turned up for 3D programs). Open it in Blender or MeshLab.\n", ok ? "wrote" : "could NOT write");
+    const std::string path = (std::filesystem::temp_directory_path() / "tour_00g.obj").string();   // never the folder it runs from
+    bool ok = spotter::SaveObj(path, mesh, "Spotter tour 00g: made-up shapes");
+    std::printf("2. SaveObj: %s %s (Y turned up for 3D programs). Open it in Blender or MeshLab.\n", ok ? "wrote" : "could NOT write", path.c_str());
 }
 
 //void ProjectByHand(spotter::OrbitView& view){

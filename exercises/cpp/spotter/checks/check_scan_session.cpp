@@ -9,8 +9,9 @@
 //   5. U then K: the last scan's folder is gone from disk.
 //   6. The rescue (D30, D48): a scan still being placed and the room folder blocked by a file. EndSession keeps
 //      the scan, saves to the first RescueFolders entry with no questions, and every scan loads back.
-// Run: build\check_scan_session.exe. Exit code 0 = passed. Writes in the temp folder, and step 6 in the repo's
-// room_scans\rescue_<time> (where 13e's rescue goes), deleted again (only a folder that wasn't there before).
+//   7. Every folder blocked and no one to answer: EndSession reports the scans not saved (13e exits non-zero).
+// Run: build\check_scan_session.exe. Exit code 0 = passed. Writes only in the temp folder (the rescue too, through
+// SPOTTER_RESCUE_FOLDER), and removes it again.
 
 #include "../../examples/13e_Room_Scan/scan_state.hpp"
 
@@ -122,6 +123,12 @@ int main()
     const fs::path base = fs::temp_directory_path() / "spotter_check_session";
     std::error_code error;
     fs::remove_all(base, error);
+    const fs::path rescues = base / "rescues";   // the rescue's first folder, never the repo's room_scans
+#ifdef _WIN32
+    _putenv_s("SPOTTER_RESCUE_FOLDER", rescues.string().c_str());
+#else
+    setenv("SPOTTER_RESCUE_FOLDER", rescues.string().c_str(), 1);
+#endif
 
     Session s(60);
     s.camera = Camera;
@@ -173,22 +180,26 @@ int main()
     Check(s.scans.size() == 3 && SaveAll(s, problem) && spotter::ScanFolders(s.folder).size() == 3 && LoadsBack(s),
           "U takes the last scan back, and K removes its folder from disk");
 
-    // 6. The rescue: a scan still being placed, the room folder blocked by a file. The rescue folder is named to
-    // the second when EndSession runs, so it's recognised by its parent and name, and deleted only if it's new.
-    const fs::path rescues = spotter::RescueFolders()[0].parent_path();
-    std::vector<fs::path> before;
-    for (const auto& entry : fs::directory_iterator(rescues, error)) before.push_back(entry.path());
+    // 6. The rescue: a scan still being placed, the room folder blocked by a file. The first rescue folder is this
+    // check's own (SPOTTER_RESCUE_FOLDER above), named to the second, so it's recognised by its parent and name.
+    Check(spotter::RescueFolders()[0].parent_path() == rescues, "SPOTTER_RESCUE_FOLDER replaces the repo's rescue folder");
     std::ofstream(base / "a_file") << "in the way\n";
     s.folder = base / "a_file" / "room";
     s.saved = false;
     StartPlacing(s, Photograph(truth[3], 4), -1);
-    EndSession(s, "check_scan_session");   // what Q, a lost Kinect or an error does
-    const bool isNew = std::find(before.begin(), before.end(), s.folder) == before.end();
+    const bool saved = EndSession(s, "check_scan_session");   // what Q, a lost Kinect or an error does
     const bool inRescues = s.folder.parent_path() == rescues && s.folder.filename().string().rfind("rescue_", 0) == 0;
     std::printf("6. rescued to %s\n", s.folder.string().c_str());
     Check(s.scans.size() == 4, "the scan still being placed is kept");
-    Check(inRescues && isNew && s.saved && LoadsBack(s), "the blocked folder fails over to the first rescue folder, with no questions, and every scan loads back");
-    if (inRescues && isNew) fs::remove_all(s.folder, error);
+    Check(saved && inRescues && s.saved && LoadsBack(s), "the blocked folder fails over to the first rescue folder, with no questions, and every scan loads back");
+    WaitForReaders(s);
+
+    // 7. Every folder blocked (a file where each rescue folder's parent should be), no one to answer: EndSession
+    // returns false, so 13e exits non-zero, and says the scans are not saved.
+    s.folder = base / "a_file" / "room";
+    s.saved = false;
+    Check(!EndSession(s, "check_scan_session", { base / "a_file" / "r1", base / "a_file" / "r2" }) && !s.saved,
+          "every folder failing: EndSession reports not saved");
     WaitForReaders(s);
     fs::remove_all(base, error);
 

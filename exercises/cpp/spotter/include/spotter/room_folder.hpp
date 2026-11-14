@@ -218,7 +218,7 @@ struct FolderCheck
 //@param3 - quick: a small test file instead of one scan's size, for checking often (default false)
 //
 //@brief - can a room be saved there? Refuses a relative path (it would land wherever the program runs), a folder
-//         inside build/ (a clean rebuild deletes it), one inside another room folder (FindRooms wouldn't list it),
+//         inside build/ or any folder holding CMakeCache.txt (a clean rebuild deletes it), one inside another room folder (FindRooms wouldn't list it),
 //         a file in the way, a path too long for Windows, a folder that can't be created, a test file that can't
 //         be written, synced and read back (the system's reason: access denied, read-only, ...), and too little
 //         free space (under scansToWrite + 5 scans). Warns under 60 scans' room. Folders it created are removed
@@ -228,8 +228,9 @@ FolderCheck CheckRoomFolder(const std::filesystem::path& room, int scansToWrite 
 //std::vector<std::filesystem::path> RescueFolders(){
 //
 //@brief - where a session's scans go, in this order, when its own folder can't be written at the end: the repo's
-//         room_scans/rescue_<date>_<time>, then <home>/Documents/Spotter rescue/rescue_<date>_<time>, then the
-//         system's temp folder. All absolute. O(1).
+//         room_scans/rescue_<date>_<time> (only if the repo is on this PC; SPOTTER_RESCUE_FOLDER in the environment
+//         replaces it, as check_scan_session does), then <home>/Documents/Spotter rescue/rescue_<date>_<time>, then
+//         the system's temp folder (cleared on a restart: move a rescue out of it). All absolute. O(1).
 std::vector<std::filesystem::path> RescueFolders();
 
 //std::filesystem::path AskRoomFolder(const std::string& defaultFolder, const std::filesystem::path& current, int scansToWrite){

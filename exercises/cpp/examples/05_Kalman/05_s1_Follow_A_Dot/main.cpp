@@ -38,12 +38,12 @@ const double Dt = 1.0 / 30;             // 30 frames a second
 cv::KalmanFilter NewFilter(cv::Point2f start)
 {
     cv::KalmanFilter kalman(4, 2, 0, CV_32F);
-    kalman.transitionMatrix = (cv::Mat_<float>(4, 4) << 1, 0, Dt, 0,   0, 1, 0, Dt,   0, 0, 1, 0,   0, 0, 0, 1);   // position += speed * dt
-    kalman.measurementMatrix = (cv::Mat_<float>(2, 4) << 1, 0, 0, 0,   0, 1, 0, 0);                              // we measure x and y
+    kalman.transitionMatrix = cv::Mat_<float>({ 4, 4 }, { 1, 0, (float)Dt, 0,   0, 1, 0, (float)Dt,   0, 0, 1, 0,   0, 0, 0, 1 });   // position += speed * dt
+    kalman.measurementMatrix = cv::Mat_<float>({ 2, 4 }, { 1, 0, 0, 0,   0, 1, 0, 0 });                              // we measure x and y
     cv::setIdentity(kalman.measurementNoiseCov, cv::Scalar(NoisePixels * NoisePixels));                          // R: measurement noise
-    double p = AccelerationPixels * Dt * Dt / 2, v = AccelerationPixels * Dt;
-    kalman.processNoiseCov = cv::Mat::diag((cv::Mat_<float>(4, 1) << p * p, p * p, v * v, v * v));              // Q: how far reality drifts
-    kalman.statePost = (cv::Mat_<float>(4, 1) << start.x, start.y, 0, 0);
+    const float p = (float)(AccelerationPixels * Dt * Dt / 2), v = (float)(AccelerationPixels * Dt);
+    kalman.processNoiseCov = cv::Mat::diag(cv::Mat_<float>({ 4, 1 }, { p * p, p * p, v * v, v * v }));              // Q: how far reality drifts
+    kalman.statePost = cv::Mat_<float>({ 4, 1 }, { start.x, start.y, 0, 0 });
     cv::setIdentity(kalman.errorCovPost, cv::Scalar(1000));                                                      // P: unsure to begin with
     return kalman;
 }
@@ -66,7 +66,7 @@ int main()
         cv::Point2f measured(truth.x + noise(random), truth.y + noise(random));
 
         kalman.predict();
-        cv::Mat estimate = kalman.correct((cv::Mat_<float>(2, 1) << measured.x, measured.y));
+        cv::Mat estimate = kalman.correct(cv::Mat_<float>({ 2, 1 }, { measured.x, measured.y }));
         cv::Point2f filtered(estimate.at<float>(0), estimate.at<float>(1));
 
         cv::Mat picture(480, 640, CV_8UC3, cv::Scalar(30, 30, 30));

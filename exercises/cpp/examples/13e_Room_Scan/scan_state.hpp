@@ -228,9 +228,10 @@ inline void SwitchFolder(Session& s, const std::filesystem::path& folder)
 
 // --- Saving: once, on K, Q, a lost Kinect or an error ---
 
-//bool SaveAll(Session& s){
+//bool SaveAll(Session& s, std::string& problem){
 //
 //@param1 - s: the session
+//@param2 - problem: set to why, when it fails
 //
 //@brief - the whole folder: StartRoomFolder, removes scan folders left from scans that U took back, each scan
 //         not yet on disk (WriteScan: pose.txt last, swapped in whole) and the others' pose.txt (X and P change
@@ -261,16 +262,20 @@ inline bool SaveAll(Session& s, std::string& problem)
     }
     catch (const std::exception& e) { ok = false; step += std::string(" (an error: ") + e.what() + ")"; }
     s.saved = ok;
-    if (!ok)
+    try   // also outside main's try: the check and the folder's name (a path the code page can't show) may throw
     {
-        int unsaved = 0;
-        for (size_t i = 0; i < s.onDisk.size(); i++) unsaved += !s.onDisk[i];
-        spotter::FolderCheck check = spotter::CheckRoomFolder(s.folder, std::max(unsaved, 1), true);
-        problem = "Failed while " + step + ". " + (check.ok ? std::string("The folder itself looks fine; see the console.") : check.problem) +
-                  " (Scans written before it are whole; 13z reads them.)";
+        if (!ok)
+        {
+            int unsaved = 0;
+            for (size_t i = 0; i < s.onDisk.size(); i++) unsaved += !s.onDisk[i];
+            spotter::FolderCheck check = spotter::CheckRoomFolder(s.folder, std::max(unsaved, 1), true);
+            problem = "Failed while " + step + ". " + (check.ok ? std::string("The folder itself looks fine; the console above says which file.") : check.problem) +
+                      " (Scans written before it are whole; 13z reads them.)";
+        }
+        std::printf("%s %s: %zu scans, points.ply %zu points, %.1f s.\n", ok ? "Saved" : "SAVING FAILED in", s.folder.string().c_str(),
+                    s.scans.size(), points, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
     }
-    std::printf("%s %s: %zu scans, points.ply %zu points, %.1f s.\n", ok ? "Saved" : "SAVING FAILED in", s.folder.string().c_str(),
-                s.scans.size(), points, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    catch (const std::exception& e) { problem = "Failed while " + step + " (" + e.what() + ")."; }
     if (!ok) std::printf("  %s\n", problem.c_str());
     if (!ok) s.message = "SAVING FAILED - see the console. The scans are still in memory: K tries again.";
     return ok;
@@ -665,17 +670,19 @@ inline void OnClick(Session& s, const spotter::OrbitView& view, cv::Point at)
 
 // --- The end: Q, a lost Kinect, or an error. Everything is saved BEFORE the Kinect is stopped. ---
 
-//void EndSession(Session& s, const std::string& why){
+//bool EndSession(Session& s, const std::string& why, const std::vector<std::filesystem::path>& rescues){
 //
 //@param1 - s: the session
 //@param2 - why: why it ended (Quitting, Kinect lost, an error), for the console
+//@param3 - rescues: where to try next, in turn (default RescueFolders())
 //
 //@brief - the rescue, run on Q, a lost Kinect or an exception: a scan still being placed is waited for and kept,
-//         then the folder is saved with no questions if it isn't already; if that fails, each RescueFolders entry
-//         in turn; only if all fail, a folder is asked for (Save As) until it saves or the scans are dropped
-//         after a yes. Ends with where every scan is. Called before the Kinect stops. Errors while waiting are
-//         printed, not thrown. O(SaveAll).
-inline void EndSession(Session& s, const std::string& why)
+//         then the folder is saved with no questions if it isn't already; if that fails, each of `rescues` in
+//         turn; only if all fail, a folder is asked for (Save As) until it saves or the scans are dropped after a
+//         yes. Ends with where every scan is. Called before the Kinect stops. Errors while waiting are printed, not
+//         thrown. False only if scans are left unsaved without anyone choosing to drop them (13e exits non-zero).
+//         O(SaveAll).
+inline bool EndSession(Session& s, const std::string& why, const std::vector<std::filesystem::path>& rescues = spotter::RescueFolders())
 {
     try
     {
@@ -691,16 +698,16 @@ inline void EndSession(Session& s, const std::string& why)
     }
     catch (const std::exception& e) { std::printf("The scan being placed is lost: %s\n", e.what()); }
     try { WaitForReaders(s); } catch (...) {}
-    if (s.scans.empty()) { std::printf("No scans, so nothing was saved.\n"); return; }
+    if (s.scans.empty()) { std::printf("No scans, so nothing was saved.\n"); return true; }
     if (!s.saved)
     {
         std::printf("\n=== %s: saving the folder ===\n", why.c_str());
         std::string problem;
         bool ok = SaveAll(s, problem);
-        for (const std::filesystem::path& rescue : spotter::RescueFolders())   // no questions (D30): the next place, then the next
+        for (const std::filesystem::path& rescue : rescues)   // no questions (D30): the next place, then the next
         {
             if (ok) break;
-            std::printf("\n!!! Couldn't save to %s. Saving to %s instead.\n", s.folder.string().c_str(), rescue.string().c_str());
+            std::printf("\n!!! Couldn't save to %s. Saving to %s instead.\n", s.folder.u8string().c_str(), rescue.u8string().c_str());
             SwitchFolder(s, rescue);
             ok = SaveAll(s, problem);
         }
@@ -708,10 +715,10 @@ inline void EndSession(Session& s, const std::string& why)
         {
             spotter::Tell("THE SCANS ARE NOT SAVED", "Every folder failed, the last one with:\n" + problem + "\n\nChoose a folder (another drive?) in the next window.");
             const std::filesystem::path where = spotter::AskRoomFolder(s.roomsFolder, {}, (int)s.scans.size());
-            if (where.empty() && std::cin.eof()) { std::printf("No one can answer (the console's input is closed): THE SCANS ARE NOT SAVED.\n"); return; }
+            if (where.empty() && std::cin.eof()) { std::printf("No one can answer (the console's input is closed): THE SCANS ARE NOT SAVED.\n"); return false; }
             if (where.empty())
             {
-                if (spotter::Confirm("Discard the scans?", cv::format("Discard all %zu scans? This can't be undone.", s.scans.size()))) { std::printf("The scans were discarded.\n"); return; }
+                if (spotter::Confirm("Discard the scans?", cv::format("Discard all %zu scans? This can't be undone.", s.scans.size()))) { std::printf("The scans were discarded.\n"); return true; }
                 continue;
             }
             SwitchFolder(s, where);
@@ -720,5 +727,6 @@ inline void EndSession(Session& s, const std::string& why)
     }
     std::printf("\n=================================================================\n"
                 "Every scan is in %s\n(13z rebuilds the room from it; 13w, 13x and the demos open it.)\n"
-                "=================================================================\n", s.folder.string().c_str());
+                "=================================================================\n", s.folder.u8string().c_str());
+    return true;
 }

@@ -44,6 +44,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/detector_yolo_opencvdnn.hpp"
 #include "spotter/geometry.hpp"
@@ -459,7 +460,9 @@ std::vector<cv::Point> FinishCapture(const Capture& capture, const spotter::Dept
 
     std::string name = capture.seed >= 0 ? "clicked" : classes.Name(capture.chosen.classId);
     std::replace(name.begin(), name.end(), ' ', '_');   // "potted plant" -> potted_plant
-    std::string path = (std::filesystem::current_path() / cv::format("object_%s_%lld.obj", name.c_str(), (long long)std::time(nullptr))).string();
+    std::string path = spotter::AskSaveAs("08b: save the object as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("object_%s_%lld.obj", name.c_str(), (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+    if (path.empty()) { std::printf("Not saved (cancelled).\n"); return tint; }
     spotter::TurnToYUp(mesh);
     if (spotter::SaveObj(path, mesh, "Spotter 08b. seen_front = scanned by the Kinect, guessed_back = made up"))
         std::printf("Saved %zu seen points, %zu seen + %zu guessed triangles to %s\n  (a capture of the room: never commit it)\n",

@@ -306,6 +306,11 @@ int main()
     check = spotter::CheckRoomFolder(inBuild);
     Check(!check.ok && check.problem.find("build folder") != std::string::npos && !fs::exists(inBuild.parent_path()),
           "a folder inside build/ is refused, and not created (D48's cause)");
+    fs::create_directories(base / "other_build", error);   // a build folder this program wasn't built in (a second one, another PC's)
+    std::ofstream(base / "other_build" / "CMakeCache.txt") << "# made up\n";
+    check = spotter::CheckRoomFolder(base / "other_build" / "examples" / "room");
+    Check(!check.ok && check.problem.find("build folder") != std::string::npos && !fs::exists(base / "other_build" / "examples"),
+          "a folder inside any build folder (CMakeCache.txt above it) is refused too");
     check = spotter::CheckRoomFolder(base / "a_room" / "inner");
     Check(!check.ok && check.problem.find("inside the saved room") != std::string::npos, "a folder inside another room is refused");
     check = spotter::CheckRoomFolder(base / "a_file");

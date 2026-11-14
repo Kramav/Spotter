@@ -37,6 +37,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/mesh.hpp"
 #include "spotter/source_freenect2.hpp"
@@ -123,7 +124,9 @@ std::vector<cv::Point> ScanAndSave(const cv::Mat& averageMm, const spotter::Rgbd
         if (averageMm.at<float>(i) > 0 && frame.colourIndex[i] >= 0) tint.emplace_back(frame.colourIndex[i] % frame.colour.cols, frame.colourIndex[i] / frame.colour.cols);
     size_t triangles = mesh.groups["seen_room"].size();
     if (triangles == 0) { std::printf("Nothing to mesh: no depth readings.\n"); return tint; }
-    std::string path = (std::filesystem::current_path() / cv::format("room_%lld.obj", (long long)std::time(nullptr))).string();
+    std::string path = spotter::AskSaveAs("09b: save the room mesh as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("room_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+    if (path.empty()) { std::printf("Not saved (cancelled).\n"); return tint; }
     spotter::TurnToYUp(mesh);   // 3D programs expect Y up
     if (spotter::SaveObj(path, mesh, "Spotter 09b: the room from one view"))
         std::printf("Saved %zu points and %zu triangles, %.1f MB, to %s\n  %.0f%% of the view had no depth. (A capture of the room: never commit it.)\n",

@@ -22,6 +22,7 @@
 #include <random>
 #include <opencv2/highgui.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/geometry.hpp"
 #include "spotter/mesh.hpp"
@@ -70,8 +71,9 @@ void SaveLevelled(const std::vector<cv::Point3f>& cloud, const cv::Mat& register
     for (cv::Point3f& p : mesh.points) p = cv::Point3f(right.dot(p), up.dot(p), towards.dot(p));   // new: room axes (Y up)
     std::printf("camera %.2f m above the floor, tilted %+.1f deg (+ = looking up), rolled %+.1f deg\n",
                 floor.distance, std::asin(up.z) * 180 / CV_PI, std::asin(up.x) * 180 / CV_PI);
-    std::string path = cv::format("room_level_%lld.obj", (long long)std::time(nullptr));
-    if (spotter::SaveObj(path, mesh, "Spotter 09c step 3: levelled by the floor")) std::printf("Saved %s (never commit it)\n", path.c_str());
+    std::string path = spotter::AskSaveAs("09c step 3: save as", SPOTTER_REPO_ROOT "/room_scans",
+                                          cv::format("room_level_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+    if (!path.empty() && spotter::SaveObj(path, mesh, "Spotter 09c step 3: levelled by the floor")) std::printf("Saved %s (never commit it)\n", path.c_str());
 }
 
 //int main(){

@@ -9,6 +9,7 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <opencv2/imgcodecs.hpp>
@@ -65,6 +66,37 @@ static bool ReplaceText(const fs::path& path, const std::string& text)
     std::error_code error;
     fs::rename(fresh, path, error);
     return !error;
+}
+
+//bool Failed(const fs::path& file, const std::string& what, const std::error_code& error){
+//
+//@brief - prints which file of a save failed and why (13e's SaveAll points to the console for it). Always false. O(1).
+static bool Failed(const fs::path& file, const std::string& what, const std::error_code& error = {})
+{
+    std::printf("Saving failed: %s %s%s\n", what.c_str(), file.string().c_str(), error ? (" (" + error.message() + ")").c_str() : "");
+    return false;
+}
+
+//bool WriteBytes(const fs::path& path, const void* data, size_t bytes){
+//
+//@brief - writes the bytes as the whole file; checked after it's closed, so a full disk on the last block shows. O(bytes).
+static bool WriteBytes(const fs::path& path, const void* data, size_t bytes)
+{
+    std::ofstream file(path, std::ios::binary);
+    file.write((const char*)data, (std::streamsize)bytes);
+    file.close();
+    return file ? true : Failed(path, "writing");
+}
+
+//bool WritePicture(const fs::path& path, const cv::Mat& picture){
+//
+//@brief - a BMP, encoded in memory and written with WriteBytes: imwrite takes a narrow path, which loses a folder
+//         name outside the system's code page (Küche) on Windows. O(pixels).
+static bool WritePicture(const fs::path& path, const cv::Mat& picture)
+{
+    std::vector<uchar> bytes;
+    if (!cv::imencode(".bmp", picture, bytes)) return Failed(path, "encoding");
+    return WriteBytes(path, bytes.data(), bytes.size());
 }
 
 //std::map<std::string, std::string> ReadKeys(const fs::path& path){
@@ -153,7 +185,7 @@ bool StartRoomFolder(const fs::path& room, const RoomInfo& info)
     std::error_code error;
     fs::create_directories(room, error);
     if (error) return false;
-    std::ofstream(room / ".gitignore") << "# A capture of a room (Spotter): never commit it.\n*\n";
+    if (!(std::ofstream(room / ".gitignore") << "# A capture of a room (Spotter): never commit it.\n*\n")) return Failed(room / ".gitignore", "writing");
     RoomInfo empty = info;
     empty.scans = 0;
     empty.finished = false;
@@ -194,26 +226,36 @@ bool WriteScan(const fs::path& room, size_t index, const Scan& scan)
     std::error_code error;
     fs::remove_all(dir, error);   // left by an earlier save that was cut off
     fs::create_directories(dir, error);
-    if (error) return false;
-    bool ok = (bool)std::ofstream(dir / "cloud.bin", std::ios::binary).write((const char*)scan.cloud.data(), scan.cloud.size() * sizeof(cv::Point3f));
-    ok = cv::imwrite((dir / "colour.bmp").string(), scan.picture) && ok;
-    if (!scan.fullPicture.empty()) ok = cv::imwrite((dir / "colour_full.bmp").string(), scan.fullPicture) && ok;
-    ok = (bool)std::ofstream(dir / "colour_index.bin", std::ios::binary).write((const char*)scan.colourIndex.data(), scan.colourIndex.size() * sizeof(int)) && ok;
+    if (error) return Failed(dir, "creating", error);
+    bool ok = WriteBytes(dir / "cloud.bin", scan.cloud.data(), scan.cloud.size() * sizeof(cv::Point3f));
+    ok = WritePicture(dir / "colour.bmp", scan.picture) && ok;
+    if (!scan.fullPicture.empty()) ok = WritePicture(dir / "colour_full.bmp", scan.fullPicture) && ok;
+    ok = WriteBytes(dir / "colour_index.bin", scan.colourIndex.data(), scan.colourIndex.size() * sizeof(int)) && ok;
+    try   // in memory, then WriteBytes (a checked write, and a path outside the code page)
     {
-        cv::FileStorage features((dir / "features.yml").string(), cv::FileStorage::WRITE);
+        cv::FileStorage features("features.yml", cv::FileStorage::WRITE | cv::FileStorage::MEMORY);
         features << "keypoints" << scan.near.keypoints << "descriptors" << scan.near.descriptors;
         features << "far_keypoints" << scan.far.keypoints << "far_descriptors" << scan.far.descriptors
                  << "far_rays" << scan.farRays << "far_origin" << scan.farOrigin;
+        const std::string text = features.releaseAndGetString();
+        ok = WriteBytes(dir / "features.yml", text.data(), text.size()) && ok;
     }
+    catch (const cv::Exception& e) { ok = Failed(dir / "features.yml", e.what()); }
+    int files = 0;
     for (const auto& entry : fs::directory_iterator(dir, error))   // bug 4: on the disk before pose.txt says "complete"
-        ok = SyncToDisk(entry.path()) && ok;
-    if (!ok || !ReplaceText(dir / "pose.txt", PoseText(index, scan))) return false;
+    {
+        files++;
+        ok = (SyncToDisk(entry.path()) || Failed(entry.path(), "pushing to the disk")) && ok;
+    }
+    if (error || files < 4) ok = Failed(dir, "listing", error);
+    if (!ok) return false;
+    if (!ReplaceText(dir / "pose.txt", PoseText(index, scan))) return Failed(dir / "pose.txt", "writing");
     // The swap: folder -> .old, .new -> folder, then .old goes. Cut off between the two renames, both are whole.
     fs::remove_all(old, error);
     if (fs::exists(folder, error)) fs::rename(folder, old, error);
-    if (error) return false;
+    if (error) return Failed(folder, "renaming to .old", error);
     fs::rename(dir, folder, error);
-    if (error) return false;
+    if (error) return Failed(dir, "renaming into place", error);
     fs::remove_all(old, error);
     return true;
 }
@@ -380,7 +422,9 @@ bool LoadScan(const fs::path& folder, const RoomInfo& info, Scan& scan, int& num
     if (cloud.peek() != std::char_traits<char>::eof()) { problem = "cloud.bin is longer than room.txt's depth_size says"; return false; }
     if (picture)
     {
-        scan.picture = cv::imread((folder / "colour.bmp").string(), cv::IMREAD_COLOR);
+        std::ifstream file(folder / "colour.bmp", std::ios::binary);   // read as bytes: imread's narrow path, as WritePicture
+        const std::vector<uchar> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (!bytes.empty()) scan.picture = cv::imdecode(bytes, cv::IMREAD_COLOR);
         if (scan.picture.size() != cv::Size(width, height)) { problem = "colour.bmp missing or the wrong size"; return false; }
     }
     size_t readings = 0;
@@ -540,6 +584,8 @@ FolderCheck CheckRoomFolder(const fs::path& room, int scansToWrite, bool quick)
 #endif
     for (fs::path above = full.parent_path(); !above.empty(); above = above.parent_path())
     {
+        if (fs::exists(above / "CMakeCache.txt", error))   // any build folder, also one this program wasn't built in
+            return Refused(check, full.string() + " is inside a build folder (" + above.string() + " holds CMakeCache.txt), which a clean rebuild deletes. Choose a folder outside it, e.g. the repo's room_scans folder.");
         if (fs::exists(above / "room.txt", error))
             return Refused(check, full.string() + " is inside the saved room " + above.string() + ", where 13z, 13w and the demos wouldn't find it. Choose a folder outside it.");
         if (above == above.parent_path()) break;
@@ -582,8 +628,12 @@ std::vector<fs::path> RescueFolders()
 {
     const std::string stamp = Now("%Y-%m-%d_%H%M%S");
     std::vector<fs::path> folders;
+    std::error_code error;
+    const char* own = std::getenv("SPOTTER_RESCUE_FOLDER");   // a test's own folder, or a scanner's (the Pi's)
+    if (own && *own) folders.push_back(fs::u8path(own) / ("rescue_" + stamp));
 #ifdef SPOTTER_REPO_ROOT
-    folders.push_back((fs::u8path(SPOTTER_REPO_ROOT) / "room_scans" / ("rescue_" + stamp)).make_preferred());
+    else if (fs::is_directory(fs::u8path(SPOTTER_REPO_ROOT), error))   // not on a PC this program was copied to
+        folders.push_back((fs::u8path(SPOTTER_REPO_ROOT) / "room_scans" / ("rescue_" + stamp)).make_preferred());
 #endif
 #ifdef _WIN32
     const char* home = std::getenv("USERPROFILE");
@@ -591,7 +641,6 @@ std::vector<fs::path> RescueFolders()
     const char* home = std::getenv("HOME");
 #endif
     if (home && *home) folders.push_back(fs::u8path(home) / "Documents" / "Spotter rescue" / ("rescue_" + stamp));
-    std::error_code error;
     const fs::path temp = fs::temp_directory_path(error);
     if (!error) folders.push_back(temp / ("spotter_rescue_" + stamp));
     return folders;

@@ -52,7 +52,7 @@ int main()
                       : i % 3 == 1 ? cv::Point3f(-1.5f + 3.5f * u, -1.3f + 2.5f * v, 3.0f)   // back wall
                                    : cv::Point3f(-1.5f, -1.3f + 2.5f * v, 0.5f + 2.5f * u);  // left wall
         a.push_back(p);
-        cv::Point3f noise(random.gaussian(0.003), random.gaussian(0.003), random.gaussian(0.003));
+        cv::Point3f noise((float)random.gaussian(0.003), (float)random.gaussian(0.003), (float)random.gaussian(0.003));
         b.push_back(undo(p) + noise);
     }
     Print("true pose", truth);

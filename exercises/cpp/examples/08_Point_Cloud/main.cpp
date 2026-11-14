@@ -33,6 +33,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/mesh.hpp"
 #include "spotter/source_freenect2.hpp"
 #include "spotter/view.hpp"
@@ -97,7 +98,9 @@ void Save(const Cloud& cloud)
 {
     std::vector<cv::Point3f> yUp;
     for (const cv::Point3f& p : cloud.points) yUp.emplace_back(p.x, -p.y, -p.z);
-    std::string path = (std::filesystem::current_path() / ("cloud_" + std::to_string(std::time(nullptr)) + ".ply")).string();
+    std::string path = spotter::AskSaveAs("08: save the point cloud as", SPOTTER_REPO_ROOT "/room_scans",
+                                          "cloud_" + std::to_string(std::time(nullptr)) + ".ply", "PLY point cloud", "ply").string();
+    if (path.empty()) { std::printf("Not saved (cancelled).\n"); return; }
     if (spotter::SavePly(path, yUp, cloud.colours)) std::printf("Saved %s (a capture of the room: never commit it)\n", path.c_str());
     else std::printf("Could not write %s\n", path.c_str());
 }

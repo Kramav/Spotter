@@ -18,6 +18,7 @@
 #include <ctime>
 #include <opencv2/highgui.hpp>
 
+#include "spotter/file_dialog.hpp"
 #include "spotter/depth.hpp"
 #include "spotter/mesh.hpp"
 #include "spotter/source_freenect2.hpp"
@@ -80,8 +81,9 @@ int main()
         {
             spotter::Mesh mesh = Triangles(frame.depthCamera.Cloud(averager.Mean()), frame.registered.reshape(0, 1));
             spotter::TurnToYUp(mesh);
-            std::string path = cv::format("room_%lld.obj", (long long)std::time(nullptr));
-            if (spotter::SaveObj(path, mesh, "Spotter 09b step 2: no jump rule"))
+            std::string path = spotter::AskSaveAs("09b step 2: save as", SPOTTER_REPO_ROOT "/room_scans",
+                                                  cv::format("room_%lld.obj", (long long)std::time(nullptr)), "Wavefront OBJ", "obj").string();
+            if (!path.empty() && spotter::SaveObj(path, mesh, "Spotter 09b step 2: no jump rule"))
                 std::printf("Saved %zu triangles to %s (never commit it)\n", mesh.groups["seen_room"].size(), path.c_str());
         }
         cv::imshow("09b step 2: S scans and saves", spotter::WithKeys(frame.colour, Keys));

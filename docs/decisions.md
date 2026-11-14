@@ -1242,3 +1242,37 @@ them breaking. A check can only call code it can reach, and this code lived insi
   - 3 lines shadowed a name: `BoxDepthSampler::Build`'s parameters hid its members, and two locals in the
     fill. They were renamed; behaviour is unchanged.
 - `ctest` 12/12 (`check_structure` untouched since D51's 13/13).
+
+## D53: the 2026-11-14 audit's fixes, part 1: scans, saving and the folder the program runs from (2026-11-14)
+
+**Why:** a six-reviewer audit of the 2026-11-11 review and its remediation
+([docs/review-2026-11-14-audit.md](review-2026-11-14-audit.md)) found these. The user said: fix them all
+except the WSL build.
+
+- **A check no longer touches the real `room_scans\`.** `check_scan_session` (D50) wrote a `rescue_<time>`
+  folder there on every `ctest` and deleted it. `RescueFolders()` now takes `SPOTTER_RESCUE_FOLDER` from the
+  environment in place of the repo's folder; the check sets it to its own temp folder. With nothing set, a
+  program behaves as before.
+- **13e says when the scans weren't saved.** `EndSession` returns false only when scans are left unsaved and
+  nobody chose to drop them (every folder failed and no one can answer); 13e then prints why and exits with
+  code 2. It also catches errors of any kind, not only `std::exception`, so those reach the rescue too. A
+  crash (an access violation) still can't be saved from: D39 stands. `EndSession` takes the folders to try
+  (default `RescueFolders()`), so `check_scan_session` now also checks the every-folder-fails case.
+- **A failed save says which file and why.** `WriteScan` prints the file, the step and the system's reason
+  (`SaveAll`'s message already pointed to the console, which said nothing). `features.yml` is now checked
+  (it wasn't), streams are checked after they close (a full disk on the last block), the `.gitignore` too.
+  BMPs and `features.yml` are written through our own checked file write (encoded in memory), and
+  `colour.bmp` is read the same way, so a folder name outside the system's code page (Küche) works.
+  `SaveAll`'s report and `EndSession`'s messages can't throw mid-rescue on such a name.
+- **Two safety rules no longer depend on paths baked in at build time.** `CheckRoomFolder` also refuses any
+  folder with a `CMakeCache.txt` above it (a second build folder, another PC's); the repo's rescue folder is
+  used only if the repo is on this PC (a copied program skips it). New `check_room` case. The other ~75 uses
+  of `SPOTTER_REPO_ROOT` in examples (the model path, the default rooms folder) are unchanged.
+- **Nothing saves into the folder the program runs from** (CLAUDE.md's rule; D48 left these): 08, 08b, 09b,
+  09c and the ladder steps 08b_s3, 09b_s2, 09c_s3 and 13e_s2 ask with Save As (opening in `room_scans\`,
+  gitignored); tour 00g writes into the temp folder. Built, not run.
+- **Warnings on the examples too** (`/W4`, same flags as D52). 26 came up: 25 were OpenCV's deprecated
+  `Mat_ <<` in the Kalman examples (05, its three steps, 05b_s2), now `Mat_<float>({rows, cols}, {...})`
+  with explicit float casts (the same numbers), and one double-to-float in 11_s2. Now 0 in the whole build.
+- Each new assertion was shown to fail with its rule broken (the CMakeCache refusal, EndSession's false).
+  `ctest` 12/12 (check_structure not re-run here).

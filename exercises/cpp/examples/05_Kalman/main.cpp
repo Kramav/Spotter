@@ -150,20 +150,20 @@ cv::KalmanFilter NewKalman(double centreX, double centreY, double meters)
     kalman.measurementMatrix = cv::Mat::eye(3, 6, CV_32F);   // H: the measurement is the first 3 state numbers
 
     // R: how noisy each measurement is (a variance = noise squared).
-    kalman.measurementNoiseCov = (cv::Mat_<float>(3, 3) <<
-        MeasurementNoisePixels * MeasurementNoisePixels, 0, 0,
-        0, MeasurementNoisePixels * MeasurementNoisePixels, 0,
-        0, 0, MeasurementNoiseMeters * MeasurementNoiseMeters);
+    kalman.measurementNoiseCov = cv::Mat_<float>({ 3, 3 }, {
+        (float)(MeasurementNoisePixels * MeasurementNoisePixels), 0, 0,
+        0, (float)(MeasurementNoisePixels * MeasurementNoisePixels), 0,
+        0, 0, (float)(MeasurementNoiseMeters * MeasurementNoiseMeters) });
 
-    kalman.statePost = (cv::Mat_<float>(6, 1) << centreX, centreY, meters, 0, 0, 0);   // where we saw it, not moving
+    kalman.statePost = cv::Mat_<float>({ 6, 1 }, { (float)centreX, (float)centreY, (float)meters, 0, 0, 0 });   // where we saw it, not moving
 
     // P: how unsure the starting guess is. Position: about one measurement's noise. Speed: no idea
     // yet (up to ~1000 px/s, ~2 m/s). No depth yet (0)? Then very unsure, so the first real depth
     // replaces the 0 at once instead of being averaged with it.
     double metersVariance = meters > 0 ? MeasurementNoiseMeters * MeasurementNoiseMeters : 100.0;
-    kalman.errorCovPost = cv::Mat::diag((cv::Mat_<float>(6, 1) <<
-        MeasurementNoisePixels * MeasurementNoisePixels, MeasurementNoisePixels * MeasurementNoisePixels,
-        metersVariance, 1000 * 1000, 1000 * 1000, 2 * 2));
+    kalman.errorCovPost = cv::Mat::diag(cv::Mat_<float>({ 6, 1 }, {
+        (float)(MeasurementNoisePixels * MeasurementNoisePixels), (float)(MeasurementNoisePixels * MeasurementNoisePixels),
+        (float)metersVariance, 1000 * 1000, 1000 * 1000, 2 * 2 }));
     return kalman;
 }
 
@@ -211,7 +211,7 @@ void Correct(Track& track, const Measured& m)
         track.kalman.measurementNoiseCov.at<float>(2, 2) = 1e6f;
     }
     const cv::Rect2d& box = m.detection.box;
-    track.kalman.correct((cv::Mat_<float>(3, 1) << box.x + box.width / 2, box.y + box.height / 2, meters));
+    track.kalman.correct(cv::Mat_<float>({ 3, 1 }, { (float)(box.x + box.width / 2), (float)(box.y + box.height / 2), (float)meters }));
     track.kalman.measurementNoiseCov.at<float>(2, 2) = (float)(MeasurementNoiseMeters * MeasurementNoiseMeters);
     track.boxSize = box.size();
     track.missedFrames = 0;
