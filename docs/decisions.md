@@ -1320,3 +1320,35 @@ except the WSL build.
 - `ctest` 13/13 with check_structure (391 s) at this commit; after the follow-up (a `features.yml` round-trip
   case in check_room, shown to fail on a truncated file) 12/12 without it (the only library change since was a
   printed path). 0 warnings in the whole build.
+
+## D55: captures and recordings save depth only by default; a USB cable now, Tailscale later (2026-11-14, the user's decision)
+
+**Why:** the 2026-11-14 audit: "colour only of empty rooms" (D29) was a convention, not code, and record/replay
+(review initiative 5) and the Pi export (D44) both move camera data. These rules come first.
+
+- **Depth only by default.** A recording or a Pi capture saves depth (and calibration) unless colour is
+  switched on for that run. Colour is still allowed for an empty room, as D29 says; it's a choice made each
+  time, not the default. 13e's room folders are unchanged for now (they hold colour, D29).
+- **How captures leave the scanner:** a USB cable to the user's PC for now; Tailscale (the user's own private
+  network) later. Nothing is uploaded to a cloud service.
+- **Still open:** encryption at rest on the Pi, and how long captures are kept on it (e.g. wiped after a
+  verified copy). Decide before the first Pi capture program.
+
+## D56: the review's decisions 3, 4 and 5, as the audit revised them (2026-11-14, the user's decision)
+
+**Why:** the 2026-11-11 review's §7 left them open; the 2026-11-14 audit revised them after D44.
+
+- **Decision 3, replay = the capture format.** One frame-file format (depth, optional colour per D55,
+  calibration, device timestamps) is both the Pi's capture format (D44's open question) and the recording.
+  Programs and checks read it through a `ReplaySource` beside `source_freenect2` (the same Options / IsOpen /
+  Next shape, chosen by a setting), not a playback mode inside `KinectSource`.
+- **Decision 4, teaching code.** The room pipeline (placing, merging, the room model) is teaching code. Whether
+  to adopt an outside foundation (e.g. RTAB-Map) is decided after a real comparison on the same room, not on
+  Pi numbers (D44 moved processing to the PC).
+- **Decision 5, a header used outside its folder moves into the library.** An example's header included from
+  another folder (a demo, a check) becomes a library module, with a namespace and its settings as options. It
+  applies now to 13x's `fill_holes.hpp` (13x, Demo 6, check_fill) -> `spotter/room_fill`; and to the wall
+  filter shared by 06c and Demo 3 (a copy, not a header, but the same case). 13e's `scan_state.hpp` and 13w's
+  `room_shell.hpp` are included only by their own example and one check each: they move if a second program
+  needs them. Geometry that correctness depends on (floor/up, frames, poses) is single-sourced regardless.
+- **Not adopted:** the feature freeze (decision 2). Decisions 1, 6 and 7 were settled earlier (D45, D47).

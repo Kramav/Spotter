@@ -88,11 +88,11 @@ its fixes that needed no decision are done (D53, D54).
 - **Done:** initiatives 1 (D45, safe scan saves), 2 (D46, error boundaries), 9 (D47, docs/repo hygiene),
   6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`; D54 compares the floor rules), 7 (D52,
   D53: 0 warnings in the whole build).
-- **Waiting on the user's decisions (the audit's list):** purge `alert_*.jpg` from git history (rewrites
-  history and both tags, `legacy-archive` and `v1.0`; force-push; re-clone on the other PC); the privacy rules for capture
-  and recording (which streams, depth-only by default?, encryption, retention), which gate 5 and the Pi
-  export; whether to log the freeze and the revised decisions 3-5 (replay as a capture format +
-  `ReplaySource`; teaching code; a header used outside its folder moves to the library).
+- **Decided 2026-11-14:** D55 (captures depth-only by default; USB cable now, Tailscale later; encryption and
+  retention on the Pi still open), D56 (replay = the capture format via `ReplaySource`; the room pipeline is
+  teaching code; a header used outside its folder moves into the library: `fill_holes.hpp` -> `room_fill`,
+  06c/Demo 3's wall filter). The freeze was not adopted. `alert_*.jpg` purged from git history (both tags
+  rewritten, force-pushed): the other PC needs a fresh clone.
 - **Next work:** the real-data sprint (initiative 3, the user's runs) gates choosing the floor rule (8) and
   the RTAB-Map reference (10). 4 (one WSL build, then CI) waits until the user says.
 - **Waiting on the user (D48/D49, new):** a 13e run on the sensor: the start-up Save As window, a
