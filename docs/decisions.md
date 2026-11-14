@@ -1317,4 +1317,6 @@ except the WSL build.
   - A lock against two programs saving to one room folder; the other ~75 build-time paths in examples.
   - Missing checks: a save interrupted at each step (fault injection), far features and landmarks, 13w's
     full-colour-picture path, a second scene.
-- `ctest` 12/12 plus check_structure (see the Status line); 0 warnings in the whole build.
+- `ctest` 13/13 with check_structure (391 s) at this commit; after the follow-up (a `features.yml` round-trip
+  case in check_room, shown to fail on a truncated file) 12/12 without it (the only library change since was a
+  printed path). 0 warnings in the whole build.
