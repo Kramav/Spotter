@@ -1224,3 +1224,21 @@ them breaking. A check can only call code it can reach, and this code lived insi
   still waits for the user's `Floor:` console lines. Merging the rules first would change the answer
   before the cause is known. It starts once those lines are in. `check_room_shell` and `check_fill` (D50)
   now guard 13w and the fill when it does.
+
+## D52: warnings on: /W4 (MSVC) or -Wall -Wextra on the library, the console guard and the checks (2026-11-13)
+
+**Why:** the 2026-11-11 review's initiative 7 (no warning flags: MSVC was at its default, about /W1).
+
+- **Flags:** set once in `exercises/cpp/CMakeLists.txt` (`spotter_warnings`). Headers included with <...>
+  (OpenCV, libfreenect2, the standard library) stay quiet (`/external:anglebrackets /external:W0`). The
+  checks include 13e's, 13x's and 13w's headers (D50), so those are covered too. The examples' `main.cpp`s
+  aren't, as the review set the scope at the library and the checks.
+- **The first build gave 22 warnings, now 0:**
+  - 13 were MSVC's "unsafe" CRT functions: `getenv`, `localtime`, `strerror`, `_wfopen`. They're silenced
+    with `_CRT_SECURE_NO_WARNINGS`, because the `_s` replacements don't exist on Linux (D7).
+  - 8 were OpenCV 4.14's deprecated `cv::Mat_ <<` initializer, in `track.cpp` and `check_track`'s copy of
+    05c's code. A `Column({...})` helper now makes the same float columns, and `Mat::diag` the same
+    covariances. `check_track` still agrees every frame.
+  - 3 lines shadowed a name: `BoxDepthSampler::Build`'s parameters hid its members, and two locals in the
+    fill. They were renamed; behaviour is unchanged.
+- `ctest` 12/12 (`check_structure` untouched since D51's 13/13).

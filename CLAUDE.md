@@ -84,9 +84,11 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
 **Next session starts here (left off 2026-11-13).** Working through the 2026-11-11 review's remediation
 ([§8](docs/review-2026-11-11-architecture.md)), the user's order: clean the repo first, Linux/CI later.
 - **Done:** initiatives 1 (D45, safe scan saves), 2 (D46, error boundaries), 9 (D47, docs/repo hygiene),
-  6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`).
-- **Next, in order:** 7 = compiler warnings, then 5 = record/replay. 8's other half (one floor/"up" rule)
-  waits for 13w's `Floor:` lines on the real room (D43, D51). 4 (Linux build + CI) waits until the user says.
+  6 (D50, the harnesses as checks), half of 8 (D51, `Pose::Inverse`), 7 (D52, warnings: 0 at /W4).
+- **Next:** 5 = record/replay, but it needs the user's call first: the review's §7 decision 3 (how
+  replay works) and which streams may be recorded (privacy: colour only of empty rooms, D29). 8's other
+  half (one floor/"up" rule) waits for 13w's `Floor:` lines on the real room (D43, D51). 4 (Linux build +
+  CI) waits until the user says.
 - **Waiting on the user (D48/D49, new):** a 13e run on the sensor: the start-up Save As window, a
   folder inside `build\` refused with a reason, K's Save As + green banner, E's Save As + `.obj` where
   chosen, Q after K; double-click a program and see its console stay open. The original
@@ -100,6 +102,7 @@ merged offline → moving camera (see [docs/ideas.md](docs/ideas.md)). The camer
   no compression for room scans, an information-per-pixel estimate). Ask before moving them into
   ideas.md or the Roadmap. "No compression" fits D44's open capture-format question.
 
+- 2026-11-13: **D52, review initiative 7 done:** `/W4` (MSVC) / `-Wall -Wextra` on the library, the console guard and the checks; 22 warnings fixed or silenced with a reason (the CRT `_s` functions aren't on Linux), now 0. `ctest` 12/12.
 - 2026-11-13: **D51:** `Pose::Inverse()`; the hand-written inverses and "angle between two poses" use it (no change in results; `check_icp` case). The one floor/up rule (8's other half) waits for D43's real-room lines.
 - 2026-11-13: **D50, review initiative 6 done:** the deleted harnesses are now checks. `check_scan_session` (13e: place, K, X, P, U, the rescue to a rescue folder), `check_fill` (13x and Demo 6) and `check_room_shell` (13w: ceiling, texture, fill); each fails with its code broken (4 mutations tried). 13x's fill and 13w's steps 2-4 moved, unchanged, into headers beside them (`fill_holes.hpp`, `room_shell.hpp`); Demo 6 includes 13x's instead of its copy (1,517 → 413 lines). Found: 13w paints a strip under 3 cm wide at furniture's foot with its colour (the 4 cm depth test), and the fill runs a top ~10 cm past its edge; recorded, not fixed. `ctest` 12/12 (check_structure not re-run). 13w wasn't relinked: it was open.
 - 2026-11-13: **D48 + D49 (the user's asks after a scare):** the user's 21-scan 13e room wasn't lost: a relative folder typed at the console put it in `build\examples\Ambulance\`; 13w then found no room and its console closed at once. Copied to `room_scans\`. Now: `spotter/file_dialog` (Save As / Open / message boxes, console fallback); `CheckRoomFolder` (refuses build/, relative, unwritable, no space; `check_room` cases) and `RescueFolders`; 13e chooses its folder in Save As, shows it all session, re-checks before each scan, K/E use Save As with a SAVED/EXPORTED banner, and a failed end save falls through the rescue folders (a temporary harness passed). 13w, 13x, 13y, 13z and Demos 4/6 open rooms with `ChooseRoom` (a Select Folder window; 13w seen waiting in it, and loading the real room). D49: the console guard in every example (crash/exception cause printed, a double-clicked console waits for Enter); tested on a throwaway program. `ctest` 10/10. Not run on the sensor.

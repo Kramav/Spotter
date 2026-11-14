@@ -163,10 +163,10 @@ std::vector<cv::Rect> KeepBigBlobs(cv::Mat& mask, int minPixels)
     return boxes;
 }
 
-void BoxDepthSampler::Build(const float* depthMm, const std::vector<int>& colourIndex, int colourWidth, int colourHeight)
+void BoxDepthSampler::Build(const float* depthMm, const std::vector<int>& colourIndex, int width, int height)
 {
-    this->colourWidth = colourWidth;
-    this->colourHeight = colourHeight;
+    colourWidth = width;
+    colourHeight = height;
     const int cellsPerRow = (colourWidth + CellColumns - 1) / CellColumns;
     const int colourPixels = colourWidth * colourHeight;
 

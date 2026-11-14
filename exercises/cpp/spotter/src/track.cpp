@@ -22,16 +22,24 @@ cv::Scalar ColourForId(int id)
     return cv::Scalar(c[0], c[1], c[2]);
 }
 
+// A float column from a list of numbers (cv::Mat_ << is deprecated in OpenCV 4.14). O(n).
+static cv::Mat Column(std::initializer_list<double> values)
+{
+    cv::Mat column((int)values.size(), 1, CV_32F);
+    int row = 0;
+    for (double value : values) column.at<float>(row++) = (float)value;
+    return column;
+}
+
 BoxFilter::BoxFilter(cv::Point2d centre, double meters, const Noise& noise) : kalman(6, 3, 0, CV_32F), noise(noise)
 {
     double pixels2 = noise.measurementPixels * noise.measurementPixels, meters2 = noise.measurementMeters * noise.measurementMeters;
     kalman.measurementMatrix = cv::Mat::eye(3, 6, CV_32F);   // H: the measurement is the first 3 state numbers
-    kalman.measurementNoiseCov = (cv::Mat_<float>(3, 3) << pixels2, 0, 0, 0, pixels2, 0, 0, 0, meters2);   // R
-    kalman.statePost = (cv::Mat_<float>(6, 1) << centre.x, centre.y, std::max(meters, 0.0), 0, 0, 0);
+    kalman.measurementNoiseCov = cv::Mat::diag(Column({ pixels2, pixels2, meters2 }));   // R
+    kalman.statePost = Column({ centre.x, centre.y, std::max(meters, 0.0), 0, 0, 0 });
     // P: position about one measurement's noise; speed unknown (~1000 px/s, ~2 m/s). No distance
     // yet: very unsure, so the first real one replaces the 0 instead of being averaged with it.
-    kalman.errorCovPost = cv::Mat::diag((cv::Mat_<float>(6, 1) << pixels2, pixels2, meters > 0 ? meters2 : 100.0,
-                                         1000 * 1000, 1000 * 1000, 2 * 2));
+    kalman.errorCovPost = cv::Mat::diag(Column({ pixels2, pixels2, meters > 0 ? meters2 : 100.0, 1000 * 1000, 1000 * 1000, 2 * 2 }));
 }
 
 void BoxFilter::Predict(double dt)
@@ -57,7 +65,7 @@ void BoxFilter::Correct(const cv::Point2d* centre, double meters)
     cv::Point2d c = centre ? *centre : Centre();
     if (!centre) r.at<float>(0, 0) = r.at<float>(1, 1) = 1e6f;
     if (meters <= 0) { meters = Meters(); r.at<float>(2, 2) = 1e6f; }
-    kalman.correct((cv::Mat_<float>(3, 1) << c.x, c.y, meters));
+    kalman.correct(Column({ c.x, c.y, meters }));
     r.at<float>(0, 0) = r.at<float>(1, 1) = (float)(noise.measurementPixels * noise.measurementPixels);
     r.at<float>(2, 2) = (float)(noise.measurementMeters * noise.measurementMeters);
 }

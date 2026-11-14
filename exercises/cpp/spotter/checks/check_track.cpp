@@ -36,19 +36,25 @@ double Overlap(const cv::Rect2d& a, const cv::Rect2d& b)
     return intersection / (a.area() + b.area() - intersection);
 }
 
+// A float column from a list of numbers (cv::Mat_ << is deprecated in OpenCV 4.14). O(n).
+cv::Mat Column(std::initializer_list<double> values)
+{
+    cv::Mat column((int)values.size(), 1, CV_32F);
+    int row = 0;
+    for (double value : values) column.at<float>(row++) = (float)value;
+    return column;
+}
+
 cv::KalmanFilter NewKalman(double centreX, double centreY, double meters)
 {
     cv::KalmanFilter kalman(6, 3, 0, CV_32F);
     kalman.measurementMatrix = cv::Mat::eye(3, 6, CV_32F);
-    kalman.measurementNoiseCov = (cv::Mat_<float>(3, 3) <<
-        MeasurementNoisePixels * MeasurementNoisePixels, 0, 0,
-        0, MeasurementNoisePixels * MeasurementNoisePixels, 0,
-        0, 0, MeasurementNoiseMeters * MeasurementNoiseMeters);
-    kalman.statePost = (cv::Mat_<float>(6, 1) << centreX, centreY, meters, 0, 0, 0);
+    kalman.measurementNoiseCov = cv::Mat::diag(Column({ MeasurementNoisePixels * MeasurementNoisePixels,
+        MeasurementNoisePixels * MeasurementNoisePixels, MeasurementNoiseMeters * MeasurementNoiseMeters }));
+    kalman.statePost = Column({ centreX, centreY, meters, 0, 0, 0 });
     double metersVariance = meters > 0 ? MeasurementNoiseMeters * MeasurementNoiseMeters : 100.0;
-    kalman.errorCovPost = cv::Mat::diag((cv::Mat_<float>(6, 1) <<
-        MeasurementNoisePixels * MeasurementNoisePixels, MeasurementNoisePixels * MeasurementNoisePixels,
-        metersVariance, 1000 * 1000, 1000 * 1000, 2 * 2));
+    kalman.errorCovPost = cv::Mat::diag(Column({ MeasurementNoisePixels * MeasurementNoisePixels,
+        MeasurementNoisePixels * MeasurementNoisePixels, metersVariance, 1000 * 1000, 1000 * 1000, 2 * 2 }));
     return kalman;
 }
 
@@ -71,7 +77,7 @@ void Correct(Track& track, bool haveBox, double centreX, double centreY, double 
     cv::Mat& noise = track.kalman.measurementNoiseCov;
     if (!haveBox) { centreX = track.CentreX(); centreY = track.CentreY(); noise.at<float>(0, 0) = noise.at<float>(1, 1) = 1e6f; }
     if (meters <= 0) { meters = track.Meters(); noise.at<float>(2, 2) = 1e6f; }
-    track.kalman.correct((cv::Mat_<float>(3, 1) << centreX, centreY, meters));
+    track.kalman.correct(Column({ centreX, centreY, meters }));
     noise.at<float>(0, 0) = noise.at<float>(1, 1) = (float)(MeasurementNoisePixels * MeasurementNoisePixels);
     noise.at<float>(2, 2) = (float)(MeasurementNoiseMeters * MeasurementNoiseMeters);
 }

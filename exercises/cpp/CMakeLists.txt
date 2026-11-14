@@ -11,6 +11,16 @@ find_package(OpenCV REQUIRED)
 
 get_filename_component(repo_root ${CMAKE_CURRENT_SOURCE_DIR}/../.. ABSOLUTE)
 
+# Warnings on our own code (the review's initiative 7): the library, the console guard and the checks. Headers
+# included with <...> (OpenCV, libfreenect2, the standard library) stay quiet on MSVC.
+if(MSVC)
+    # _CRT_SECURE_NO_WARNINGS: MSVC calls getenv, localtime, strerror and _wfopen unsafe, but their _s
+    # replacements don't exist on Linux (D7).
+    set(spotter_warnings /W4 /external:anglebrackets /external:W0 /D_CRT_SECURE_NO_WARNINGS)
+else()
+    set(spotter_warnings -Wall -Wextra)
+endif()
+
 # The original examples and presentation demos, kept as they were in legacy/ (D34): an archive, built only
 # when asked (D47): cmake --preset default -DSPOTTER_BUILD_LEGACY=ON. Git tag legacy-archive marks them too.
 option(SPOTTER_BUILD_LEGACY "Also build the legacy/ archive (34 programs, into build/legacy)" OFF)
@@ -43,11 +53,13 @@ if(WIN32)
 endif()
 # room_folder refuses a room folder inside build/ (a clean rebuild deletes it) and knows the repo's room_scans/ (D48).
 target_compile_definitions(spotter PRIVATE SPOTTER_BUILD_DIR="${CMAKE_BINARY_DIR}" SPOTTER_REPO_ROOT="${repo_root}")
+target_compile_options(spotter PRIVATE ${spotter_warnings})
 
 # The console guard (D49): linked into every program in examples/, so its console never closes by itself on an
 # error or crash (and, double-clicked, waits for Enter at the end). OBJECT, so it always links; the checks don't use it.
 add_library(spotter_console_guard OBJECT spotter/console_guard/console_guard.cpp)
 target_link_libraries(spotter_console_guard PUBLIC ${OpenCV_LIBS})
+target_compile_options(spotter_console_guard PRIVATE ${spotter_warnings})
 
 # Self-checks on synthetic data (no Kinect): one per library module, plus three that include an example's own code
 # (13e's session, 13x's fill, 13w's shell). Run them all: ctest --test-dir build
@@ -58,6 +70,7 @@ foreach(check_source ${spotter_checks})
     add_executable(${check} ${check_source})
     target_include_directories(${check} PRIVATE ${freenect2_INCLUDE_DIRS})   # check_frame compares with libfreenect2
     target_link_libraries(${check} PRIVATE spotter)
+    target_compile_options(${check} PRIVATE ${spotter_warnings})
     target_compile_definitions(${check} PRIVATE SPOTTER_REPO_ROOT="${repo_root}" SPOTTER_BUILD_DIR="${CMAKE_BINARY_DIR}")
     add_test(NAME ${check} COMMAND ${check})
 endforeach()

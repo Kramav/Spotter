@@ -447,16 +447,16 @@ inline WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector
             int touching;
             if (!path.data[k] || Runs(path, k, touching) != 1 || touching > 2) continue;
             int r = k / plan.columns, c = k % plan.columns, label = labels.at<int>(r, c);
-            cv::Point2f out(0, 0);
+            cv::Point2f outward(0, 0);
             for (int dr = -5; dr <= 5; dr++)
                 for (int dc = -5; dc <= 5; dc++)
                 {
                     int rr = r + dr, cc = c + dc;
                     if (rr < 0 || cc < 0 || rr >= plan.rows || cc >= plan.columns || labels.at<int>(rr, cc) != label) continue;
-                    out += Centre(k) - Centre(rr * plan.columns + cc);
+                    outward += Centre(k) - Centre(rr * plan.columns + cc);
                 }
-            float length = (float)cv::norm(out);
-            if (length > 1e-6f) ends.push_back({ k, label, Centre(k), out / length, false });
+            float length = (float)cv::norm(outward);
+            if (length > 1e-6f) ends.push_back({ k, label, Centre(k), outward / length, false });
         }
         const float aimCos = std::cos(25 * (float)CV_PI / 180);
         for (End& a : ends)
@@ -766,8 +766,8 @@ inline WallMap FillWalls(const std::vector<cv::Point3f>& room, const std::vector
                 const cv::Point2f& d = directions[i];
                 if (onWall[i] || room[i].y < floorY + 0.03f || !around.contains(d)) continue;
                 if (!cone.at<uchar>((int)((d.y - around.y) / bin), (int)((d.x - around.x) / bin))) continue;
-                float distance = std::hypot(room[i].x, room[i].z);
-                if (distance < wallDistance - 0.2f) shares.push_back(distance / wallDistance);
+                float reach = std::hypot(room[i].x, room[i].z);
+                if (reach < wallDistance - 0.2f) shares.push_back(reach / wallDistance);
             }
             float share = shares.size() >= 3 ? spotter::Percentile(shares, 0.5) : 0.98f;   // 0.98: just in front of the wall's fill
             for (int r = 0; r < piece.rows; r++)
