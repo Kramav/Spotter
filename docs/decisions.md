@@ -1352,3 +1352,58 @@ except the WSL build.
   `room_shell.hpp` are included only by their own example and one check each: they move if a second program
   needs them. Geometry that correctness depends on (floor/up, frames, poses) is single-sourced regardless.
 - **Not adopted:** the feature freeze (decision 2). Decisions 1, 6 and 7 were settled earlier (D45, D47).
+
+## D57: the demos' text is Arial Unicode MS, not OpenCV's Hershey font (2026-11-16, the user's ask)
+
+**Why:** the user didn't like the look of OpenCV's built-in stroke font, and it's ASCII only.
+
+- **New module `spotter/text`:** `PutText` and `TextWidth`, with the same scale and thickness meaning as
+  `cv::putText` (scale 1.0 is about 30 px tall; thickness 2 or more is bold), so a call changes by its name only.
+  Windows draws through the GDI (no new dependency; OpenCV's FreeType module isn't in our vcpkg build). Text is
+  UTF-8, so a degree sign or an accent now shows. Elsewhere it falls back to `cv::putText`.
+- **Used by:** the six demos, `WithKeys` (the key strip every example shows), `FpsMeter::Draw`, the radar and the
+  3D view's labels. The other examples' own `cv::putText` calls still use Hershey: change them when they're next touched.
+- **Demo 5** right-aligns its two corner lines by the measured width instead of a fixed offset.
+
+## D58: the ceiling is found, not cut; Demo 7 and 13v replace Demos 4 and 6 and 13x; retired programs aren't built (2026-11-16, the user's decision)
+
+**Why:** Demos 4 and 6 and 13x hid everything more than 1.6 m above the floor. That took the ceiling off,
+but every wall's top went with it, and the fill stopped at 1.6 m. The user: "1.6 is way too low"; a key to
+show or hide the ceiling, "through finding the ceiling, not by kneecapping the walls"; as much wall height
+as possible.
+
+- **Finding it:** 13w's `FindCeiling` (D42) moved into `spotter/room_twin` unchanged, its constants as
+  `CeilingOptions`. It finds the highest 2 cm step, at least 1.8 m above the floor, where level readings
+  cover 0.5 m², so a fan or lamp never wins. There's also `FindTwinCeiling`, with a report like
+  `FindTwinFloor`'s. 13w and `check_room_shell` use the library version.
+- **Hiding it:** `CeilingPoints` marks a point as ceiling if it's level (within 20°) and within 10 cm under
+  the ceiling, or more than 5 cm above it whatever it faces. Upright wall points stay right up to the
+  ceiling, the wall/ceiling corner stays, and a fan hanging lower stays. If no ceiling is seen, nothing is
+  hidden and the room is shown whole.
+- **The fill** (now `spotter/room_fill.hpp`, `spotter::fill`, header-only and unchanged; D56's move) goes up
+  to the ceiling, and the ceiling's own points are left out of its input. Otherwise its level-surface step,
+  which takes |normal.y|, would treat the ceiling as a table top and grow legs up to it. With no ceiling
+  seen, it fills up to 2.4 m above the floor.
+- **Demo 7 · Room Twin** replaces Demos 4 and 6: Demo 6 (G: fill marked / unmarked / off; off is Demo 4's
+  look) plus C (ceiling shown / hidden, hidden at start).
+  - **Without the Kinect** it shows the room alone, as 13v does.
+  - **Unplugged mid-show:** the visitors go and the room stays.
+  - **Reconnecting:** while there's no Kinect, it's looked for every 10 s. When it's found, Demo 7 learns
+    the empty view and locates again.
+  - **No room and no Kinect:** it says so and stops.
+- **13v · Room Fill** replaces 13x: the same ceiling handling (C, fill up to the ceiling). Its header says
+  how it differs.
+- **Retired = not built.** Demos 4 and 6 and 13x moved to `exercises/cpp/legacy/retired/` (its README says
+  what replaced each). No CMake list builds them, not even with `SPOTTER_BUILD_LEGACY`. Their includes
+  point at `spotter/room_fill.hpp`, so they'd still compile. The user: "we only want to build what we
+  actually want to use each time."
+- **Verified:** only the touched targets were built (0 warnings), and their three checks run. The new
+  `check_room_twin` cases:
+  - no ceiling when every scan looks down;
+  - with a scan looking up, the ceiling found 2.50 m above the floor;
+  - all 5,173 ceiling points hidden, and none of the 25,749 upright points up to 5 cm under it.
+
+  Both new rules fail with their code broken (no level test: 314 wall points hidden; nothing hidden: the
+  ceiling stays). 13v and Demo 7 ran without a Kinect on a synthetic room folder. A harness render of the
+  same library calls was checked by eye: the walls and the fill reach the ceiling (highest filled point
+  1.30 m, the ceiling at 1.30 m). The live part (visitors, unplugging) wasn't run on the sensor.

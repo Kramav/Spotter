@@ -1,7 +1,8 @@
-// 13x's step 2: filling the holes in a room's flat surfaces, and marking what was filled (parts a-f, see
-// main.cpp's top). Kept apart from main.cpp because it's long and three programs use it: 13x, Demo 6 (which
-// shows it live) and check_fill. It's still this example's own code, not the library's (D34, D50).
-// The filling is legacy Demo 6's (D31-D33), unchanged.
+// spotter/room_fill.hpp: filling the holes in a room's flat surfaces, and marking what was filled (parts a-f:
+// walls, upright planes, level surfaces, legs, what counts as seen, shadows). Used by 13v, Demo 7 and check_fill.
+// The filling is legacy Demo 6's (D31-D33), unchanged; it was 13x's fill_holes.hpp until D58 moved it here
+// (D56's rule: a header used outside its own folder moves to the library). Header-only, in spotter::fill;
+// its settings are still the constants below (D56's "settings as options" is left for later).
 #pragma once
 
 #include <algorithm>
@@ -17,6 +18,9 @@
 #include <opencv2/photo.hpp>   // cv::inpaint
 
 #include "spotter/stats.hpp"
+
+namespace spotter::fill
+{
 
 // --- Filling the holes (new). A simple layout: walls upright (any path along the floor), surfaces
 //     level (D32). Sloped ceilings, ramps or leaning walls need another mode (docs/ideas.md). ---
@@ -1125,3 +1129,4 @@ inline Filled FillHoles(const std::vector<cv::Point3f>& room, const std::vector<
     return out;
 }
 
+}   // namespace spotter::fill

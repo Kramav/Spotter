@@ -2760,27 +2760,27 @@ EX.push({
 });
 
 EX.push({
-  id: '13x', name: 'Room Fill', group: 'scan', from: '13e',
-  idea: 'No Kinect needed: a 13e room folder with its holes filled in. Walls (paths along the floor), cabinet fronts, level surfaces and table legs are found, and what nobody saw on them is painted in from the seen cells around, marked with blue stripes. K saves a .ply with the fill. Legacy Demo 6\'s filling, unchanged.',
+  id: '13v', name: 'Room Fill', group: 'scan', from: '13e',
+  idea: 'No Kinect needed: a 13e room folder with its holes filled in, the ceiling found and lifted off (C puts it back) and the walls kept at full height. It replaces 13x, which cut everything over 1.6 m off, walls included (D58). Walls (paths along the floor), cabinet fronts, level surfaces and table legs are found, and what nobody saw on them is painted in from the seen cells around, marked with blue stripes. K saves a .ply with the fill. Legacy Demo 6\'s filling, unchanged.',
   uses: ['xyz', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
-  compare: 'check_room_twin\'s synthetic room folder (3 scans): floor −1.20 m, the couch top 0.60 m above it, 2.9 m² filled in 0.2 s. Not yet run on a real room.',
+  compare: 'A synthetic room folder with a scan looking up (check_room_twin\'s): floor −1.20 m, ceiling 2.50 m above it; every ceiling point lifted off and no wall point; walls and fill reach the ceiling. Not yet run on a real room.',
   setup(st) { st.S = scans(); st.use = [0, 1, 2, 3, 5]; st.all = asCloud(st.use.map(k => [st.S[k].P, null, 2])); },
   steps: [
     {
       name: 'Load the room', a: 'Every included scan, merged at 3 cm', b: 'The floor, from its own readings',
-      text: 'The newest room under room_scans\ (or the one named on the command line): every included scan merged at 3 cm and levelled. The floor is the lowest level piece of 0.25 m² near the walls\' foot (D33).',
+      text: 'The newest room under room_scans\ (or the one named on the command line): every included scan merged at 3 cm and levelled. The floor is the lowest level piece of 0.25 m² near the walls\' foot (D33); the ceiling the highest level readings covering 0.5 m², at least 1.8 m up (13w\'s rule), and its own points are set apart (level, within 10 cm of it).',
       A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
-      B(ctx, R) { consoleLines(ctx, R, ['Floor: seen at -1.20 m (6.62 m^2 of level readings in one piece)', 'The room: 3 scans, 3 cm cubes, 28809 points, about 4.1 m across']); },
+      B(ctx, R) { consoleLines(ctx, R, ['Floor: seen at -1.20 m (6.59 m^2 of level readings in one piece)', 'Ceiling: seen at 1.30 m, 2.50 m above the floor', 'The room: 5 scans, 40940 points (5173 of them the ceiling)']); },
     },
     {
-      name: 'Fill the flat surfaces', a: 'The room (the fill shows in blue stripes in 13x)', b: 'What was filled',
-      text: 'Walls seen from above become paths along the floor, unrolled and filled up to the cut; upright planes (cabinet fronts) and crowded heights of level points (floor, table tops) are filled too. A cell is seen if a real point is near it or just behind it; the rest gets colour from cv::inpaint.',
+      name: 'Fill the flat surfaces', a: 'The room (the fill shows in blue stripes in 13v)', b: 'What was filled',
+      text: 'Walls seen from above become paths along the floor, unrolled and filled up to the ceiling (its own points left out); upright planes (cabinet fronts) and crowded heights of level points (floor, table tops) are filled too. A cell is seen if a real point is near it or just behind it; the rest gets colour from cv::inpaint.',
       A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.9, pivot: 2.2, dist: 3.6 }); },
       B(ctx, R) { consoleLines(ctx, R, ['Filled 2.9 m^2 in 0.2 s: floor 2.2 m^2, 1 walls 0.5 m^2,', '  6 other surfaces 0.1 m^2, 0 legs, 0 dark shadows', '  wall 1: 8.2 m long, 100% of it seen, filled 0.54 m^2', '  floor (seen) at -1.20 m: filled 2.24 m^2', '  level surface 0.60 m above the floor: filled 0.02 m^2']); },
     },
     {
       name: 'Look, then save', a: 'From above', b: 'K writes into the room\'s folder',
-      text: 'G switches marked / unmarked / off (off is the scan as it was). K saves every real point plus the fill as shown, as room_filled_<date>_<time>.ply beside the scans.',
+      text: 'G switches marked / unmarked / off (off is the scan as it was); C shows or lifts off the ceiling. K saves every real point plus the fill as shown, as room_filled_<date>_<time>.ply beside the scans.',
       A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
       B(ctx, R) { consoleLines(ctx, R, ['G: marked -> unmarked -> off', 'K:', { t: 'Saved room_scans\room_2026-11-08_1400\room_filled_2026-11-08_141502.ply', c: SCR.green }]); },
     },

@@ -1,54 +1,40 @@
 // =====================================================================
-//  Demo 6 · Room Filled               (presentation; Demo 4 + hole filling)
+//  Demo 4 · Room Twin                 (presentation; from 13e, 08 and 03)
 //
-//  Demo 4's room twin (the scanned room as a turning doll's house, the
-//  visitors live inside it), with the holes filled in. A scan only has
-//  what the Kinect saw: the wall behind the couch, the floor under the
-//  table, the part of a table top under a box were never seen. Here the
-//  flat surfaces are found and their holes painted in, and the filled-in
-//  parts are MARKED (blue stripes), so visitors can tell real from guessed.
+//  The room you scanned with 13e, as a slowly turning doll's house (the
+//  ceiling cut off), with the visitors walking around INSIDE it, live,
+//  in 3D. A first cut of roadmap step 15 (objects in the map), for people.
 //
-//    1. Load      the room (Demo 4: a 13e room folder, or the Kinect's own view).
-//    1b. Fill     (new) once, assuming a simple layout: walls upright,
-//                 surfaces level (D32):
-//                 a. walls: seen from above, upright points stacked over
-//                    1 m high are a wall's path along the floor (straight,
-//                    bent or curved). Each path is unrolled into a flat
-//                    picture and filled from the floor up to the cut;
-//                 b. cabinet fronts, couch backs: upright planes (RANSAC);
-//                 c. level surfaces (floor, table tops, seats): crowded
-//                    heights of up-facing points. The floor is the lowest
-//                    one big enough to be a floor (D33, spotter::FindTwinFloor);
-//                    a floor nobody saw is guessed at the walls' foot;
-//                 d. table legs: thin, tall blobs of readings under a top,
-//                    made whole from the floor to the top;
-//                 e. a cell counts as seen if a real point is near it, or
-//                    just behind it; points far behind a wall mean an
-//                    opening (a door). The rest is filled, coloured from
-//                    the seen cells around (cv::inpaint, 07e's plan).
-//    1c. Shadows  (new) black, glossy or see-through things send no depth
-//                 back, but leave their shadow on the wall behind. A hole
-//                 nothing seen explains becomes a purple cut-out of
-//                 "something dark", where its few readings (chair legs)
-//                 put it.
-//    2-4.         as Demo 4: learn the empty view, locate (from several
-//                 starts around scan 1's spot, D33), live visitors.
+//    1. Load      a room folder from 13e: every scan merged into one
+//                 surface (spotter::LoadTwinRoom, 13z's "seen_room"), and
+//                 its floor (FindTwinFloor, D33's rule).
+//    2. Learn     the empty view's depth, as in 03 (StillBackground).
+//    3. Locate    where the Kinect stands in the room: ICP from several
+//                 starts around scan 1's spot, turned and shifted; the
+//                 best match wins (LocateKinect, D33). The empty view is
+//                 matched, so visitors don't confuse it.
+//    4. Live      every frame: what is clearly nearer than the empty view
+//                 (03's blobs) becomes 3D points, moved into the room by
+//                 step 3's pose, and drawn in it.
 //
-//  It only fills FLAT things and legs it has readings of. It never invents
-//  a chair back or a plant, and big holes get smeared colour.
+//  Before the show: scan the stand with 13e (README, "Recreate a room"),
+//  then put the Kinect back where scan 1 was taken, aimed the same way
+//  (within about 50 cm and 30°: the starts and ICP find the rest). Start
+//  it with nobody in view.
 //
-//  Nothing is saved. The room file holds no people (scanned with nobody
-//  in view); the visitors are only drawn on screen.
+//  Nothing is saved. The room folder holds no people (13e is run with
+//  nobody in view); the visitors are only drawn on screen.
 //
-//  Keys:   G  fill: marked / unmarked / off   H  visitors highlighted / true colour
-//          O  turning on/off   L  learn the empty view and locate again
+//  Keys:   L  learn the empty view and locate again (clear the view first)
+//          H  visitors highlighted / true colour     O  turning on/off
 //          mouse drag / W A S D  turn   wheel / Z X  zoom   R reset
 //          F  fullscreen on/off      Q or Esc  quit
-//  Run:    Demo6_Room_Filled [room folder]   (none: an Open window starting in RoomsFolder, the newest room selected)
-//  No room? As Demo 4, the Kinect's own empty view becomes the room (spotter::OneViewRoom):
-//  one view has big shadows behind things, so there's plenty to fill.
-//  The filling is legacy Demo 6's (D31-D33), unchanged, shared with 13x (13x_Room_Fill/fill_holes.hpp);
-//  the rest is Demo 4's.
+//  Run:    Demo4_Room_Twin [room folder]   (none: an Open window starting in RoomsFolder, the newest room selected)
+//  No room? It takes the Kinect's own empty view as the room instead (spotter::OneViewRoom):
+//  one view only, good for rehearsing.
+//  Rooms are 13e's folders (format 2, or 13c-13e's format 1). Legacy 13's room_scan_*.obj files
+//  are legacy Demo 4's.
+// =====================================================================
 
 #include <algorithm>
 #include <chrono>
@@ -61,15 +47,15 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "../../13x_Room_Fill/fill_holes.hpp"   // step 1b (new): 13x's filling
 #include "spotter/depth.hpp"
 #include "spotter/room_twin.hpp"
 #include "spotter/source_freenect2.hpp"
 #include "spotter/stats.hpp"
+#include "spotter/text.hpp"
 #include "spotter/view.hpp"
 
 // The keys, shown in a strip along the bottom of the screen (spotter::WithKeys).
-const std::string Keys = "G  fill: marked / unmarked / off   L  relearn and locate (clear the view first)   H  highlight visitors   O  turning on/off   drag / W A S D  turn   "
+const std::string Keys = "L  relearn and locate (clear the view first)   H  highlight visitors   O  turning on/off   drag / W A S D  turn   "
                          "wheel / Z X  zoom   R  reset   F  fullscreen   Q or Esc  quit";
 
 // ---------------------------------------------------------------------
@@ -85,8 +71,6 @@ const float UnderFloorMeters = 0.10f;     // ...and readings this far under it (
 const float OrbitSeconds = 60;            // one full turn
 const float ViewPitchDegrees = 35;        // looking down from above
 
-// --- Filling the holes (new): 13x's, its settings and code in ../../13x_Room_Fill/fill_holes.hpp. ---
-
 // --- Visitors: 03's blobs ---
 const double SecondsBeforeBackground = 3;
 const float ForegroundThresholdMm = 100;
@@ -100,15 +84,19 @@ const float MinLocatedShare = 0.6f;     // below this share of matched points, w
 const float OneViewLevelDegrees = 14;
 
 const bool StartFullscreen = true;
-const std::string Window = "Demo 6 - room filled";
+const std::string Window = "Demo 4 - room twin";
 const cv::Vec3b Orange(0, 160, 255);
 
 // ---------------------------------------------------------------------
 //  Step 1: the doll's house
 // ---------------------------------------------------------------------
 
-// The viewer works in camera coordinates (Y down, Z ahead); the room is Y up, Z towards the first
-// camera: turned 180 degrees about X, it's seen from in front, as 09b's flip.
+//cv::Point3f ForView(const cv::Point3f& p){
+//
+//@param1 - p: a point in the room (Y up, Z towards the first camera)
+//
+//@brief - the room -> the viewer's coordinates (Y down, Z ahead): turned 180 degrees about X, (x, y, z) -> (x, -y,
+//         -z), as 09b's flip, so the room is seen from in front. It is its own inverse. O(1).
 cv::Point3f ForView(const cv::Point3f& p) { return { p.x, -p.y, -p.z }; }
 
 struct House
@@ -117,56 +105,15 @@ struct House
     std::vector<cv::Vec3b> colours;
     float floorY = 0, radius = 3;      // how far the room reaches from its middle (90% of it)
     cv::Point3f middle;
-    Filled filled;                     // step 1b (new): the guessed points, as the room's
-    std::vector<cv::Point3f> filledPoints, ghostPoints;   // ...ready for the viewer
-    std::vector<cv::Vec3b> markedColours, ghostColours;   // the guess tinted blue in stripes; the shadows purple
 };
-
-//void Fill(House& house, const spotter::TwinRoom& room, const spotter::TwinFloor& floor){
-//
-//@param1 - house: the house; its filled points are added
-//@param2 - room: the loaded room
-//@param3 - floor: its floor
-//
-//@brief - step 1b (new): fills the holes once, in what's above the under-floor noise (FillHoles up to the cut),
-//         prints the areas and time, and keeps the filled points (for the viewer, Y turned) with their marked
-//         colours and the purple shadow cut-outs. O(FillHoles).
-void Fill(House& house, const spotter::TwinRoom& room, const spotter::TwinFloor& floor)
-{
-    std::vector<cv::Point3f> kept, keptNormals;
-    std::vector<cv::Vec3b> keptColours;
-    for (size_t i = 0; i < room.points.size(); i++)
-        if (room.points[i].y >= floor.y - UnderFloorMeters)
-        {
-            kept.push_back(room.points[i]);
-            keptNormals.push_back(room.normals[i]);
-            keptColours.push_back(room.colours[i]);
-        }
-    auto start = std::chrono::steady_clock::now();
-    Filled& filled = house.filled = FillHoles(kept, keptNormals, keptColours, floor.y, floor.seen, floor.y + CutAboveFloorMeters, room.firstCamera);
-    std::printf("Filled %.1f m^2 in %.1f s: floor %.1f m^2, %d walls %.1f m^2, %d other surfaces %.1f m^2, %d legs, %d dark shadows\n",
-                filled.floorArea + filled.wallArea + filled.otherArea, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(),
-                filled.floorArea, filled.walls, filled.wallArea, filled.others, filled.otherArea, filled.legs, filled.shadows);
-    for (const std::string& line : filled.report) std::printf("%s\n", line.c_str());
-    for (size_t i = 0; i < filled.points.size(); i++)
-    {
-        float tint = filled.stripe[i] ? 0.65f : 0.3f;
-        house.filledPoints.push_back(ForView(filled.points[i]));
-        house.markedColours.push_back(cv::Vec3b(cv::Vec3f(filled.colours[i]) * (1 - tint) + cv::Vec3f(MarkColour) * tint));
-    }
-    for (size_t i = 0; i < filled.ghosts.size(); i++)
-    {
-        house.ghostPoints.push_back(ForView(filled.ghosts[i]));
-        house.ghostColours.push_back(filled.ghostStripe[i] ? GhostColour : GhostColour / 2);
-    }
-}
 
 //House MakeHouse(const spotter::TwinRoom& room){
 //
 //@param1 - room: the loaded room
 //
 //@brief - the room as a doll's house: the floor (FindTwinFloor), the points from just under the floor up to
-//         CutAboveFloorMeters (turned for the viewer), their middle and radius, then the fill (Fill). O(points).
+//         CutAboveFloorMeters (turned for the viewer), their middle and the radius (90th percentile reach). Prints
+//         the counts and size. O(points).
 House MakeHouse(const spotter::TwinRoom& room)
 {
     House house;
@@ -188,7 +135,6 @@ House MakeHouse(const spotter::TwinRoom& room)
     house.middle.y = floor.y + CutAboveFloorMeters / 2;
     std::printf("The room: %s, %zu points, %zu below the cut, about %.1f m across\n", room.from.c_str(), room.points.size(), house.points.size(),
                 2 * house.radius);
-    Fill(house, room, floor);
     return house;
 }
 
@@ -217,7 +163,7 @@ Twin LoadTwin(int argc, char** argv)
 {
     Twin twin;
     std::string problem;
-    const std::filesystem::path folder = spotter::ChooseRoom(argc, argv, RoomsFolder, "Demo6");
+    const std::filesystem::path folder = spotter::ChooseRoom(argc, argv, RoomsFolder, "Demo4");
     if (folder.empty() || !spotter::LoadTwinRoom(folder, CubeMeters, twin.room, problem))
         std::printf("%s The Kinect's own empty view becomes the room. For the real thing, scan the room with 13e_Room_Scan.\n",
                     folder.empty() ? "No room chosen." : ("Can't load " + folder.string() + ": " + problem).c_str());
@@ -232,10 +178,10 @@ Twin LoadTwin(int argc, char** argv)
 //@param3 - background: the recorded empty view
 //@param4 - view: the viewer, repositioned for a new room
 //
-//@brief - with no scanned room the Kinect's own empty view becomes the room (OneViewRoom, then the fill). Then
-//         LocateKinect from every LocateStep-th pixel of the empty view finds where the Kinect stands in it;
-//         prints the starts, time, share matched, the camera's place and height, the best fits, and warns about
-//         two alike fits or a poor match. O(LocateKinect).
+//@brief - with no scanned room the Kinect's own empty view becomes the room (OneViewRoom). Then LocateKinect from
+//         every LocateStep-th pixel of the empty view finds where the Kinect stands in it; prints the starts,
+//         time, share matched, the camera's place and height, the best fits, and warns about two alike fits or a
+//         poor match. O(LocateKinect).
 void LearnAndLocate(Twin& twin, const spotter::RgbdFrame& frame, const spotter::StillBackground& background, spotter::OrbitView& view)
 {
     std::vector<cv::Point3f> cloud = frame.depthCamera.Cloud(background.DepthMm()), sample;
@@ -273,8 +219,8 @@ void LearnAndLocate(Twin& twin, const spotter::RgbdFrame& frame, const spotter::
 //@param3 - highlight: true = tint them orange
 //@param4 - twin: the room and where the Kinect is; its visitor points are replaced
 //
-//@brief - the foreground pixels as 3D points in the room (each from its own depth, moved by the located pose and
-//         turned for the viewer) with their colour. Nothing until the room is located. O(pixels).
+//@brief - step 4: the foreground pixels as 3D points in the room (each from its own depth, moved by the located
+//         pose and turned for the viewer) with their colour. Nothing until the room is located. O(pixels).
 void Visitors(const spotter::RgbdFrame& frame, const cv::Mat& mask, bool highlight, Twin& twin)
 {
     const spotter::Pose& pose = twin.located.pose;
@@ -298,43 +244,32 @@ void Visitors(const spotter::RgbdFrame& frame, const cv::Mat& mask, bool highlig
 //  Output
 // ---------------------------------------------------------------------
 
-//void Show(const Twin& twin, const spotter::StillBackground& background, int fillMode, spotter::OrbitView& view, spotter::PointRenderer& renderer){
+//void Show(const Twin& twin, const spotter::StillBackground& background, spotter::OrbitView& view, spotter::PointRenderer& renderer){
 //
-//@param1 - twin: the room, the fill and the visitors
+//@param1 - twin: the room and the visitors
 //@param2 - background: for the countdown
-//@param3 - fillMode: 0 = marked, 1 = unmarked, 2 = off
-//@param4 - view: the viewer
-//@param5 - renderer: draws the points
+//@param3 - view: the viewer
+//@param4 - renderer: draws the points
 //
-//@brief - the doll's house, then (new) the fill (marked, unmarked or off) and the purple shadows in the marked
-//         view, the visitors, a circle where the camera is, the title, what the colours mean and the matched
-//         share; shown with the key strip. O(points).
-void Show(const Twin& twin, const spotter::StillBackground& background, int fillMode, spotter::OrbitView& view, spotter::PointRenderer& renderer)
+//@brief - the doll's house, the visitors, a circle where the camera is, a title, and the matched share; shown with
+//         the key strip. O(points).
+void Show(const Twin& twin, const spotter::StillBackground& background, spotter::OrbitView& view, spotter::PointRenderer& renderer)
 {
-    const House& house = twin.house;
     cv::Mat& image = renderer.Begin(view, cv::Scalar(20, 20, 20));
-    renderer.Draw(house.points, house.colours, 3);   // 3 cm apart: about 2-3 px from a few metres
-    if (fillMode < 2) renderer.Draw(house.filledPoints, fillMode == 0 ? house.markedColours : house.filled.colours, 3);   // new
-    // ponytail: legacy sized each cut-out by its distance (ghostPatches); one size here.
-    if (fillMode == 0) renderer.Draw(house.ghostPoints, house.ghostColours, 3);
+    renderer.Draw(twin.house.points, twin.house.colours, 3);   // 3 cm apart: about 2-3 px from a few metres
     renderer.Draw(twin.visitors, twin.visitorColours, 2);
     cv::Point pixel;
     float depth;
     if (twin.ready && view.Project(ForView(twin.located.pose.shift), pixel, depth))
     {
         cv::circle(image, pixel, 8, cv::Scalar(0, 255, 255), 2);
-        cv::putText(image, "camera", pixel + cv::Point(12, 5), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 1);
+        spotter::PutText(image, "camera", pixel + cv::Point(12, 5), 0.6, cv::Scalar(0, 255, 255), 1);
     }
-    std::string title = twin.ready ? "The room, scanned in 3D - holes filled by software"
+    std::string title = twin.ready ? "The room, scanned in 3D - and you, live, inside it"
                                    : cv::format("Clear the view: learning the room in %.0f s", std::max(1.0, std::ceil(background.SecondsLeft())));
-    cv::putText(image, title, cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.85, cv::Scalar(255, 255, 255), 2);
-    const char* fillNote[3] = { "blue stripes = filled in by software (never seen)", "filled in by software, unmarked", "only what the Kinect saw" };
-    cv::putText(image, fillNote[fillMode], cv::Point(20, 70), cv::FONT_HERSHEY_SIMPLEX, 0.6, fillMode == 0 ? cv::Scalar(MarkColour) : cv::Scalar(200, 200, 200), 2);
-    if (fillMode == 0 && !house.ghostPoints.empty())
-        cv::putText(image, "purple = something dark the Kinect got no reading from (its shadow on the wall)", cv::Point(20, 95),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(GhostColour), 2);
-    cv::putText(image, (twin.ready ? cv::format("matched %.0f%%   ", twin.located.share * 100) : std::string()) + "live only: nothing is recorded",
-                cv::Point(20, image.rows - 15), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(160, 160, 160), 1);
+    spotter::PutText(image, title, cv::Point(20, 40), 0.85, cv::Scalar(255, 255, 255), 2);
+    spotter::PutText(image, (twin.ready ? cv::format("matched %.0f%%   ", twin.located.share * 100) : std::string()) + "live only: nothing is recorded",
+                cv::Point(20, image.rows - 15), 0.55, cv::Scalar(160, 160, 160), 1);
     cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 
@@ -347,9 +282,10 @@ void Show(const Twin& twin, const spotter::StillBackground& background, int fill
 //@param1 - argc: how many command-line words there are
 //@param2 - argv: the words; the file's header says what it accepts
 //
-//@brief - the program: Demo 6 · Room Filled (presentation; Demo 4 + hole filling). Demo 4's room twin (the scanned
-//         room as a turning doll's house, the visitors live inside it), with the holes filled in. Setup, main loop
-//         and clean-up are laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
+//@brief - the program: Demo 4 · Room Twin (presentation; from 13e, 08 and 03). The room you scanned with 13e, as a
+//         slowly turning doll's house (the ceiling cut off), with the visitors walking around INSIDE it, live, in
+//         3D. A first cut of roadmap step 15 (objects in the map), for people. Setup, main loop and clean-up are
+//         laid out in the file's sections. Returns 0 on a normal exit, 1 if it couldn't start.
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -365,7 +301,6 @@ int main(int argc, char** argv)
     spotter::StillBackground background(SecondsBeforeBackground);
     spotter::RgbdFrame frame;
     bool highlight = true, orbit = true;
-    int fillMode = 0;   // 0 marked, 1 unmarked, 2 off (Demo 4's look)
     double last = 0;
 
     while (kinect.Next(frame))
@@ -376,11 +311,10 @@ int main(int argc, char** argv)
         Visitors(frame, mask, highlight, twin);                                                         // step 4
         if (orbit && last > 0) view.yawDegrees += 360 * (float)(frame.seconds - last) / OrbitSeconds;
         last = frame.seconds;
-        Show(twin, background, fillMode, view, renderer);
+        Show(twin, background, view, renderer);
 
         int key = cv::waitKey(1);
         if (spotter::IsQuitKey(key)) break;
-        if (key == 'g') fillMode = (fillMode + 1) % 3;   // new
         if (key == 'h') highlight = !highlight;
         if (key == 'o') orbit = !orbit;
         if (key == 'f') spotter::ToggleFullscreen(Window);
@@ -391,19 +325,16 @@ int main(int argc, char** argv)
 }
 
 // ---------------------------------------------------------------------
-//  Experiment ideas (Demo 4's apply too)
+//  Experiment ideas
 // ---------------------------------------------------------------------
-//  1. Press G three times: marked, unmarked, off. Off is Demo 4: count the holes it had.
-//  2. Read the console's list of surfaces: does every real wall show up as "wall", and how much
-//     does each bend? A curved wall should say so.
-//  3. A doorway nothing was seen through (a closed door, or a dark hallway the Kinect read nothing
-//     in) gets filled shut: the filling can't tell a door from a hole. Open the door and scan through it.
-//  4. Set WallBehindMeters = 0.05 (round 1's value): where the drawn wall stands a little in front
-//     of the real one, the fill covers what was seen. That's why it's 0.5.
-//  5. Set WallStackMeters = 0.5: chair backs and table edges start counting as walls.
-//  6. Put a black office chair in front of a wall and scan: the Kinect reads almost nothing of it,
-//     but its purple cut-out appears where its legs were read.
-//  7. Set LegCrossShare = 0.8: the far legs, whose upper part the table top itself hides from the
-//     camera, are no longer found. Push a chair under the table: its legs aren't taken for the
-//     table's (its seat is on them), but the chair seat gets its own legs.
-//  8. Set InpaintRadiusCells = 1: big holes get the colour of the nearest edge only, in streaks.
+//  1. Walk to a corner of the stand: does your orange shell stand in the same corner of the
+//     scanned room? If it floats beside it, the match was off: look at "matched %" and press L.
+//  2. Move the Kinect 40 cm along and press L: it finds itself again, and the yellow "camera"
+//     circle moves in the house. Turn it 45 degrees: it gets lost (and says so), because the
+//     starts are all near scan 1's spot. (docs/structure-localization-findings.md: a global search.)
+//  3. Set CutAboveFloorMeters = 3: the ceiling comes back and hides everything from above.
+//  4. Put a chair where there was none during the scan: it shows up orange too. Anything new is a
+//     "visitor" (03 knows nearer, not who). Demo 3's YOLO could name it: that's step 15 proper.
+//  5. Point the Kinect at a bare wall and press L: the match % is high, but the camera circle
+//     stays where it started along the wall. A flat wall can't say where along it you are, so
+//     the ICP leaves that direction alone (its "weak directions").

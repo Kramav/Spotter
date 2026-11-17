@@ -1,6 +1,6 @@
 // Self-check for 13w's surfaces, texture and fill (examples/13w_Room_Shell/room_shell.hpp), with no Kinect
 // (review 2026-11-11, initiative 6: this replaces the temporary harness behind D42).
-//   1. FindCeiling: the highest BIG level surface. A small patch above the ceiling and a fan below it don't
+//   1. spotter::FindCeiling (room_twin, D58): the highest BIG level surface. A small patch above the ceiling and a fan below it don't
 //      win; with no big level surface above 1.8 m there is none.
 //   2. FindSurfaces on check_room's patterned box room (couch included), from 5 shots at their true poses:
 //      the floor 1.2 m below the first camera, the ceiling 2.5 m above the floor, the walls.
@@ -49,14 +49,14 @@ int main()
     AddLevel(points, normals, 2.7f, 0, 0.3f, 0, 0.3f);       // a small patch higher up (0.09 m^2: a skylight's edge, noise)
     AddLevel(points, normals, 2.2f, -0.2f, 0.4f, -0.2f, 0.4f);   // a fan's blades (0.36 m^2)
     float ceilingY = 0;
-    bool found = FindCeiling(points, normals, 0, ceilingY);
+    bool found = spotter::FindCeiling(points, normals, 0, ceilingY);
     std::printf("1. ceiling at %.3f m\n", ceilingY);
     Check(found && std::abs(ceilingY - 2.5f) < 0.02f, "the ceiling is the highest big level surface (not the small patch above, not the fan)");
     points.clear();
     normals.clear();
     AddLevel(points, normals, 2.2f, -0.2f, 0.4f, -0.2f, 0.4f);
     AddLevel(points, normals, 1.0f, -1, 1, -1, 1);           // a big table top, under 1.8 m
-    Check(!FindCeiling(points, normals, 0, ceilingY), "no big level surface above 1.8 m: no ceiling");
+    Check(!spotter::FindCeiling(points, normals, 0, ceilingY), "no big level surface above 1.8 m: no ceiling");
 
     // 2. The surfaces, from 5 shots: 3 looking down at the floor, one up at the ceiling, one back.
     Shell shell;

@@ -113,10 +113,11 @@ There are no globals. A program's state lives in plain structs declared in that 
 | `room.hpp` | `FuseScans` (TSDF + surface net), `BuildRoom` (floor, ceiling, walls, furniture boxes, levelled) → `Room`; `SaveRoomObj`, `RoomPoints` | 00h |
 | `structure.hpp` | a prototype for the structure-localisation study: `ExtractStructure` (planes sorted into floor, ceiling, walls; area and density), `FindEdges`, `MergeStructures`, `Relocate` (a pose from structure alone, ranked by `ViewAgreement`, ambiguity flagged), `ColourVotes` / `OffPlaneShare` (tie-breakers), `PlaceAfter` (Continuous mode) | 13y |
 | `room_folder.hpp` | the room folder, format 2: `StartRoomFolder`, `WriteScan` (pose.txt last), `WritePose`, `RemoveScansFrom`, `WriteLandmarks`, `FinishRoomFolder`; `FindRooms`, `ScanFolders`, `ReadRoomInfo`, `LoadScan` (format 1 mirrored back), `SetExcluded`, `LoadLandmarks`; where a room may go (D48): `CheckRoomFolder` (not in build/, writable, room on the disk), `RescueFolders`, `AskRoomFolder` (Save As + checks) | 00h |
-| `room_twin.hpp` | for the room twin (Demos 4, 6): `LoadTwinRoom` (a room folder merged into one levelled surface), `NewestRoomFolder`, `ChooseRoom` (the command line, else an Open window, D48), `OneViewRoom` (no room: the Kinect's own view); `FindTwinFloor` (D33's floor rule, with the review's bug 7 fixed); `LocateKinect` (ICP from several starts around scan 1's spot) | |
+| `room_twin.hpp` | for the room twin (Demo 7, 13v): `LoadTwinRoom` (a room folder merged into one levelled surface), `NewestRoomFolder`, `ChooseRoom` (the command line, else an Open window, D48), `OneViewRoom` (no room: the Kinect's own view); `FindTwinFloor` (D33's floor rule, with the review's bug 7 fixed); `FindCeiling` / `FindTwinCeiling` (13w's ceiling rule) and `CeilingPoints` (the ceiling's own points, so it can be hidden without cutting the walls, D58); `LocateKinect` (ICP from several starts around scan 1's spot) | |
+| `room_fill.hpp` | header-only, `spotter::fill`: `FillHoles`, the holes in a room's flat surfaces filled and marked (legacy Demo 6's filling, unchanged; 13x's `fill_holes.hpp` until D58) | |
 | `file_dialog.hpp` | asking the user with the system's own windows (D48): `AskSaveAs`, `AskOpenFolder`, `Confirm`, `Tell`; `Ask` (the console). Windows: the shell's dialogs; Linux: zenity; else, or with `SPOTTER_CONSOLE_DIALOGS=1`, the console | |
 
-Added with the demos: `StillBackground` in `depth.hpp` (03's empty view after a countdown, for Demos 4 and 5)
+Added with the demos: `StillBackground` in `depth.hpp` (03's empty view after a countdown, for Demos 5 and 7)
 and `OpenExhibitWindow` / `ToggleFullscreen` in `view.hpp`. The wall filter stays inline in 06c, and
 Demo 3 copies it.
 
@@ -125,8 +126,8 @@ cameras, scan count, `finished`), one `scan_NNN` folder per scan (`cloud.bin`, `
 `colour_full.bmp`, `colour_index.bin`, `features.yml`, then `pose.txt` last, holding the cloud's
 point count), `landmarks.txt`, and `points.ply` once finished. Format 2 is the right way round;
 format 1 (legacy 13c–13e) was mirrored and is read back unmirrored. Legacy 13z refuses format 2,
-and legacy Demos 4 and 6 read 13's mirrored `.obj` files: use the new programs with new rooms. The
-new Demos 4 and 6 read room folders directly.
+and legacy Demos 4 and 6 read 13's mirrored `.obj` files: use the new programs with new rooms. Demo 7
+and 13v read room folders directly.
 
 **External dependencies show in the file name.** Core headers use only OpenCV core types. Anything
 tied to a device, a model or a runtime is an *adapter* named `<role>_<dependency>`. To swap one,
@@ -224,29 +225,30 @@ More ladders are added as each example is ported.
 | `11b_Feature_Pose` | a rough pose from colour features, polished by the library's ICP | yes | built, not run |
 | `13e_Room_Scan` | the room scanner: many spots, placed in the background, live anchors, next shot; saved on K / Q / a lost Kinect / an error | yes | run on the sensor by the user (a 21-scan room, with the autosave version); the save-once version run on synthetic frames |
 | `13w_Room_Shell` | just the walls (full height), floor and ceiling, each textured from the scans' full colour pictures, unseen parts filled with the surface's own pattern; K saves `.obj` + `.mtl` + `.bmp`s | no | `check_room_shell` runs its surfaces, texture and fill on a synthetic room (the ceiling rule, every seen texel's colour, the couch never painted on the wall, the floor's pattern under the couch); the view and a real room not checked |
-| `13x_Room_Fill` | a 13e room with the holes in its flat surfaces filled and marked (legacy Demo 6's filling); K saves a `.ply` | no | `check_fill` runs its filling on a synthetic room folder (the floor under the couch filled, every filled point on a true surface, nothing seen filled again); K and the view not checked by eye |
+| `13v_Room_Fill` | a 13e room with the holes in its flat surfaces filled and marked (legacy Demo 6's filling), the walls at full height, the ceiling found and lifted off (C); K saves a `.ply`. Replaces 13x (D58) | no | `check_fill` runs its filling on a synthetic room folder; `check_room_twin` the ceiling rule; started on a synthetic room folder with a scan looking up, and a harness render of the same library calls checked by eye (walls and fill up to the ceiling, the ceiling shown / lifted off); K not checked |
 | `13y_Structure_Survey` | measurements for the structure-localisation study: coverage, edges, Relocate vs baselines, Continuous | no | runs (on the real room, numbers only) |
 | `13z_Room_Rebuild` | rooms rebuilt from their folders: view, exclude, `.obj`, `.ply` | no | runs (on a synthetic room) |
 | `demos/Demo1_You_In_3D` | yourself as a live, swinging 3D point cloud (08) | yes | built, not run |
 | `demos/Demo2_Invisibility_Cloak` | camera and "cloaked" view side by side: people painted out (07d) | yes | built, not run |
 | `demos/Demo3_Booth_Radar` | camera with boxes and distances, plus the radar with trails and filtered walls (06c) | yes | built, not run |
-| `demos/Demo4_Room_Twin` | a 13e room as a turning doll's house, the visitors live inside it | yes | built; its library part passes `check_room_twin`, and its house was built from a synthetic room folder by a temporary harness |
 | `demos/Demo5_How_Tall` | your height over your head, from depth alone (03) | yes | built, not run |
-| `demos/Demo6_Room_Filled` | Demo 4 with the holes in flat surfaces filled and marked | yes | built; its fill is 13x's (`13x_Room_Fill/fill_holes.hpp`), checked by `check_fill` |
+| `demos/Demo7_Room_Twin` | a 13e room as a turning doll's house, filled and marked (G), the ceiling found and lifted off (C), the walls at full height; the visitors live inside it with the Kinect, the room alone without it (picked up when plugged in). Replaces Demos 4 and 6 (D58) | optional | built; started without the Kinect on a synthetic room folder (room-only mode); its library part passes `check_room_twin` and `check_fill`; the live part not run on the sensor |
 
-13–13d are left out: 13e contains them. The flowcharts in [`../EXAMPLES.md`](../EXAMPLES.md) still
+13–13d are left out: 13e contains them. Demos 4 and 6 and 13x are retired to
+[`../legacy/retired/`](../legacy/retired/README.md) and not built (D58). The flowcharts in [`../EXAMPLES.md`](../EXAMPLES.md) still
 describe each idea.
 
 **The demos** are fullscreen remixes for an exhibition: F toggles fullscreen, Q or Esc quits, and the
 keys are shown along the bottom. Nothing is saved. The stand set-up is in
 [`../legacy/presentation/README.md`](../legacy/presentation/README.md). Differences from legacy:
-- Demos 4 and 6 load a 13e room folder: the one named on the command line, or the newest under
-  the repo's `room_scans/` (legacy read 13's `room_scan_*.obj`).
-- The floor rule (D33) is one library function for both, and it now also refuses a level patch
+- Demo 7 (legacy Demos 4 and 6 in one) loads a 13e room folder: the one named on the command line, or one chosen
+  in an Open window starting in the repo's `room_scans/` (legacy read 13's `room_scan_*.obj`). It finds the ceiling
+  and lifts it off instead of cutting everything over 1.6 m (D58), and runs without the Kinect.
+- The floor rule (D33) is a library function, and it now also refuses a level patch
   well under the walls' foot (the review's bug 7).
 - Demo 5 refuses a height when the top or bottom row has too few readings (the review's bug 12).
 - The demos keep their legacy settings and logic. 07d's and 06c's code is copied into Demos 2
-  and 3. Demo 6's fill is 13x's (`13x_Room_Fill/fill_holes.hpp`: legacy Demo 6's, unchanged), not a copy.
+  and 3. Demo 7's fill is the library's (`spotter/room_fill.hpp`: legacy Demo 6's, unchanged), as 13v's.
 - Demos have no ladders: the examples they're built from have them.
 
 ## What is tested, and how
@@ -274,7 +276,9 @@ keys are shown along the bottom. Nothing is saved. The stand set-up is in
   - `check_room_twin`: check_room's room written as a 3-scan folder. `LoadTwinRoom` levels it; the
     floor is found at −1.20 m, also with a level "reflection" 0.4 m under it (the review's bug 7);
     `LocateKinect` finds the Kinect put back 0.28 m / 25° and 0.64 m / 33° off, within 0.1 cm / 0.1°;
-    `OneViewRoom` stands level.
+    `OneViewRoom` stands level. The ceiling (D58): none when every scan looks down; with a scan looking
+    up, found 2.50 m above the floor, and `CeilingPoints` hides all 5,173 of its points but none of the
+    wall points up to 5 cm under it.
   - `check_mesh`: grid triangles (none across a depth jump), an outward-facing box, the OBJ writer,
     and `DepthAverager`'s hole rule.
   - `check_box_depth`: `BoxDepthSampler` gives exactly the same answers as the old per-box loop, on
@@ -282,9 +286,9 @@ keys are shown along the bottom. Nothing is saved. The stand set-up is in
   - `check_scan_session`: 13e's session (`scan_state.hpp`) on 4 raycast scans: placed in the background,
     K, X (only `pose.txt` rewritten), P, U; then the rescue with the room folder blocked by a file and a
     scan still being placed: saved to the first rescue folder with no questions, every scan loads back.
-  - `check_fill`: 13x's and Demo 6's filling (`fill_holes.hpp`) on a 3-scan room folder: the floor
+  - `check_fill`: 13v's and Demo 7's filling (`spotter/room_fill.hpp`) on a 3-scan room folder: the floor
     under the couch filled, the filled points on the true surfaces, nothing seen filled again.
-  - `check_room_shell`: 13w's steps 2-4 (`room_shell.hpp`): the ceiling is the highest big level
+  - `check_room_shell`: 13w's steps 2-4 (`room_shell.hpp`): the ceiling (`spotter::FindCeiling`) is the highest big level
     surface (not a fan, not a small patch above it); floor, ceiling and walls from 5 shots; every seen
     texel has its true colour, also behind the couch; the fill keeps the floor's pattern.
 - The tour programs without a Kinect run to completion and print what they show.

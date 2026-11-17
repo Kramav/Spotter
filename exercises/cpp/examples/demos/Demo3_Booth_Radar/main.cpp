@@ -32,6 +32,7 @@
 #include "spotter/radar.hpp"
 #include "spotter/source_freenect2.hpp"
 #include "spotter/track.hpp"
+#include "spotter/text.hpp"
 #include "spotter/view.hpp"
 #include "spotter/walls.hpp"
 
@@ -298,7 +299,7 @@ void DrawCamera(cv::Mat& picture, const spotter::Tracker& tracker, const spotter
         double meters = track.filter.Meters();
         std::string label = "#" + std::to_string(track.id) + " " + classes.Name(track.classId) + (meters > 0 ? cv::format(" %.2fm", meters) : "");
         cv::rectangle(picture, track.Box(), colour, track.Coasting() ? 1 : 3);
-        cv::putText(picture, label, cv::Point((int)track.Box().x, std::max((int)track.Box().y - 10, 30)), cv::FONT_HERSHEY_SIMPLEX, 1.0, colour,
+        spotter::PutText(picture, label, cv::Point((int)track.Box().x, std::max((int)track.Box().y - 10, 30)), 1.0, colour,
                     track.Coasting() ? 1 : 2);
     }
     fps.Draw(picture);
@@ -330,8 +331,8 @@ void Show(cv::Mat& camera, spotter::RadarView& radar, const std::vector<spotter:
         if (OnRadar(classes.Name(track.classId)))
             radar.DrawTrail(trails.Of(track.id), spotter::ColourForId(track.id), track.Coasting(), "#" + std::to_string(track.id) + " " + classes.Name(track.classId));
     cv::Mat& map = radar.Image();
-    cv::putText(map, "seen from above", cv::Point(12, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-    cv::putText(map, "live only: nothing is recorded", cv::Point(12, 55), cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(160, 160, 160), 1);
+    spotter::PutText(map, "seen from above", cv::Point(12, 30), 0.8, cv::Scalar(255, 255, 255), 2);
+    spotter::PutText(map, "live only: nothing is recorded", cv::Point(12, 55), 0.45, cv::Scalar(160, 160, 160), 1);
     cv::Mat left, both;
     cv::resize(camera, left, cv::Size(camera.cols * map.rows / camera.rows, map.rows));
     cv::hconcat(left, map, both);

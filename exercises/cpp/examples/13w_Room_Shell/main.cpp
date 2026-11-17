@@ -300,7 +300,7 @@ int main(int argc, char** argv)
 //  Experiment ideas
 // ---------------------------------------------------------------------
 //  1. Press G: how much of each wall was really seen? Where would one more scan help most?
-//  2. Set MinCeilingAreaMeters2 = 0.05: with a fan, the console's ceiling height may drop to the fan's.
+//  2. Set spotter::CeilingOptions::minAreaMeters2 = 0.05 (room_twin.hpp): with a fan, the console's ceiling height may drop to the fan's.
 //     That's why the ceiling is the highest BIG level surface, not just the highest.
 //  3. Set BaseCellMeters = 0.05 on a wooden floor: the planks under the couch smear into stripes of
 //     colour, because the planks are now "slow changes". Over a plank's width, they're pattern.

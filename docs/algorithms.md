@@ -173,7 +173,7 @@ flowchart LR
     p2l --> place
     hash["Cube hashing"] --> place
     place --> second["Second-opinion ICP"]
-    p2l --> locate["Multi-start ICP<br/>(Demos 4, 6)"]
+    p2l --> locate["Multi-start ICP<br/>(Demo 7)"]
     p2l --> relo["Relocate (study)"]
     place --> nbv["Next-best-view<br/>(RecommendNext)"]
 ```
@@ -189,7 +189,7 @@ flowchart LR
     build --> obj["OBJ / PLY export"]
     nets --> twin["LoadTwinRoom"]
     twin --> floor["FindTwinFloor"]
-    floor --> fill["Hole fill (Demo 6, 13x)"]
+    floor --> fill["Hole fill (Demo 7, 13v)"]
     dt["Distance transform"] --> fill
     hull["Convex hull"] --> fill
     telea["Telea inpaint"] --> fill
@@ -449,7 +449,7 @@ flowchart LR
 
 ### 4.1 Still background (recorded once)
 
-- **Status / where:** Library. `StillBackground` in [depth.cpp](../exercises/cpp/spotter/src/depth.cpp); 03, Demos 4, 5.
+- **Status / where:** Library. `StillBackground` in [depth.cpp](../exercises/cpp/spotter/src/depth.cpp); 03, Demos 5, 7.
 - **What:** after a countdown, keep one depth frame. Foreground = at least `nearerMm` nearer.
 - **Why:** with depth, "nearer than the empty room" is a cleaner foreground test than any colour
   model: no shadows, no lighting changes.
@@ -480,7 +480,7 @@ flowchart LR
 
 ### 4.4 Morphology: opening, closing, dilation
 
-- **Status / where:** Library (`StillBackground::Foreground`; `MakeScan` and `AddFarFeatures` erode feature masks 3 and 8 pixels clear of depth holes' edges), 13x / Demo 6, Python 02.
+- **Status / where:** Library (`StillBackground::Foreground`; `MakeScan` and `AddFarFeatures` erode feature masks 3 and 8 pixels clear of depth holes' edges), 13v / Demo 7, Python 02.
 - **What:** opening removes specks and thin edges; closing joins specks a cell apart; dilation
   grows a mask (e.g. "seen" spreads one cell).
 - **Why:** cheap clean-up of noisy masks before counting blobs.
@@ -490,7 +490,7 @@ flowchart LR
 
 ### 4.5 Connected-component labelling
 
-- **Status / where:** Library: `KeepBigBlobs` ([depth.cpp](../exercises/cpp/spotter/src/depth.cpp)), `FindPlanes` (biggest piece), `FindTwinFloor` (footprint), `BuildRoom` (furniture). Examples 03, 06b, Demo 6, 13x.
+- **Status / where:** Library: `KeepBigBlobs` ([depth.cpp](../exercises/cpp/spotter/src/depth.cpp)), `FindPlanes` (biggest piece), `FindTwinFloor` (footprint), `BuildRoom` (furniture). Examples 03, 06b, Demo 7, 13v.
 - **What:** `cv::connectedComponentsWithStats` labels groups of touching pixels/cells and returns
   their areas and boxes. O(pixels).
 - **Why:** turns a mask into objects, and "the biggest connected piece" is what stops a plane
@@ -504,7 +504,7 @@ flowchart LR
 
 ### 4.6 Flood fill with a depth-jump limit
 
-- **Status / where:** Example. 08b's click-anywhere ([08b main.cpp](../exercises/cpp/examples/08b_Object_Mesh/main.cpp)); 13x's `PieceDomains` (a surface's enclosed area, flood-filled from outside).
+- **Status / where:** Example. 08b's click-anywhere ([08b main.cpp](../exercises/cpp/examples/08b_Object_Mesh/main.cpp)); `room_fill`'s `PieceDomains` (13v, Demo 7) (a surface's enclosed area, flood-filled from outside).
 - **What:** `cv::floodFill` from the clicked pixel on the depth picture, stepping only to neighbours
   within `MaxJumpMm`, mask-only.
 - **Why:** scans an object YOLO didn't name (the paper cup), with no model (ideas.md, "Detection misses").
@@ -515,7 +515,7 @@ flowchart LR
 
 ### 4.7 Distance transform with labels
 
-- **Status / where:** Example. The 13x / Demo 6 fill, `FillWalls` in [fill_holes.hpp](../exercises/cpp/examples/13x_Room_Fill/fill_holes.hpp).
+- **Status / where:** Library (header-only). The 13v / Demo 7 fill, `FillWalls` in [room_fill.hpp](../exercises/cpp/spotter/include/spotter/room_fill.hpp).
 - **What:** `cv::distanceTransform(DIST_L2, DIST_MASK_5, DIST_LABEL_PIXEL)`: every plan cell's
   distance to, and identity of, the nearest wall-path cell.
 - **Why:** assigns each upright point to its nearest wall path in one pass.
@@ -536,7 +536,7 @@ flowchart LR
 
 ### 4.9 Image inpainting (Telea)
 
-- **Status / where:** Example. Demo 6 / 13x (filled cells' colour), 13w (slow colour changes on 25 cm cells).
+- **Status / where:** Library / example. Demo 7 / 13v (filled cells' colour, `room_fill`), 13w (slow colour changes on 25 cm cells).
 - **What:** `cv::inpaint(INPAINT_TELEA)`: fast marching from the hole's edge inwards, each pixel a
   weighted average of known neighbours.
 - **Why:** cheap and good for small holes and smooth shading. Big holes smear, so 13w adds pattern
@@ -570,7 +570,7 @@ flowchart LR
 
 ### 4.12 Convex hull, polygon fill and outline chaining
 
-- **Status / where:** Examples. 13w `Outline` and `Clip`; Demo 6 / 13x table-top outlines.
+- **Status / where:** Examples. 13w `Outline` and `Clip`; Demo 7 / 13v table-top outlines (`room_fill`).
 - **What:** walls' ends chained into a closed loop when each next end lies within `JoinMeters`,
   else their convex hull (`cv::convexHull`, Sklansky's algorithm). The outline is filled into a
   texel mask (`cv::fillPoly`).
@@ -745,7 +745,7 @@ flowchart LR
 
 ### 7.2 Least-squares plane by PCA
 
-- **Status / where:** Library. `FitPlane` in [geometry.cpp](../exercises/cpp/spotter/src/geometry.cpp). Demo 6 uses a 2D version for cabinet fronts.
+- **Status / where:** Library. `FitPlane` in [geometry.cpp](../exercises/cpp/spotter/src/geometry.cpp). `room_fill` (Demo 7, 13v) uses a 2D version for cabinet fronts.
 - **What:** the direction the points spread least in (smallest principal component) is the normal.
 - **Why:** total least squares: errors measured at right angles to the plane, which suits a sensor
   whose noise isn't along one axis. O(n).
@@ -792,7 +792,7 @@ flowchart LR
 
 ### 7.6 The floor from footprints and the walls' foot (`FindTwinFloor`)
 
-- **Status / where:** Library, **Ours** (D33, D43). `FindTwinFloor` in [room_twin.cpp](../exercises/cpp/spotter/src/room_twin.cpp); Demos 4, 6, 13w, 13x.
+- **Status / where:** Library, **Ours** (D33, D43). `FindTwinFloor` in [room_twin.cpp](../exercises/cpp/spotter/src/room_twin.cpp); Demo 7, 13w, 13v.
 - **What:** the walls' foot = the lowest 2 cm step where upright points crowd as densely as up a wall.
   Level points go into 2 cm height bins; each peak's biggest connected footprint is measured on a
   5 cm grid. The floor = the lowest piece of 0.25 m² within 25 cm of the foot, or the biggest level
@@ -808,7 +808,10 @@ flowchart LR
 
 ### 7.7 Ceiling: the highest level height with 0.5 m²
 
-- **Status / where:** Example, **Ours** (D42). `FindCeiling` in [room_shell.hpp](../exercises/cpp/examples/13w_Room_Shell/room_shell.hpp); `check_room_shell` (not a 0.09 m² patch above, nor a fan below; none without a ceiling).
+- **Status / where:** Library, **Ours** (D42, D58). `FindCeiling` / `FindTwinCeiling` in [room_twin.cpp](../exercises/cpp/spotter/src/room_twin.cpp) (13w's rule, moved there unchanged); 13w, 13v, Demo 7. `check_room_shell` (not a 0.09 m² patch above, nor a fan below; none without a ceiling); `check_room_twin` (a merged room: found 2.50 m above the floor).
+- **Lifting it off (D58):** `CeilingPoints` marks a point as ceiling if it is level (within 20°) and within
+  10 cm under the ceiling, or more than 5 cm above it. Upright wall points stay up to the ceiling, so
+  hiding it never cuts the walls (legacy Demos 4/6 and 13x cut everything over 1.6 m instead).
 - **What:** a height histogram of level readings; the highest bin covering 0.5 m².
 - **Why:** a fan, lamp or beam hangs lower and covers less; "most crowded" could pick a big fan,
   "highest" picks noise (D42).
@@ -881,7 +884,7 @@ flowchart LR
 
 ### 8.4 Point-to-plane ICP that leaves weak directions alone
 
-- **Status / where:** Library. `Icp` in [register.cpp](../exercises/cpp/spotter/src/register.cpp); 11b, 13e, Demos 4/6, structure.
+- **Status / where:** Library. `Icp` in [register.cpp](../exercises/cpp/spotter/src/register.cpp); 11b, 13e, Demo 7, structure.
 - **What:** pair by nearest neighbour; the gap is measured along the target's normal; the linearised
   6×6 system (small turn + shift, about the pairs' centre) is solved per eigen-direction. A direction
   pinned by under 5% of pairs keeps the start's value instead of drifting on noise. The turn is
@@ -997,7 +1000,7 @@ flowchart LR
 
 ### 8.13 Multi-start ICP (`LocateKinect`)
 
-- **Status / where:** Library. `LocateKinect` in [room_twin.cpp](../exercises/cpp/spotter/src/room_twin.cpp); Demos 4, 6.
+- **Status / where:** Library. `LocateKinect` in [room_twin.cpp](../exercises/cpp/spotter/src/room_twin.cpp); Demo 7.
 - **What:** ICP on a quarter of the view from up to 63 starts (7 turns about up × 9 shifts of 0.4 m),
   nearest first, stopping at 95% paired; the best refined on the whole view. Warns when two distinct
   fits score within 5%.
@@ -1038,7 +1041,7 @@ flowchart LR
 
 ### 9.2 TSDF fusion
 
-- **Status / where:** Library. `FuseScans` in [room.cpp](../exercises/cpp/spotter/src/room.cpp); 13e (E), 13z, Demos 4, 6.
+- **Status / where:** Library. `FuseScans` in [room.cpp](../exercises/cpp/spotter/src/room.cpp); 13e (E), 13z, Demo 7, 13v.
 - **What:** a voxel grid (2 cm, growing ×1.25 until under 80M voxels; bounds from 1st/99th
   percentiles). Each voxel projects into each scan; signed distance (seen − voxel depth), truncated at
   3 voxels, clamped to 1, voxels more than one truncation behind the surface skipped as unknown;
@@ -1099,9 +1102,9 @@ flowchart LR
 - **Alternatives:** shape by class (cylinders from fitted circles, cuboids) (11.8); learned shape
   completion (PC only); a real back from more views (TSDF).
 
-### 9.6 Hole filling: wall paths, slabs, openings, legs and shadows (Demo 6, 13x)
+### 9.6 Hole filling: wall paths, slabs, openings, legs and shadows (Demo 7, 13v)
 
-- **Status / where:** Example, **Ours** (D31–D33). `FillHoles` in 13x's [fill_holes.hpp](../exercises/cpp/examples/13x_Room_Fill/fill_holes.hpp); Demo 6 includes the same header (D50: its copy is gone). Checked by `check_fill`: the floor under the couch filled, 98% of filled points within 3 cm of a true surface, nothing seen filled again. Moving into the library as `spotter/room_fill` (D56's decision 5).
+- **Status / where:** Library (header-only), **Ours** (D31–D33). `FillHoles` in [room_fill.hpp](../exercises/cpp/spotter/include/spotter/room_fill.hpp) (13x's `fill_holes.hpp` until D58); 13v and Demo 7 fill up to the found ceiling, its own points left out. Checked by `check_fill`: the floor under the couch filled, 98% of filled points within 3 cm of a true surface, nothing seen filled again. Moved into the library as `spotter/room_fill` by D58 (D56's decision 5); its settings are still constants.
 - **What, in order:**
   1. **Wall cells:** upright points stacked 1.2 m+ in a 3 cm plan cell.
   2. **Thinning:** one cell across the wall, at the points' mean.

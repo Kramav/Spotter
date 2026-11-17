@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <opencv2/imgproc.hpp>
+#include "spotter/text.hpp"
 
 namespace spotter
 {
@@ -25,7 +26,7 @@ cv::Mat& RadarView::Begin(const PinholeCamera& colourCamera)
     {
         int radius = (int)(meters * pixelsPerMeter);
         cv::ellipse(image, camera, cv::Size(radius, radius), 0, 180, 360, grey, 1);
-        cv::putText(image, std::to_string(meters) + " m", camera + cv::Point(4, -radius - 4), cv::FONT_HERSHEY_SIMPLEX, 0.4, grey, 1);
+        spotter::PutText(image, std::to_string(meters) + " m", camera + cv::Point(4, -radius - 4), 0.4, grey, 1);
     }
     // The picture's edge is width/2 pixels from its centre, at a focal length of fx pixels.
     double halfFov = std::atan((colourCamera.width / 2.0) / colourCamera.fx);
@@ -41,7 +42,7 @@ void RadarView::DrawLine(cv::Point2d a, cv::Point2d b, cv::Scalar colour, int th
 {
     cv::Point pa = ToPixel(a), pb = ToPixel(b);
     cv::line(image, pa, pb, colour, thickness);
-    if (!label.empty()) cv::putText(image, label, (pa + pb) / 2 + cv::Point(6, -6), cv::FONT_HERSHEY_SIMPLEX, 0.45, colour, 1);
+    if (!label.empty()) spotter::PutText(image, label, (pa + pb) / 2 + cv::Point(6, -6), 0.45, colour, 1);
 }
 
 void RadarView::DrawTrail(const std::deque<cv::Point2d>& trail, cv::Scalar colour, bool hollow, const std::string& label)
@@ -50,7 +51,7 @@ void RadarView::DrawTrail(const std::deque<cv::Point2d>& trail, cv::Scalar colou
     for (size_t i = 1; i < trail.size(); i++) cv::line(image, ToPixel(trail[i - 1]), ToPixel(trail[i]), colour, 1);
     cv::Point now = ToPixel(trail.back());
     cv::circle(image, now, 7, colour, hollow ? 1 : cv::FILLED);
-    cv::putText(image, label, now + cv::Point(10, 4), cv::FONT_HERSHEY_SIMPLEX, 0.45, colour, 1);
+    spotter::PutText(image, label, now + cv::Point(10, 4), 0.45, colour, 1);
 }
 
 void TrackTrails::Update(const Tracker& tracker, const PinholeCamera& colourCamera)

@@ -26,11 +26,7 @@
 const float CubeMeters = 0.03f;                 // the floor and ceiling searches use one point per 3 cm cube (as Demo 4's room)
 const float JoinMeters = 0.10f;                 // wall ends this close are one corner (BuildRoom snaps them)
 const float MinWallMeters = 0.5f;               // shorter wall pieces are left out
-const float LevelDegrees = 20;                  // a level reading faces within this of straight up or down
-const float MinCeilingAboveFloorMeters = 1.8f;
-const float CeilingStepMeters = 0.02f;          // the ceiling's height histogram step
-const float MinCeilingAreaMeters2 = 0.5f;       // the ceiling: the HIGHEST level readings covering this much
-const float AreaCellMeters = 0.05f;             // area counted in cells this big, seen from below
+// The ceiling: spotter::FindCeiling (the library's since D58; its limits in spotter::CeilingOptions).
 const float GuessCeilingMeters = 2.4f;          // above the floor, when no ceiling was seen
 
 // --- Texturing (new) ---
@@ -94,45 +90,6 @@ struct Shell
 // ---------------------------------------------------------------------
 //  Step 2 (new): the walls, floor and ceiling
 // ---------------------------------------------------------------------
-
-//bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY){
-//
-//@param1 - points: the room's points, levelled (Y up)
-//@param2 - normals: which way each faces
-//@param3 - floorY: the floor's height
-//@param4 - ceilingY: set to the ceiling's height
-//
-//@brief - the ceiling: the highest height (2 cm steps, at least MinCeilingAboveFloorMeters above the floor) where
-//         level, down-facing readings cover MinCeilingAreaMeters2 of the plan (AreaCellMeters cells). A fan, a
-//         lamp or a beam hangs lower and covers less, so it never wins; the ceiling it hides is step 4's job.
-//         False if none qualifies. O(points).
-inline bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY)
-{
-    const float levelCos = std::cos(LevelDegrees * (float)CV_PI / 180);
-    std::map<int, std::vector<cv::Point3f>> steps;   // level readings by height
-    for (size_t i = 0; i < points.size(); i++)
-        if (std::abs(normals[i].y) >= levelCos && points[i].y > floorY + MinCeilingAboveFloorMeters)
-            steps[(int)std::floor(points[i].y / CeilingStepMeters)].push_back(points[i]);
-    for (auto step = steps.rbegin(); step != steps.rend(); ++step)   // from the top down
-    {
-        std::set<std::pair<int, int>> cells;
-        double sum = 0;
-        int count = 0;
-        for (int s = step->first - 1; s <= step->first + 1; s++)   // the step and its neighbours
-        {
-            auto found = steps.find(s);
-            if (found == steps.end()) continue;
-            for (const cv::Point3f& p : found->second)
-            {
-                cells.insert({ (int)std::floor(p.x / AreaCellMeters), (int)std::floor(p.z / AreaCellMeters) });
-                sum += p.y;
-                count++;
-            }
-        }
-        if (cells.size() * AreaCellMeters * AreaCellMeters >= MinCeilingAreaMeters2) { ceilingY = (float)(sum / count); return true; }
-    }
-    return false;
-}
 
 //std::vector<cv::Point2f> Outline(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& walls, bool& closed){
 //
@@ -237,7 +194,7 @@ inline void Level(Shell& shell, const cv::Matx33f& firstCamera)
 //
 //@param1 - shell: the shell with its shots; its surfaces, floor, ceiling and outline are filled
 //
-//@brief - step 2: BuildRoom's walls at full height, FindTwinFloor's floor and FindCeiling's ceiling, from every
+//@brief - step 2: BuildRoom's walls at full height, FindTwinFloor's floor and spotter::FindCeiling's ceiling, from every
 //         scan's ICP points levelled and thinned to one per CubeMeters cube (evenly spread, so a wall seen up
 //         close doesn't outweigh one seen once; D43: raw points put the walls' foot, and so the floor, too high).
 //         Floor and ceiling follow the walls' outline; each wall faces into the room. False if no walls.
@@ -267,7 +224,7 @@ inline bool FindSurfaces(Shell& shell)
     const spotter::TwinFloor floor = spotter::FindTwinFloor(levelled);
     for (const std::string& line : floor.report) std::printf("%s\n", line.c_str());
     shell.floorY = floor.y;
-    const bool ceilingSeen = FindCeiling(levelled.points, levelled.normals, floor.y, shell.ceilingY);
+    const bool ceilingSeen = spotter::FindCeiling(levelled.points, levelled.normals, floor.y, shell.ceilingY);
     if (!ceilingSeen) shell.ceilingY = floor.y + GuessCeilingMeters;
     const float height = shell.ceilingY - shell.floorY;
     std::printf("Ceiling: %s, %.2f m above the floor\n", ceilingSeen ? "seen" : "not seen, guessed", height);

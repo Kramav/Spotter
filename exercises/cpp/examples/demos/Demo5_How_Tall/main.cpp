@@ -31,6 +31,7 @@
 
 #include "spotter/depth.hpp"
 #include "spotter/source_freenect2.hpp"
+#include "spotter/text.hpp"
 #include "spotter/view.hpp"
 
 // The keys, shown in a strip along the bottom of the screen (spotter::WithKeys).
@@ -139,16 +140,15 @@ void Show(const cv::Mat& liveMm, const cv::Mat& mask, const std::vector<Person>&
     for (const Person& p : people)
     {
         cv::rectangle(picture, p.box, yellow, 1);
-        cv::putText(picture, p.wholeInView ? cv::format("%.2f m", p.heightMeters) : "step back", cv::Point(p.box.x, std::max(p.box.y - 8, 24)),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.9, yellow, 2);
+        spotter::PutText(picture, p.wholeInView ? cv::format("%.2f m", p.heightMeters) : "step back", cv::Point(p.box.x, std::max(p.box.y - 8, 24)),
+                    0.9, yellow, 2);
     }
     if (!background.Recorded())
-        cv::putText(picture, cv::format("background in %.0f s", std::ceil(background.SecondsLeft())), cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX,
-                    0.6, cv::Scalar(0, 0, 255), 2);
+        spotter::PutText(picture, cv::format("background in %.0f s", std::ceil(background.SecondsLeft())), cv::Point(10, 20), 0.6, cv::Scalar(0, 0, 255), 2);
     if (tallest > 0)
-        cv::putText(picture, cv::format("tallest today: %.2f m", tallest), cv::Point(picture.cols - 215, 22), cv::FONT_HERSHEY_SIMPLEX, 0.6,
+        spotter::PutText(picture, cv::format("tallest today: %.2f m", tallest), cv::Point(picture.cols - 10 - spotter::TextWidth(cv::format("tallest today: %.2f m", tallest), 0.6, 2), 22), 0.6,
                     cv::Scalar(255, 255, 255), 2);
-    cv::putText(picture, "live only: nothing is recorded", cv::Point(picture.cols - 200, picture.rows - 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
+    spotter::PutText(picture, "live only: nothing is recorded", cv::Point(picture.cols - 10 - spotter::TextWidth("live only: nothing is recorded", 0.4, 1), picture.rows - 10), 0.4,
                 cv::Scalar(160, 160, 160), 1);
     fps.Draw(picture);
     cv::imshow(Window, spotter::WithKeys(picture, Keys));

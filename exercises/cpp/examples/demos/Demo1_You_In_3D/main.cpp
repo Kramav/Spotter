@@ -28,6 +28,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include "spotter/source_freenect2.hpp"
+#include "spotter/text.hpp"
 #include "spotter/view.hpp"
 
 // The keys, shown in a strip along the bottom of the screen (spotter::WithKeys).
@@ -142,12 +143,12 @@ void Show(const Cloud& cloud, spotter::OrbitView& view, spotter::PointRenderer& 
     if (view.Project(cv::Point3f(0, 0, 0), kinect, depth))
     {
         cv::circle(image, kinect, 8, cv::Scalar(0, 255, 255), 2);
-        cv::putText(image, "camera", kinect + cv::Point(12, 5), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 1);
+        spotter::PutText(image, "camera", kinect + cv::Point(12, 5), 0.6, cv::Scalar(0, 255, 255), 1);
     }
-    cv::putText(image, "This is you, in 3D. The camera only sees your front.", cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.85,
+    spotter::PutText(image, "This is you, in 3D. The camera only sees your front.", cv::Point(20, 40), 0.85,
                 cv::Scalar(255, 255, 255), 2);
-    cv::putText(image, cv::format("%zu depth points, live   (live only: nothing is recorded)", cloud.points.size()),
-                cv::Point(20, image.rows - 15), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(160, 160, 160), 1);
+    spotter::PutText(image, cv::format("%zu depth points, live   (live only: nothing is recorded)", cloud.points.size()),
+                cv::Point(20, image.rows - 15), 0.55, cv::Scalar(160, 160, 160), 1);
     cv::imshow(Window, spotter::WithKeys(image, Keys));
 }
 

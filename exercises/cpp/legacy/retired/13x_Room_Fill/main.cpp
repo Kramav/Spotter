@@ -53,11 +53,13 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "fill_holes.hpp"   // step 2 (new), also used by Demo 6 and check_fill
+#include "spotter/room_fill.hpp"   // was fill_holes.hpp beside 13x; in the library since D58
 #include "spotter/mesh.hpp"
 #include "spotter/room_twin.hpp"
 #include "spotter/stats.hpp"
 #include "spotter/view.hpp"
+
+using namespace spotter::fill;   // retired (D58): not built; this line keeps it compiling against the library
 
 // The keys, shown in a strip below the window (spotter::WithKeys).
 const std::string Keys = "G  fill: marked / unmarked / off   K  save the .ply   drag / W A S D  turn   wheel / Z X  zoom   R  reset   Q or Esc  quit";

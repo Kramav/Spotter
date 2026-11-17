@@ -1,4 +1,4 @@
-// Self-check for 13x's (and Demo 6's) hole filling (examples/13x_Room_Fill/fill_holes.hpp), with no Kinect:
+// Self-check for the hole filling of 13v and Demo 7 (spotter/room_fill.hpp, once 13x's fill_holes.hpp), with no Kinect:
 // check_room's patterned box room with its couch, 3 scans written to a room folder and loaded as 13x does
 // (LoadTwinRoom, FindTwinFloor, the points above the under-floor noise), then FillHoles up to 1.6 m
 // (review 2026-11-11, initiative 6: this replaces the temporary harnesses behind D40 and 13x).
@@ -10,7 +10,7 @@
 //   4. The walls are found (traced round the room as one path), the floor is called seen, the marking has both bands.
 // Run: build\check_fill.exe. Exit code 0 = passed. Writes only in the system's temp folder.
 
-#include "../../examples/13x_Room_Fill/fill_holes.hpp"
+#include "spotter/room_fill.hpp"
 #include "spotter/room_folder.hpp"
 #include "spotter/room_twin.hpp"
 #include "test_room.hpp"
@@ -20,6 +20,7 @@
 #include <unordered_set>
 
 namespace fs = std::filesystem;
+using namespace spotter::fill;
 
 
 // How far a point (in the raycast room's coordinates) is from the nearest true surface: a wall, the floor, the

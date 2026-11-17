@@ -6,12 +6,16 @@
 //      And with the walls' lower 0.6 m hidden and a couch seat: still the floor (D43).
 //   3. LocateKinect: views from 0.3 m / 20 deg and 0.64 m / 30 deg off scan 1's spot, found within 2 cm and 1 deg.
 //   4. OneViewRoom: one view, levelled, the floor found.
+//   5. The ceiling (D58): none in the folder above (every scan looks down); with a scan looking up, FindTwinCeiling
+//      finds it 2.5 m above the floor, and CeilingPoints hides its points but keeps every wall point up to 5 cm
+//      under it (the walls at full height).
 // Run: build\check_room_twin.exe. Exit code 0 = passed.
 
 #include "spotter/room_folder.hpp"
 #include "spotter/room_twin.hpp"
 #include "test_room.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 
@@ -113,6 +117,48 @@ int main()
     spotter::TwinFloor oneFloor = spotter::FindTwinFloor(one);
     std::printf("4. one view: %zu points; %s\n", one.points.size(), oneFloor.report[0].c_str());
     Check(oneFloor.seen && std::abs(oneFloor.y + 1.2f) < 0.03f, "OneViewRoom stands level: the floor at -1.2 m");
+
+    // 5. The ceiling. The folder above has none: every scan looks 15 deg down.
+    spotter::TwinCeiling none = spotter::FindTwinCeiling(room, floor.y);
+    std::printf("5. %s\n", none.report[0].c_str());
+    const std::vector<char> noneHidden = spotter::CeilingPoints(room, none);
+    Check(!none.seen && std::count(noneHidden.begin(), noneHidden.end(), 1) == 0, "no scan looked up: no ceiling, nothing hidden");
+
+    // ...and a room folder with a scan looking 30 deg up (and one looking back), as check_room_shell's shots.
+    const fs::path upFolder = fs::temp_directory_path() / "spotter_check_room_twin_up";
+    { std::error_code ignored; fs::remove_all(upFolder, ignored); }
+    std::vector<spotter::Scan> upScans = scans;
+    upScans.push_back(Taken(Spot(0, 0, 0.5f, 0, -30), 4));
+    upScans.push_back(Taken(Spot(0.3f, 0, 1.0f, 180, 10), 5));
+    written = spotter::StartRoomFolder(upFolder, info);
+    for (size_t k = 0; k < upScans.size(); k++) written = written && spotter::WriteScan(upFolder, k, upScans[k]);
+    written = written && spotter::FinishRoomFolder(upFolder, info, upScans, spotter::RoomOptions(), points);
+    spotter::TwinRoom upRoom;
+    Check(written && spotter::LoadTwinRoom(upFolder, 0.03f, upRoom, problem), "the room folder with a scan looking up is written and loads");
+    spotter::TwinFloor upFloor = spotter::FindTwinFloor(upRoom);
+    spotter::TwinCeiling ceiling = spotter::FindTwinCeiling(upRoom, upFloor.y);
+    std::printf("   %s\n", ceiling.report[0].c_str());
+    Check(ceiling.seen && std::abs(ceiling.y - 1.3f) < 0.02f && std::abs(ceiling.y - upFloor.y - 2.5f) < 0.03f,
+          "FindTwinCeiling finds the ceiling 1.3 m above the first camera, 2.5 m above the floor");
+    const std::vector<char> isCeiling = spotter::CeilingPoints(upRoom, ceiling);
+    size_t onCeiling = 0, ceilingHidden = 0, onWalls = 0, wallsHidden = 0;
+    float highestWall = -1e9f;
+    for (size_t i = 0; i < upRoom.points.size(); i++)
+    {
+        const cv::Point3f& p = upRoom.points[i];
+        if (std::abs(p.y - 1.3f) < 0.01f && std::abs(upRoom.normals[i].y) > 0.94f) { onCeiling++; ceilingHidden += isCeiling[i]; }
+        if (std::abs(upRoom.normals[i].y) < 0.34f && p.y < 1.25f)   // upright (within 20 deg), up to 5 cm under the ceiling
+        {
+            onWalls++;
+            wallsHidden += isCeiling[i];
+            if (!isCeiling[i]) highestWall = std::max(highestWall, p.y);
+        }
+    }
+    std::printf("   ceiling points hidden: %zu of %zu; upright points up to 5 cm under it hidden: %zu of %zu; the highest kept: %.3f m\n",
+                ceilingHidden, onCeiling, wallsHidden, onWalls, highestWall);
+    Check(onCeiling > 1000 && ceilingHidden == onCeiling, "CeilingPoints hides every point on the ceiling");
+    Check(onWalls > 1000 && wallsHidden == 0 && highestWall > 1.2f, "...and keeps every wall point up to 5 cm under it: the walls at full height");
+    { std::error_code ignored; fs::remove_all(upFolder, ignored); }
 
     { std::error_code ignored; fs::remove_all(folder, ignored); }
     std::printf(failures ? "check_room_twin: %d FAILED\n" : "check_room_twin: all passed\n", failures);

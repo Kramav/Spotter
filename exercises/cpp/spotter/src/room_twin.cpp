@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <opencv2/imgproc.hpp>
+#include <set>
 
 namespace spotter
 {
@@ -229,6 +231,61 @@ TwinFloor FindTwinFloor(const TwinRoom& room, float minAreaMeters2, float aboveF
         : cv::format("Floor: never seen (no level piece of %.2f m^2 near the walls' foot): guessed at the walls' foot, %.2f m; the lowest 2%% is at %.2f m",
                      minAreaMeters2, floor.y, lowest));
     return floor;
+}
+
+bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY,
+                 const CeilingOptions& options)
+{
+    const float levelCos = std::cos(options.levelDegrees * (float)CV_PI / 180);
+    std::map<int, std::vector<cv::Point3f>> steps;   // level readings by height
+    for (size_t i = 0; i < points.size(); i++)
+        if (std::abs(normals[i].y) >= levelCos && points[i].y > floorY + options.minAboveFloorMeters)
+            steps[(int)std::floor(points[i].y / options.stepMeters)].push_back(points[i]);
+    for (auto step = steps.rbegin(); step != steps.rend(); ++step)   // from the top down
+    {
+        std::set<std::pair<int, int>> cells;
+        double sum = 0;
+        int count = 0;
+        for (int s = step->first - 1; s <= step->first + 1; s++)   // the step and its neighbours
+        {
+            auto found = steps.find(s);
+            if (found == steps.end()) continue;
+            for (const cv::Point3f& p : found->second)
+            {
+                cells.insert({ (int)std::floor(p.x / options.areaCellMeters), (int)std::floor(p.z / options.areaCellMeters) });
+                sum += p.y;
+                count++;
+            }
+        }
+        if (cells.size() * options.areaCellMeters * options.areaCellMeters >= options.minAreaMeters2) { ceilingY = (float)(sum / count); return true; }
+    }
+    return false;
+}
+
+TwinCeiling FindTwinCeiling(const TwinRoom& room, float floorY, const CeilingOptions& options)
+{
+    TwinCeiling ceiling;
+    ceiling.seen = FindCeiling(room.points, room.normals, floorY, ceiling.y, options);
+    if (!ceiling.seen) ceiling.y = floorY + options.guessAboveFloorMeters;
+    ceiling.report.push_back(ceiling.seen
+        ? cv::format("Ceiling: seen at %.2f m, %.2f m above the floor", ceiling.y, ceiling.y - floorY)
+        : cv::format("Ceiling: never seen (no level readings of %.1f m^2 at least %.1f m above the floor): nothing to hide; walls filled up to %.1f m above the floor",
+                     options.minAreaMeters2, options.minAboveFloorMeters, options.guessAboveFloorMeters));
+    return ceiling;
+}
+
+std::vector<char> CeilingPoints(const TwinRoom& room, const TwinCeiling& ceiling, float bandMeters, float levelDegrees)
+{
+    std::vector<char> isCeiling(room.points.size(), 0);
+    if (!ceiling.seen) return isCeiling;
+    const float levelCos = std::cos(levelDegrees * (float)CV_PI / 180), beyondMeters = 0.05f;
+    for (size_t i = 0; i < room.points.size(); i++)
+    {
+        const float y = room.points[i].y;
+        const bool level = std::abs(room.normals[i].y) >= levelCos;
+        isCeiling[i] = (char)((level && y >= ceiling.y - bandMeters) || y > ceiling.y + beyondMeters);
+    }
+    return isCeiling;
 }
 
 Located LocateKinect(const std::vector<cv::Point3f>& view, const TwinRoom& room, const LocateOptions& options)

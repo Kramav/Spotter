@@ -32,6 +32,7 @@
 #include "spotter/depth.hpp"
 #include "spotter/detector_yolo_opencvdnn.hpp"
 #include "spotter/source_freenect2.hpp"
+#include "spotter/text.hpp"
 #include "spotter/view.hpp"
 
 // The keys, shown in a strip below each window (spotter::WithKeys).
@@ -224,10 +225,10 @@ void Show(const spotter::RgbdFrame& frame, const cv::Mat& foreground, const cv::
     std::string status = cv::format("%d person box(es), %d object box(es), %d px removed (%d never seen)", masks.people, masks.objects, removed, neverSeen);
     // Side by side (new): the camera, then the cloaked view.
     cv::Mat camera = frame.registered.clone(), both;
-    cv::putText(camera, "camera", cv::Point(10, 28), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-    cv::putText(picture, explain ? "cloaked (explained)" : "cloaked", cv::Point(10, 28), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+    spotter::PutText(camera, "camera", cv::Point(10, 28), 0.8, cv::Scalar(255, 255, 255), 2);
+    spotter::PutText(picture, explain ? "cloaked (explained)" : "cloaked", cv::Point(10, 28), 0.8, cv::Scalar(255, 255, 255), 2);
     cv::hconcat(camera, picture, both);
-    cv::putText(both, "live only: nothing is recorded", cv::Point(10, both.rows - 10), cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(200, 200, 200), 1);
+    spotter::PutText(both, "live only: nothing is recorded", cv::Point(10, both.rows - 10), 0.45, cv::Scalar(200, 200, 200), 1);
     cv::imshow(Window, spotter::WithKeys(both, Keys));
     if (report.Due()) std::printf("%s\n", status.c_str());
 }

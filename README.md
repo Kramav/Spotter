@@ -207,15 +207,15 @@ Every example is built as `build\examples\<folder name>.exe`. Then work through 
 | 11b | `11b_Feature_Pose` | The rough start found automatically, like Meshroom: matching features in the two colour pictures, then ICP |
 | 13e | `13e_Room_Scan` | **Scan a whole room** from several spots and save one model. Each scan is placed by colour details plus ICP, with live "anchors", a suggested next shot, flags for suspicious scans, and far details for hallways. The scans stay in memory and are written to a folder when you press **K** or **Q**, or if the Kinect is lost (a rescue). Guide: [below](#recreate-a-room-example-13e) |
 | 13w | `13w_Room_Shell` | No Kinect: just the room itself, as a textured `.obj`: every wall full height, the floor and the ceiling, each with a picture taken from the scans' full colour pictures. Behind the couch, under the table and above a ceiling fan, the surface's own pattern is continued. K saves it |
-| 13x | `13x_Room_Fill` | No Kinect: a 13e room with the holes in its flat surfaces (walls, floor, table tops) filled in and marked with blue stripes, so guessed and seen stay apart. K saves a `.ply` with the fill |
+| 13v | `13v_Room_Fill` | No Kinect: a 13e room with the holes in its flat surfaces (walls, floor, table tops) filled in and marked with blue stripes, so guessed and seen stay apart. The ceiling is found and lifted off (C puts it back); the walls keep their full height. K saves a `.ply` with the fill |
 | 13y | `13y_Structure_Survey` | No Kinect: a study of placing scans by the room's structure (floor, walls, ceiling) instead of colour. Prints numbers about a saved room. Findings: [docs/structure-localization-findings.md](docs/structure-localization-findings.md) |
 | 13z | `13z_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
-**Showing it at an exhibition:** six fullscreen demos (you in 3D, an invisibility cloak, a radar
-of the stand, the scanned room with visitors live inside it, "how tall are you", and the scanned
-room with its holes filled in by software, marked as guesses) are in
+**Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
+of the stand, "how tall are you", and the scanned room as a doll's house, its holes filled in by
+software and marked as guesses, the ceiling lifted off, with the visitors live inside it) are in
 [exercises/cpp/examples/demos/](exercises/cpp/examples/README.md) (built as `build\examples\Demo1_You_In_3D.exe` and so on).
-Demos 4 and 6 read a room folder saved by 13e.
+Demo 7 reads a room folder saved by 13e, and shows the room alone when no Kinect is plugged in.
 
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
 [exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).
@@ -369,7 +369,7 @@ scan, so you can rebuild with 13z later.
        build\examples\13z_Room_Rebuild.exe
 
    It lists every saved room in the repo's `room_scans\` (or give a folder: `13z_Room_Rebuild D:\scans`).
-   `o` opens a Select Folder window instead, and so does finding no rooms. 13w, 13x and Demos 4 and 6
+   `o` opens a Select Folder window instead, and so does finding no rooms. 13w, 13v and Demo 7
    open a room the same way when started without one.
    Then you choose:
    - **Which rooms:** `2`, `1,3`, or Enter for all.

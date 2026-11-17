@@ -5,6 +5,7 @@
 #include <cmath>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+#include "spotter/text.hpp"
 
 namespace spotter
 {
@@ -42,8 +43,7 @@ double FpsMeter::Tick()
 void FpsMeter::Draw(cv::Mat& image, const std::string& extra) const
 {
     double size = std::clamp(image.cols / 1000.0, 0.45, 1.0);
-    cv::putText(image, cv::format("%.1f fps", fps) + extra, cv::Point(10, image.rows - 10), cv::FONT_HERSHEY_SIMPLEX,
-                size, cv::Scalar(0, 255, 255), size > 0.7 ? 2 : 1);
+    spotter::PutText(image, cv::format("%.1f fps", fps) + extra, cv::Point(10, image.rows - 10), size, cv::Scalar(0, 255, 255), size > 0.7 ? 2 : 1);
 }
 
 OrbitView::OrbitView(const Options& options, cv::Point3f pivot, float distance)
@@ -97,15 +97,15 @@ cv::Mat WithKeys(const cv::Mat& image, const std::string& keys)
     for (const std::string& entry : entries)
     {
         std::string longer = lines.back().empty() ? entry : lines.back() + "    " + entry;
-        if (!lines.back().empty() && cv::getTextSize(longer, cv::FONT_HERSHEY_SIMPLEX, scale, 1, nullptr).width > picture.cols - 2 * margin)
+        if (!lines.back().empty() && spotter::TextWidth(longer, scale, 1) > picture.cols - 2 * margin)
             lines.push_back(entry);
         else lines.back() = longer;
     }
     cv::Mat shown(picture.rows + (int)lines.size() * lineHeight + 6, picture.cols, CV_8UC3, cv::Scalar(40, 40, 40));
     picture.copyTo(shown(cv::Rect(0, 0, picture.cols, picture.rows)));
     for (size_t i = 0; i < lines.size(); i++)
-        cv::putText(shown, lines[i], cv::Point(margin, picture.rows + (int)(i + 1) * lineHeight - 4), cv::FONT_HERSHEY_SIMPLEX, scale,
-                    cv::Scalar(230, 230, 230), 1, cv::LINE_AA);
+        spotter::PutText(shown, lines[i], cv::Point(margin, picture.rows + (int)(i + 1) * lineHeight - 4), scale,
+                    cv::Scalar(230, 230, 230), 1);
     return shown;
 }
 
@@ -226,7 +226,7 @@ void DrawCamera(cv::Mat& image, const OrbitView& view, const Pose& pose, const P
                                 cv::Point2f((float)camera.width, (float)camera.height) })
         if (view.Project(pose(camera.Unproject(corner - cv::Point2f(0.5f, 0.5f), arrowMeters)), tip, depth))
             cv::arrowedLine(image, pixel, tip, colour, thickness, cv::LINE_AA, 0, 0.15);
-    cv::putText(image, label, pixel + cv::Point(8, -8), cv::FONT_HERSHEY_SIMPLEX, 0.5, colour, 1);
+    spotter::PutText(image, label, pixel + cv::Point(8, -8), 0.5, colour, 1);
 }
 
 }

@@ -123,7 +123,7 @@ private:
 };
 
 // The empty view's depth, recorded once after a countdown to step out of view (example 03's idea;
-// Demos 4 and 5 use this copy). Foreground = clearly nearer than it, cleaned and only big blobs kept.
+// Demos 5 and 7 use this copy). Foreground = clearly nearer than it, cleaned and only big blobs kept.
 class StillBackground
 {
 public:

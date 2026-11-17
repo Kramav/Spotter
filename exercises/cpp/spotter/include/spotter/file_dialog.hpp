@@ -1,7 +1,7 @@
 // spotter/file_dialog.hpp: asking the user, with the system's own windows (D48).
 //
 //   AskSaveAs      the standard "Save As" window (13e: the room folder at start-up and on K, the .obj on E)
-//   AskOpenFolder  the standard "Select Folder" window (13w, 13x, 13y, 13z, Demos 4 and 6: which room)
+//   AskOpenFolder  the standard "Select Folder" window (13w, 13v, 13y, 13z, Demo 7: which room)
 //   Confirm        a Yes / No box (No is the default)
 //   Tell           a message box that has to be clicked away: for failures, so they can't be missed
 //   Ask            one line typed in the console

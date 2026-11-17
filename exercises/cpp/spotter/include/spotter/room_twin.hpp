@@ -1,5 +1,5 @@
-// spotter/room_twin.hpp: the scanned room for the presentation's room twin (Demos 4 and 6): loaded
-// from a room folder (13e's), its floor, and where the Kinect stands in it now.
+// spotter/room_twin.hpp: the scanned room for the presentation's room twin (Demo 7, 13v): loaded
+// from a room folder (13e's), its floor and ceiling, and where the Kinect stands in it now.
 // Coordinates: X right, Y up, Z towards the first camera (scan 1's camera at 0, 0, 0), as BuildRoom's.
 #pragma once
 
@@ -90,6 +90,60 @@ struct TwinFloor
 //         hidden). A floor nobody saw is guessed at the walls' foot. `report`: how it chose.
 //         O(n + bins x n) for n points (one footprint per peak).
 TwinFloor FindTwinFloor(const TwinRoom& room, float minAreaMeters2 = 0.25f, float aboveFootMeters = 0.25f);
+
+// The ceiling (D58): found, so it can be shown or hidden without cutting the walls' tops off.
+struct CeilingOptions
+{
+    float levelDegrees = 20;                 // a level reading faces within this of straight up or down
+    float minAboveFloorMeters = 1.8f;
+    float stepMeters = 0.02f;                // the height histogram's step
+    float minAreaMeters2 = 0.5f;             // the ceiling: the HIGHEST level readings covering this much of the plan
+    float areaCellMeters = 0.05f;            // area counted in cells this big, seen from below
+    float guessAboveFloorMeters = 2.4f;      // TwinCeiling::y when no ceiling was seen
+};
+
+//bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY, const CeilingOptions& options){
+//
+//@param1 - points: the room's points, levelled (Y up)
+//@param2 - normals: which way each faces
+//@param3 - floorY: the floor's height
+//@param4 - ceilingY: set to the ceiling's height
+//@param5 - options: the limits (defaults: CeilingOptions())
+//
+//@brief - the ceiling (13w's rule, D58 moved it here): the highest height (stepMeters steps, at least
+//         minAboveFloorMeters above the floor) where level readings cover minAreaMeters2 of the plan (areaCellMeters
+//         cells). A fan, a lamp or a beam hangs lower and covers less, so it never wins. False if none qualifies.
+//         O(points).
+bool FindCeiling(const std::vector<cv::Point3f>& points, const std::vector<cv::Point3f>& normals, float floorY, float& ceilingY,
+                 const CeilingOptions& options = CeilingOptions());
+
+struct TwinCeiling
+{
+    float y = 0;          // seen: its height; not seen: floor + guessAboveFloorMeters (for filling walls up to)
+    bool seen = false;
+    std::vector<std::string> report;
+};
+
+//TwinCeiling FindTwinCeiling(const TwinRoom& room, float floorY, const CeilingOptions& options){
+//
+//@param1 - room: the levelled room (evenly spread points, as FindTwinFloor's)
+//@param2 - floorY: FindTwinFloor's floor
+//@param3 - options: the limits (defaults: CeilingOptions())
+//
+//@brief - FindCeiling on the room, with a report line for the console. O(points).
+TwinCeiling FindTwinCeiling(const TwinRoom& room, float floorY, const CeilingOptions& options = CeilingOptions());
+
+//std::vector<char> CeilingPoints(const TwinRoom& room, const TwinCeiling& ceiling, float bandMeters, float levelDegrees){
+//
+//@param1 - room: the levelled room
+//@param2 - ceiling: FindTwinCeiling's
+//@param3 - bandMeters: how far under the ceiling a level reading still belongs to it (default 0.10)
+//@param4 - levelDegrees: level = facing within this of straight down or up (default 20)
+//
+//@brief - 1 for each point that is the ceiling: level and within bandMeters under it (or anywhere above it), or
+//         more than 5 cm above it whatever its facing (recesses, stray readings). Walls keep every upright point up
+//         to the ceiling, and a fan hanging lower stays. All 0 if the ceiling wasn't seen. O(points).
+std::vector<char> CeilingPoints(const TwinRoom& room, const TwinCeiling& ceiling, float bandMeters = 0.10f, float levelDegrees = 20);
 
 // Where the Kinect is (D33): ICP from several starts around scan 1's spot.
 struct LocateOptions

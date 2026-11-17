@@ -40,7 +40,7 @@ flowchart LR
     E13c --> E13z["13z Room Rebuild"] --> E14["14 Textured Room"]
     E13d -.->|far landmarks| E13z
     E13e -.->|saved folders| E13z
-    E13e -->|saved folders| E13x["13x Room Fill"]
+    E13e -->|saved folders| E13v["13v Room Fill"]
     E13e -->|saved folders| E13w["13w Room Shell"]
     E13e -->|saved folders| E13y["13y Structure Survey"]
     E13 --> E15["15 Objects in the map"]
@@ -48,14 +48,14 @@ flowchart LR
     E08 --> D1["Demo 1 You in 3D"]
     E07d --> D2["Demo 2 Invisibility Cloak"]
     E06c --> D3["Demo 3 Booth Radar"]
-    E13 --> D4["Demo 4 Room Twin"]
+    E13e --> D7["Demo 7 Room Twin"]
     E03 --> D5["Demo 5 How Tall"]
-    D4 --> D6["Demo 6 Room Filled"]
+    E13v -.->|the fill and the ceiling| D7
 
     classDef planned stroke-dasharray: 5 5
     class E14,E15 planned
     classDef demo fill:#fff3d6,stroke:#c08a00
-    class D1,D2,D3,D4,D5,D6 demo
+    class D1,D2,D3,D5,D7 demo
 ```
 
 ---
@@ -657,7 +657,7 @@ flowchart LR
     SAVE -- "fails at the end" --> RES["Rescue folders in turn:<br/>room_scans/rescue_, Documents, temp"]
     E["E: Save As .obj<br/>in the room's folder"] --> OBJ["room_scan_date_time.obj;<br/>green EXPORTED banner"]
     MEM --> OBJ
-    SAVE --> Z["13z, 13w, 13x, demos<br/>open it (Open window)"]
+    SAVE --> Z["13z, 13w, 13v, Demo 7<br/>open it (Open window)"]
     RES --> Z
 
     classDef new stroke-width:3px
@@ -689,26 +689,33 @@ flowchart LR
     class OPEN,CE,SURF,TEX,FILL,OBJ new
 ```
 
-## 13x Room Fill
+## 13v Room Fill
 
 Starts from 13e's room folder; no Kinect. Legacy Demo 6's filling (D31-D33), unchanged, as an
-example of its own: the holes in the flat surfaces filled and marked, then saved as a `.ply`.
+example of its own: the holes in the flat surfaces filled and marked, then saved as a `.ply`. It
+replaces 13x (retired, D58): 13x cut everything over 1.6 m off, walls included; 13v finds the
+ceiling, lifts only that off (C puts it back), and fills the walls right up to it.
 
 ```mermaid
 flowchart LR
     FOLD["13e room folder"] --> LOAD["Merged at 3 cm, levelled;<br/>floor (FindTwinFloor)"]
-    LOAD --> WALL["Walls: paths along the floor,<br/>unrolled, filled to the cut"]
-    LOAD --> UP["Upright planes<br/>(cabinet fronts)"]
-    LOAD --> LV["Level surfaces + legs"]
+    LOAD --> CEIL["Ceiling: the highest level readings<br/>covering 0.5 m², 1.8 m+ up<br/>(FindTwinCeiling); its points<br/>set apart (CeilingPoints)"]
+    CEIL --> WALL["Walls: paths along the floor,<br/>unrolled, filled up to the ceiling"]
+    CEIL --> UP["Upright planes<br/>(cabinet fronts)"]
+    CEIL --> LV["Level surfaces + legs"]
     WALL --> SEEN["Seen or not, per cell;<br/>the rest inpainted, marked blue"]
     UP --> SEEN
     LV --> SEEN
-    SEEN --> SHOW["Doll's house view<br/>G: marked / unmarked / off"]
+    SEEN --> SHOW["Doll's house view<br/>G: marked / unmarked / off<br/>C: ceiling shown / lifted off"]
+    CEIL --> SHOW
     SHOW --> PLY["K: room_filled_*.ply"]
 
     classDef new stroke-width:3px
-    class WALL,UP,LV,SEEN,PLY new
+    class CEIL,WALL,SHOW new
 ```
+
+**What to compare:** press C with the view turned low: the walls should reach the ceiling, and lifting
+it off should take nothing else away.
 
 ## 13y Structure Survey
 
@@ -731,20 +738,27 @@ flowchart LR
 
 ## Presentation demos
 
-Six fullscreen remixes for an exhibition, in [examples/demos/](examples/README.md) (yellow in
+Five fullscreen remixes for an exhibition, in [examples/demos/](examples/README.md) (yellow in
 the family tree; the originals are in [legacy/presentation/](legacy/presentation/README.md)). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
-save keys; Demo 5 also measures height from each end's own depth. Demo 4 is new: the first cut of
-15, for people. Demo 6 is Demo 4 with the holes in flat surfaces filled (below). The library ports
-are in [examples/demos/](examples/README.md). Their Demos 4 and 6 read a 13e room folder instead of
-13's `.obj` (every scan merged by `FuseScans`, levelled by `room.txt`'s first camera turn); the
-steps are otherwise the same.
+save keys; Demo 5 also measures height from each end's own depth. Demo 7 is legacy Demos 4 and 6 in
+one (D58; the library ports of Demos 4 and 6 are retired to [legacy/retired/](legacy/retired/README.md)).
+
+### Demo 7 Room Twin
+
+The first cut of 15, for people. A 13e room folder (every scan merged by `FuseScans`, levelled by
+`room.txt`'s first camera turn) as a turning doll's house, with 13v's fill (G) and ceiling (C). With the
+Kinect, the visitors walk around inside it; without it, the room alone, and the Kinect is looked for
+every 10 s.
 
 ```mermaid
 flowchart LR
-    OBJ["13's room_scan_&lt;time&gt;.obj<br/>seen_room points + normals,<br/>scan 1's camera turn"] --> DH["Doll's house<br/>ceiling cut off, turning"]
-    K["Kinect, empty view"] --> BG["Empty view's depth (03)"]
-    BG --> LOC["Locate: 13's point-to-plane ICP<br/>from up to 63 starts around<br/>scan 1's spot, best match (D33)"]
-    OBJ --> LOC
+    FOLD["13e room folder<br/>merged, levelled"] --> FC["Floor (FindTwinFloor),<br/>ceiling (FindTwinCeiling);<br/>the ceiling's points apart"]
+    FC --> FILL["13v's fill, up to the ceiling<br/>(spotter/room_fill.hpp)"]
+    FC --> DH["Doll's house, turning:<br/>walls full height,<br/>C: ceiling shown / lifted off"]
+    FILL --> DH
+    K["Kinect, empty view<br/>(if plugged in)"] --> BG["Empty view's depth (03)"]
+    BG --> LOC["Locate: point-to-plane ICP<br/>from up to 63 starts around<br/>scan 1's spot, best match (D33)"]
+    FOLD --> LOC
     K2["Kinect, every frame"] --> FG["Nearer than the empty view<br/>= visitors (03's blobs)"]
     BG --> FG
     FG --> MOVE["Visitors' points<br/>moved into the room"]
@@ -753,40 +767,13 @@ flowchart LR
     DH --> V
 
     classDef new stroke-width:3px
-    class DH,LOC,MOVE new
+    class FC,DH new
 ```
 
 **What to compare:** walk to a corner of the stand: does your orange shell stand in the same
-corner of the doll's house?
-
-### Demo 6 Room Filled
-
-Demo 4, plus one step at start-up (D31, D32, D33): the room's flat surfaces, their holes filled and
-marked, for a simple layout (walls upright, surfaces level).
-
-```mermaid
-flowchart LR
-    OBJ["Demo 4's room<br/>points + normals, levelled"] --> FLOOR["Floor: the lowest level piece<br/>of 0.25 m², near the walls' foot;<br/>stray readings under it hidden"]
-    FLOOR --> WALL["Walls from above:<br/>upright points stacked 1.2 m,<br/>thinned, gaps bridged,<br/>unrolled along their path"]
-    FLOOR --> UP["Cabinet fronts:<br/>RANSAC + 2D refit"]
-    FLOOR --> LV["Level surfaces:<br/>crowded heights,<br/>height per tile"]
-    WALL --> SEEN["Seen: a real point 5 cm in front<br/>to 50 cm behind. Farther behind:<br/>an opening"]
-    UP --> SEEN
-    LV --> SEEN
-    SEEN --> FILL["Fill the rest,<br/>colour by cv::inpaint;<br/>unseen floor at the walls' foot"]
-    LV --> LEG["Legs: thin stacked blobs<br/>under a top, made whole"]
-    WALL --> DARK["Shadows nothing seen explains:<br/>a dark thing, at its<br/>nearby readings' distance"]
-    FILL --> V["Demo 4's viewer + the fill:<br/>G marked / unmarked / off"]
-    LEG --> V
-    DARK --> V
-    OBJ --> V
-
-    classDef new stroke-width:3px
-    class FLOOR,WALL,UP,LV,SEEN,FILL,LEG,DARK new
-```
-
-**What to compare:** press G until it's off (Demo 4's holes), then marked: is every blue patch a
-place no scan could have seen, and is every purple cut-out something dark in the room?
+corner of the doll's house, under a wall as tall as the real one? Press G until it's off (the scan's
+holes), then marked: is every blue patch a place no scan could have seen, and is every purple cut-out
+something dark in the room?
 
 ---
 
