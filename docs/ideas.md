@@ -177,7 +177,8 @@ estimate distance from colour alone, cheapest first:
 Not usable: stereo or structure-from-motion, which need a second camera or a moving camera.
 
 **When:** 1 and 2 fit after 09, as one small example ("distance past the depth range"). 3 only if
-the room map needs far walls that the depth camera can't reach.
+the room map needs far walls that the depth camera can't reach. For real range from another sensor, see
+"Longer range: a lidar on the scanner" at the end of this file.
 
 ## Object scans: cut a detected object out and mesh it
 
@@ -461,3 +462,69 @@ built yet; each item says when it would pay off.
 - **Door and window gaps as landmarks** for Relocate's ties. A wall's holes are fixed and
   asymmetric where the room's planes aren't. It would need wall extents (edge endpoints), which
   the survey found unstable between scans so far.
+
+## Keeping scans level while scanning (after D59, 2026-11-18)
+
+*Not scheduled.* Demo 8 straightens a saved room's scans after the fact (D59): each scan's tilt is fitted from
+its own level and upright readings and undone, then the scan is set on the room's floor. The user's 80-scan hall
+needed up to 9.6 degrees.
+- **The idea:** do it while scanning, inside 13e's `PlaceScan`, so a tilt is never handed on. Options:
+  - after ICP, run Demo 8's `FitTilt` on the new scan and undo it before it becomes a reference for later scans;
+  - or add "level readings face up, walls plumb" as extra rows in ICP's least squares (a soft gravity
+    constraint), weighted like the prior in `FitTilt`;
+  - and warn (13e's red flag) when a scan's fit says it is more than 2 degrees off level.
+- **When it pays off:** long walks (halls, corridors, several rooms), where an early tilt reaches every later scan.
+  Saved folders would then need no straightening, and 13z/13w/13v would get it too.
+- **Watch out for:** rooms that really aren't level (a ramp, an attic's sloped ceiling: the `FitTilt` cut-off at
+  3 degrees leaves slopes out, but a whole view of slope would pull). The floor-height part needs the camera to
+  stand about as high over the floor scan to scan (true for a tripod).
+- **Beyond tilt:** a scan's sideways slip along a curved or bare wall (ICP's weak direction) and yaw drift need
+  loop closures (a pose graph, "Multi-view registration" above); "up" can't see them.
+
+## Longer range: a lidar on the scanner (the user's ask, 2026-11-18)
+
+*Not scheduled, no hardware bought.* The Kinect reads nothing past about 6 m (07b), and the user's hall (D59)
+showed it: far walls got no depth, only far-feature rays (about ±12 cm at 12 m: enough to place a scan, not to
+model a wall). The user wants more range. Working figure for the Kinect: ±5 mm per frame (07b, at 4–6 m).
+
+**Specs and prices below are from memory, not checked online: confirm before buying.**
+
+**Depth cameras don't fix it** (same physics, or stereo, whose error grows with distance squared):
+
+| Option | Usable range | Why not |
+|---|---|---|
+| Orbbec Femto Bolt (Azure Kinect successor) | about 5.5 m | Time-of-flight like the Kinect: no real gain |
+| Intel RealSense D455 (stereo) | 4–6 m before the error balloons | Stereo |
+| Stereolabs ZED 2i (stereo) | claims 20 m | Needs an NVIDIA GPU (D11); metres off at 15 m |
+
+**Lidar options:**
+
+| | Range | Error | Field of view | Price | Notes |
+|---|---|---|---|---|---|
+| **Livox Mid-360** (the pick) | 40 m (10% reflective) to 70 m (80%) | about ±2 cm | 360° × 59° | about $750 | Built-in IMU, Ethernet, open Livox-SDK2 on Linux, 9–27 V power |
+| Unitree L2 | about 30 m | about ±2 cm | 360° × 90° | about $400 | Cheaper, smaller ecosystem |
+| Ouster OS0 / OS1 | 50–100 m+ | about ±1–3 cm | 360° × 45–90° | $6,000+ | Excellent, expensive |
+| Phone lidar (iPhone/iPad Pro) | about 5 m | about ±1 cm, 256×192 | narrow | in the phone | Worse than the Kinect |
+| 2D spinning (RPLidar, Hokuyo) | 6–30 m | about ±1 cm or 1% | one slice | $100–2,000 | One plane only |
+| Survey scanner (Leica BLK360, FARO Focus, Leica RTC360) | 45–350 m | about ±1–4 mm | 360° × 300° | $20,000–80,000; rent about $200–500 a day | Rent one as **ground truth** for the accuracy milestone |
+
+**Why the Mid-360:**
+- Fits D44: Ethernet, Linux, CPU only; the Pi captures, the PC processes.
+- Its IMU gives gravity, so every scan arrives level: fixes D59's lean at the source (see "Keeping scans level
+  while scanning" above).
+- Its non-repeating pattern fills in a dense cloud while it stands still (about 5–10 s): suits fixed stations.
+- 360°: far fewer stations, much more overlap between them, so placement and turn error improve. A turn error of
+  0.06° already equals ±5 mm at 5 m, so overlap matters more than sensor noise.
+- The library's ICP, TSDF, plane search, floor/ceiling steps and Demo 8's straightening work on any point cloud;
+  only sizes grow (e.g. 5 cm voxels for ±2 cm points).
+
+**Trade-offs:** ±2 cm is worse than the Kinect's ±5 mm up close, so keep both (lidar for shape at range, Kinect
+for near detail). No colour: YOLO and textures still need a camera, plus a lidar-to-camera calibration (a new
+step). Needs its own 9–27 V supply (not from the Pi's USB).
+
+**As a ladder** (one idea each): (1) read the Mid-360 and show its points (`OrbitView`); (2) level the cloud by the
+IMU's gravity; (3) a dense cloud from one still station; (4) ICP between two stations: the hall from 2–3 spots;
+(5) calibrate the lidar to the Kinect's colour; (6) fuse: lidar shape + Kinect near detail and colour.
+
+**Before scheduling:** the user decides the biggest space to map (the Mid-360 covers up to about 40 m) and the
+budget (about $400 / $750 / $6,000+). Then log it in decisions.md and move the ladder to the Roadmap.

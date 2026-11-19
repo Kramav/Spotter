@@ -46,6 +46,7 @@ flowchart TB
         SAFE["Scans saved on K / Q (13e)<br/>+ a rescue if the Kinect is lost"]
         KEEP["Kept scans, rebuilt later<br/>K folders + 13z"]
         TEX["Textured room (14)"]
+        STR["Scans stood up straight,<br/>ceiling found spot by spot,<br/>lamps lifted off (Demo 8)"]
         AV -.->|6 m cut-off| PC
         PC --> FL
         PC --> RM
@@ -57,6 +58,7 @@ flowchart TB
         RM -.->|clean model of the merged room| V13
         V13 -->|K| KEEP --> TEX
         V13 --> SAFE -->|same folders| KEEP
+        KEEP --> STR
     end
 
     R -->|colour| Y
@@ -211,11 +213,13 @@ Every example is built as `build\examples\<folder name>.exe`. Then work through 
 | 13y | `13y_Structure_Survey` | No Kinect: a study of placing scans by the room's structure (floor, walls, ceiling) instead of colour. Prints numbers about a saved room. Findings: [docs/structure-localization-findings.md](docs/structure-localization-findings.md) |
 | 13z | `13z_Room_Rebuild` | No Kinect: rebuild rooms later from the folders that 13e saves. Pick rooms and scans, look at them, exclude bad ones, build the `.obj` and the `.ply` again (finer if you like). Step by step: [below](#keep-the-scans-and-rebuild-later-k-and-13z) |
 
-**Showing it at an exhibition:** five fullscreen demos (you in 3D, an invisibility cloak, a radar
+**Showing it at an exhibition:** six fullscreen demos (you in 3D, an invisibility cloak, a radar
 of the stand, "how tall are you", and the scanned room as a doll's house, its holes filled in by
 software and marked as guesses, the ceiling lifted off, with the visitors live inside it) are in
 [exercises/cpp/examples/demos/](exercises/cpp/examples/README.md) (built as `build\examples\Demo1_You_In_3D.exe` and so on).
-Demo 7 reads a room folder saved by 13e, and shows the room alone when no Kinect is plugged in.
+Demo 7 reads a room folder saved by 13e, and shows the room alone when no Kinect is plugged in. Demo 8 is
+Demo 7 for a big hall: it stands every scan up straight before merging them (a long scan can lean), finds the
+ceiling spot by spot, and lifts hanging lamps off with it.
 
 Each example's pipeline is drawn as a flowchart, with what it adds highlighted, in
 [exercises/cpp/EXAMPLES.md](exercises/cpp/EXAMPLES.md).

@@ -51,11 +51,12 @@ flowchart LR
     E13e --> D7["Demo 7 Room Twin"]
     E03 --> D5["Demo 5 How Tall"]
     E13v -.->|the fill and the ceiling| D7
+    D7 --> D8["Demo 8 Straight Room Twin"]
 
     classDef planned stroke-dasharray: 5 5
     class E14,E15 planned
     classDef demo fill:#fff3d6,stroke:#c08a00
-    class D1,D2,D3,D5,D7 demo
+    class D1,D2,D3,D5,D7,D8 demo
 ```
 
 ---
@@ -738,10 +739,11 @@ flowchart LR
 
 ## Presentation demos
 
-Five fullscreen remixes for an exhibition, in [examples/demos/](examples/README.md) (yellow in
+Six fullscreen remixes for an exhibition, in [examples/demos/](examples/README.md) (yellow in
 the family tree; the originals are in [legacy/presentation/](legacy/presentation/README.md)). Demos 1, 2, 3 and 5 are 08, 07d, 06c and 03 with fullscreen, big text and no
 save keys; Demo 5 also measures height from each end's own depth. Demo 7 is legacy Demos 4 and 6 in
 one (D58; the library ports of Demos 4 and 6 are retired to [legacy/retired/](legacy/retired/README.md)).
+Demo 8 is Demo 7 made right for a big hall (D59).
 
 ### Demo 7 Room Twin
 
@@ -774,6 +776,35 @@ flowchart LR
 corner of the doll's house, under a wall as tall as the real one? Press G until it's off (the scan's
 holes), then marked: is every blue patch a place no scan could have seen, and is every purple cut-out
 something dark in the room?
+
+### Demo 8 Straight Room Twin
+
+Demo 7 for a big hall (D59). The user's 80-scan hall leaned 9 degrees at its far end (each scan is placed
+against earlier ones, so one scan's tilt is handed on), its ceiling has several heights, and lamps hang under
+it. Demo 8 stands every scan up straight before merging, finds the ceiling spot by spot, and lifts what hangs
+off with it. The three new steps live in `straight_room.hpp` beside it (`check_straight_room` tests them).
+
+```mermaid
+flowchart LR
+    FOLD["13e room folder:<br/>the scans as placed"] --> ST["Straighten each scan:<br/>level readings face up/down,<br/>walls plumb (least squares);<br/>then onto the room's floor"]
+    ST --> MERGE["Merged, levelled<br/>(MergeTwinRoom)"]
+    MERGE --> FL["Floor (FindTwinFloor)"]
+    FL --> CM["Ceiling map: a height<br/>per 25 cm from readings facing<br/>down; small lower pieces out"]
+    CM --> HANG["Hanging: pieces above 2.1 m<br/>that reach down to nothing"]
+    CM --> FILL["13v's fill, up to the highest<br/>ceiling, cut to each spot's"]
+    HANG --> FILL
+    FILL --> DH["Doll's house, turning:<br/>C: ceiling + lamps / ceiling /<br/>nothing lifted off"]
+    CM --> DH
+    HANG --> DH
+    K["Kinect (if plugged in):<br/>Demo 7's locate and visitors"] --> DH
+
+    classDef new stroke-width:3px
+    class ST,CM,HANG new
+```
+
+**What to compare:** set `StraightenScans = false` and run the same room: the console's Floor and Ceiling
+lines, and the far end leaning when you turn the view low. Press C through its three states: do the lamps and
+beams go with the ceiling, and do the walls under a lower part of the ceiling stop at it?
 
 ---
 

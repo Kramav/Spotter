@@ -176,6 +176,7 @@ flowchart LR
     p2l --> locate["Multi-start ICP<br/>(Demo 7)"]
     p2l --> relo["Relocate (study)"]
     place --> nbv["Next-best-view<br/>(RecommendNext)"]
+    place --> straight["Straighten scans<br/>(Demo 8)"]
 ```
 
 ### 1.5 Reconstruction, filling and texture
@@ -184,12 +185,14 @@ flowchart LR
 flowchart LR
     avg["Temporal average"] --> grid["Grid mesh,<br/>relative jump test (09b)"]
     place["Placed scans"] --> tsdf["TSDF fusion"]
+    place --> straight["Straighten (Demo 8)"] --> tsdf
     tsdf --> nets["Surface nets"]
     nets --> build["BuildRoom: up, sort,<br/>corners, boxes"]
     build --> obj["OBJ / PLY export"]
     nets --> twin["LoadTwinRoom"]
     twin --> floor["FindTwinFloor"]
     floor --> fill["Hole fill (Demo 7, 13v)"]
+    floor --> cmap["Ceiling map + hanging<br/>(Demo 8)"] --> fill
     dt["Distance transform"] --> fill
     hull["Convex hull"] --> fill
     telea["Telea inpaint"] --> fill
@@ -851,6 +854,29 @@ flowchart LR
 - **Why not one rule yet:** merging them would change answers before D43's cause is known. It starts
   once the real room's `Floor:` lines are in; the acceptance is "D43 and the real room agree" (D51).
 
+### 7.11 The ceiling spot by spot, and what hangs from it (Demo 8)
+
+- **Status / where:** Example, **Ours** (D59). `FindCeilingMap`, `CeilingMapPoints`, `HangingPoints` in
+  [straight_room.hpp](../exercises/cpp/examples/demos/Demo8_Straight_Room_Twin/straight_room.hpp), beside Demo 8;
+  `check_straight_room` (a hall with two ceiling heights, an unseen hole, two lamps, a tall cabinet).
+- **What:** a 2.5D height map of the ceiling. Readings facing down (within 60 degrees, so a ceiling sloping to the walls
+  counts), 1.8 m or more over the floor, binned in 25 cm cells; a cell's height is 95% of the way up its readings.
+  Neighbouring cells within 20 cm are one piece; a piece under 0.5 m^2 that is lower than the cells around it, or
+  alone, is a lamp or a beam: cleared. Empty cells take their highest neighbour's height, ring by ring. A point is
+  the ceiling if it is level (or facing down) within 15 cm under its spot's height, or more than 5 cm over it.
+  Hanging: the points over 2.1 m (the ceiling's left out) in touching 8 cm cubes are pieces; a piece whose lowest
+  point is 10 cm or more over that line reaches down to nothing (a lamp, a fan, a duct). A wall's top reaches down
+  the wall, so it stays.
+- **Why:** 7.7's one height can't describe a hall: on the user's hall the ceiling ran 4.6-5.3 m with lower parts at
+  2.2, 2.8 and 4.0 m, and 7.7 took the highest, leaving everything lower on show.
+- **Alternatives:** RANSAC planes facing down (several heights and slopes need many); 7.7 per region.
+- **Excluded / revisit:** a beam built into a wall reaches down the wall, so it stays; a mezzanine reaching down to
+  nothing would be lifted off. The 2.2 m part on the user's hall had nothing seen above it: a low ceiling, or a part
+  nobody looked up at (it can't tell).
+- **Sources:** D59. Height maps of this kind are the 2.5D elevation maps of mobile robotics (e.g. Fankhauser et al.,
+  "Probabilistic Terrain Mapping for Mobile Robots with Uncertain Localization", *IEEE RA-L* 3(4), 2018), turned
+  upside down.
+
 ---
 
 ## 8. Registration: placing one view against another
@@ -1024,6 +1050,33 @@ flowchart LR
 - **Sources:** [findings report](structure-localization-findings.md); free-space (visibility) consistency
   as in Huber & Hebert, "Fully Automatic Registration of Multiple 3D Data Sets", *Image and Vision
   Computing* 21(7), 2003.
+
+### 8.15 Straightening placed scans: level readings up, walls plumb (Demo 8)
+
+- **Status / where:** Example, **Ours** (D59). `FitTilt`, `FloorUnder`, `Straighten` in
+  [straight_room.hpp](../exercises/cpp/examples/demos/Demo8_Straight_Room_Twin/straight_room.hpp);
+  `check_straight_room` (4 of 6 shots tilted up to 8.7 degrees and lifted up to 20 cm: back within 0.14 degrees, 0.2 cm).
+- **What:** after placing, each scan in turn: the small turn w (about X and Z) that makes its level readings face
+  straight up or down and its upright readings face straight sideways, by linear least squares on the small-angle
+  rotation n' = n + w x n (a level reading gives two equations, an upright one gives one), refitted 4 times leaving
+  out readings over 3 degrees off, leaning on the previous scan's fix (worth 300 readings) for the direction one wall
+  can't tell. The scan turns about its own camera. Then its floor (the lowest 2 cm step with 150 up-facing readings)
+  is believed when the camera stands about as high over it as over the last 5 believed (within 15 cm; a table top is
+  0.7 m nearer), and the scan is lifted onto the room's floor (the median of the first 3 believed). Scans with no
+  believed floor take the lifts of the scans either side, in proportion.
+- **Why:** each scan is placed against earlier ones, so one scan's tilt is handed on to every later one. On the
+  user's 80-scan hall the error jumped 6 degrees at scan 36 and reached 9.6 degrees; the floor, ceiling and walls all
+  leaned alike (a real ramp keeps its walls plumb) and the camera "climbed" 0.9 m. Straightened: the floor's lean
+  under 0.5 degrees and the walls' under 1.1 degrees everywhere. Rooms are built level, so "up" is a free, strong
+  constraint that pairwise ICP doesn't use.
+- **Alternatives:** a pose graph with loop closures (11.x: spreads the error but needs the loops); an IMU's gravity
+  (the Kinect v2 has none); the level constraint inside `PlaceScan` while scanning (ideas.md: fixes it at the source).
+- **Excluded / revisit:** a room whose floor really has steps or a ramp would be set on one floor; a scan's sideways
+  slip along a curved or bare wall (ICP's weak direction) isn't touched: only tilt and height are.
+- **Sources:** D59. The small-angle linearisation is point-to-plane ICP's (Low, "Linear Least-Squares Optimization
+  for Point-to-Plane ICP Surface Registration", UNC TR04-004, 2004); using the room's own level and plumb surfaces
+  for "up" is the Manhattan-world idea (Coughlan and Yuille, "Manhattan World", *ICCV* 1999; Straub et al., "A
+  Mixture of Manhattan Frames", *CVPR* 2014).
 
 ---
 
@@ -1388,6 +1441,8 @@ flowchart TD
 - **Algorithms:** known size (Z = fy × height / pixels); floor contact (ray through the box bottom meets
   09's floor plane; tilt error grows with Z²); monocular depth networks scaled by in-range pixels.
 - **Exclusion:** networks are several times heavier than YOLO, PC only (X1).
+- **Another sensor:** a 3D lidar (Livox Mid-360 and others) is in [ideas.md](ideas.md), "Longer range: a lidar on
+  the scanner" (2026-11-18, not scheduled).
 - **Sources:** [Yang et al. 2024, Depth Anything V2](https://arxiv.org/abs/2406.09414);
   [Ranftl et al. 2020, MiDaS](https://arxiv.org/abs/1907.01341).
 
@@ -1472,9 +1527,11 @@ flowchart TD
 | EKF per wall | Example | 6.4 |
 | Entropy per pixel | Need | 11.2 |
 | Feature pose RANSAC | Library | 8.6 |
+| Straightening placed scans (level up, walls plumb) | Example | 8.15 |
 | FindPlanes (localized RANSAC) | Library | 7.3 |
 | FindTwinFloor | Library | 7.6 |
 | FindWalls | Library | 7.4 |
+| Ceiling map (2.5D, from below) and hanging pieces | Example | 7.11 |
 | Flood fill | Example | 4.6 |
 | Floor/up rules compared | Check | 7.10 |
 | Global registration (FPFH, FGR, TEASER++) | Optional | 11.11 |

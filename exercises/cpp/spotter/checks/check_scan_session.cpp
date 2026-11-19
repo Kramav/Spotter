@@ -10,6 +10,8 @@
 //   6. The rescue (D30, D48): a scan still being placed and the room folder blocked by a file. EndSession keeps
 //      the scan, saves to the first RescueFolders entry with no questions, and every scan loads back.
 //   7. Every folder blocked and no one to answer: EndSession reports the scans not saved (13e exits non-zero).
+//   8. Continuing a saved room (ContinueRoom): loaded whole, a new scan placed against it, all saved to a new folder,
+//      the saved room untouched; another depth camera refused.
 // Run: build\check_scan_session.exe. Exit code 0 = passed. Writes only in the temp folder (the rescue too, through
 // SPOTTER_RESCUE_FOLDER), and removes it again.
 
@@ -141,6 +143,57 @@ int main()
     Check(!EndSession(s, "check_scan_session", { base / "a_file" / "r1", base / "a_file" / "r2" }) && !s.saved,
           "every folder failing: EndSession reports not saved");
     WaitForReaders(s);
+
+    // 8. Continuing a saved room (ContinueRoom): 3 whole scans saved, loaded into a new session, a 4th placed against
+    // them, all 4 saved to a NEW folder; the saved room is left as it was. Another depth camera is refused.
+    auto Whole = [](spotter::Scan scan) {   // as 13e's OnScanReady makes them: the full picture and the colour index too
+        scan.fullPicture = scan.picture.clone();
+        scan.colourIndex.resize(scan.cloud.size());
+        for (size_t i = 0; i < scan.cloud.size(); i++) scan.colourIndex[i] = std::isnan(scan.cloud[i].z) ? -1 : (int)i;
+        return scan;
+    };
+    auto NewSession = [&](Session& n, const fs::path& folder) {
+        n.camera = Camera;
+        n.folder = folder;
+        n.roomsFolder = base.string();
+        n.info.program = "check_scan_session";
+        n.info.depthCamera = Camera;
+        n.info.calibration = s.info.calibration;
+    };
+    Session first(60);
+    NewSession(first, base / "to_continue");
+    AddScan(first, Whole(Photograph(truth[0], 1)));
+    for (size_t k = 1; k < 3; k++) { StartPlacing(first, Whole(Photograph(truth[k], (int)k + 1)), -1); Collect(first); }
+    Check(first.scans.size() == 3 && SaveAll(first, problem), "8. a room of 3 whole scans is saved");
+    const fs::file_time_type savedAt = fs::last_write_time(first.folder / "room.txt");
+
+    Session next(60);
+    NewSession(next, base / "continued");
+    const bool continued = ContinueRoom(next, first.folder, problem);
+    bool same = continued && next.scans.size() == 3 && next.landmarks.size() == first.landmarks.size();
+    for (size_t k = 0; same && k < 3; k++)
+    {
+        const spotter::Scan &a = first.scans[k], &b = next.scans[k];
+        same = cv::norm(a.pose.shift - b.pose.shift) < 0.0005f && a.near.keypoints.size() == b.near.keypoints.size() &&
+               cv::norm(a.near.descriptors, b.near.descriptors, cv::NORM_HAMMING) == 0 && a.far.keypoints.size() == b.far.keypoints.size() &&
+               b.fullPicture.size() == a.fullPicture.size() && b.colourIndex == a.colourIndex && !next.onDisk[k];
+    }
+    std::printf("8. continued: %s; %zu scans, %zu landmarks\n", continued ? "loaded" : problem.c_str(), next.scans.size(), next.landmarks.size());
+    Check(same, "ContinueRoom loads every scan whole: poses within 0.5 mm, the same features, pictures and index, none counted as on disk");
+    StartPlacing(next, Whole(Photograph(truth[3], 4)), -1);
+    Collect(next);
+    Check(next.scans.size() == 4 && MmOff(next.scans[3], truth[3]) < 5, "a new scan is placed against the loaded ones, within 5 mm");
+    Check(SaveAll(next, problem) && LoadsBack(next) && spotter::ScanFolders(next.folder).size() == 4,
+          "K writes all 4 scans to the new folder, and they load back");
+    Check(spotter::ScanFolders(first.folder).size() == 3 && fs::last_write_time(first.folder / "room.txt") == savedAt,
+          "the room that was continued is left as it was");
+    Session other(60);
+    NewSession(other, base / "other");
+    other.camera.fx += 5;
+    Check(!ContinueRoom(other, first.folder, problem) && other.scans.empty(), "a room from another depth camera is refused, nothing loaded");
+    std::printf("   (refused: %s)\n", problem.c_str());
+    WaitForReaders(first);
+    WaitForReaders(next);
     fs::remove_all(base, error);
 
     std::printf(failures ? "check_scan_session: %d FAILED\n" : "check_scan_session: all passed\n", failures);

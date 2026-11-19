@@ -2821,6 +2821,34 @@ EX.push({
   ],
 });
 
+EX.push({
+  id: 'D8', name: 'Straight Room Twin', group: 'scan', from: 'Demo 7 (13e\'s folders)',
+  idea: 'Demo 7 made right for a big hall (D59). Each scan is placed against earlier ones, so one scan\'s small tilt is handed on to every later one: the user\'s 80-scan hall leaned 9 degrees at its far end, floor, ceiling and walls alike. Demo 8 stands every scan up straight before merging, finds the ceiling spot by spot (a hall\'s ceiling has steps and slopes), and lifts the lamps and beams off with it.',
+  uses: ['xyz', 'disk'], sim: () => ({ person: false }), maxDepth: () => 6,
+  compare: 'The user\'s real hall (80 scans, numbers only): the floor\'s lean under 0.5 degrees in every 2 m band (was up to 6.8), the walls\' under 1.1 (was 8.2); ceiling 4.6-5.3 m (Demo 7 said 6.14 m); 31k points of lamps and beams in 230 pieces. check_straight_room: shots tilted up to 8.7 degrees stood back up within 0.14.',
+  setup(st) { st.S = scans(); st.use = [0, 1, 2, 3, 5]; st.all = asCloud(st.use.map(k => [st.S[k].P, null, 2])); },
+  steps: [
+    {
+      name: 'Stand each scan up', a: 'The scans, merged', b: 'Each scan\'s tilt (the user\'s hall)',
+      text: 'For each scan: the small turn that makes its level readings face straight up or down and its walls stand plumb (a curved wall too), fitted by least squares and undone about its own camera. Then it is lifted onto the room\'s floor where it saw the floor; the camera stood 1.45 m above it every time.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.5, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { bars(ctx, R, [{ label: 'scans 1-35', frac: 1 / 10, value: 'about 1 deg', c: SCR.green }, { label: 'scan 36', frac: 6.5 / 10, value: '6.5 deg', c: SCR.red }, { label: 'scans 43-61', frac: 9.6 / 10, value: '8.5-9.6 deg', c: SCR.red }, { label: 'scans 62-80', frac: 5 / 10, value: '3-5 deg' }], { title: 'Tilt undone, per scan' }); },
+    },
+    {
+      name: 'The ceiling, spot by spot', a: 'From above', b: 'A height per 25 cm',
+      text: 'Readings facing down, 1.8 m or more up, give each 25 cm of the plan its own ceiling height. A small piece lower than its surroundings is a lamp, not ceiling; a spot nobody looked up at takes the height around it. A wall stops at its own spot\'s ceiling.',
+      A(ctx, R, st) { drawPlan(ctx, R, { layers: st.S.map(q => ({ ...q.plan, c: q.col, a: 0.75 })), cams: st.S.map((_, j) => camOf(st.S, j)) }); },
+      B(ctx, R) { consoleLines(ctx, R, ['Ceiling: found spot by spot, 2.65 to 5.34 m above the floor,', '  in 11 pieces of 1 m^2 or more; 102 small lower pieces', '  are hanging things, not ceiling', '  ceiling piece 4.88 m above the floor: 34.7 m^2 seen', '  ceiling piece 4.55 m above the floor: 15.6 m^2 seen']); },
+    },
+    {
+      name: 'Lift off what hangs', a: 'The doll\'s house', b: 'C: three ways',
+      text: 'Above a door\'s height, pieces that reach down to nothing (lamps, ducts, a ceiling sloping to the walls) are lifted off with the ceiling. A wall\'s or a tall cabinet\'s top reaches down, so it stays. The fill goes up to the highest ceiling and is cut to each spot\'s.',
+      A(ctx, R, st, s) { drawCloud(ctx, R, st.all, { yaw: 0.5 * Math.sin(s * 0.6), pitch: 0.9, pivot: 2.2, dist: 3.6 }); },
+      B(ctx, R) { consoleLines(ctx, R, ['The room: 495866 points (80866 of them the ceiling,', '  31247 hanging from it in 230 pieces)', 'C: ceiling + lamps lifted off -> ceiling only -> nothing', { t: 'then 27.2 m^2 of fill over its spot\'s ceiling dropped', c: SCR.green }]); },
+    },
+  ],
+});
+
 // =====================================================================
 //  Setup: the page around the stage
 // =====================================================================

@@ -464,6 +464,48 @@ bool LoadScan(const fs::path& folder, const RoomInfo& info, Scan& scan, int& num
     return true;
 }
 
+bool LoadWholeScan(const fs::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem)
+{
+    if (info.format != 2) { problem = "only format 2 rooms can be scanned on (format 1's features are mirrored)"; return false; }
+    if (!LoadScan(folder, info, scan, number, problem, true)) return false;
+    // The full colour picture (read as bytes: imread's narrow path, as WritePicture).
+    {
+        std::ifstream file(folder / "colour_full.bmp", std::ios::binary);
+        const std::vector<uchar> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (!bytes.empty()) scan.fullPicture = cv::imdecode(bytes, cv::IMREAD_COLOR);
+        if (scan.fullPicture.empty()) { problem = "colour_full.bmp missing or unreadable"; return false; }
+    }
+    // Which full-picture pixel each depth pixel landed on.
+    {
+        scan.colourIndex.resize(scan.cloud.size());
+        std::ifstream file(folder / "colour_index.bin", std::ios::binary);
+        file.read((char*)scan.colourIndex.data(), scan.colourIndex.size() * sizeof(int));
+        if (!file || file.gcount() != (std::streamsize)(scan.colourIndex.size() * sizeof(int))) { problem = "colour_index.bin missing or short"; return false; }
+    }
+    // The features, as WriteScan put them (in memory, then parsed: a path outside the code page is fine).
+    try
+    {
+        std::ifstream file(folder / "features.yml", std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (text.empty()) { problem = "features.yml missing or empty"; return false; }
+        cv::FileStorage features(text, cv::FileStorage::READ | cv::FileStorage::MEMORY);
+        cv::read(features["keypoints"], scan.near.keypoints);
+        features["descriptors"] >> scan.near.descriptors;
+        cv::read(features["far_keypoints"], scan.far.keypoints);
+        features["far_descriptors"] >> scan.far.descriptors;
+        features["far_rays"] >> scan.farRays;
+        features["far_origin"] >> scan.farOrigin;
+    }
+    catch (const cv::Exception& e) { problem = std::string("features.yml unreadable: ") + e.what(); return false; }
+    if (scan.near.keypoints.size() != (size_t)scan.near.descriptors.rows || scan.far.keypoints.size() != (size_t)scan.far.descriptors.rows ||
+        scan.far.keypoints.size() != scan.farRays.size())
+    {
+        problem = "features.yml's keypoints, descriptors and rays don't add up (a damaged file?)";
+        return false;
+    }
+    return true;
+}
+
 bool SetExcluded(const fs::path& scanFolder, bool excluded)
 {
     std::ifstream in(scanFolder / "pose.txt");

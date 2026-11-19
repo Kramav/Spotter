@@ -65,8 +65,16 @@ std::filesystem::path ChooseRoom(int argc, char** argv, const std::string& rooms
 bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoom& room, std::string& problem)
 {
     RoomInfo info;
-    if (!ReadRoomInfo(folder, info, problem)) return false;
     std::vector<Scan> scans;
+    if (!LoadTwinScans(folder, info, scans, problem)) return false;
+    room = MergeTwinRoom(scans, info, cubeMeters, folder.filename().string());
+    return !room.points.empty();
+}
+
+bool LoadTwinScans(const std::filesystem::path& folder, RoomInfo& info, std::vector<Scan>& scans, std::string& problem)
+{
+    if (!ReadRoomInfo(folder, info, problem)) return false;
+    scans.clear();
     std::string why;
     for (const std::filesystem::path& scanFolder : ScanFolders(folder))
     {
@@ -76,13 +84,18 @@ bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoo
         else if (!scan.excluded) scans.push_back(std::move(scan));
     }
     if (scans.empty()) { problem = "no scans to load in " + folder.string() + (why.empty() ? "" : " (the last skipped: " + why + ")"); return false; }
+    return true;
+}
+
+TwinRoom MergeTwinRoom(const std::vector<Scan>& scans, const RoomInfo& info, float cubeMeters, const std::string& name)
+{
     std::vector<const Scan*> all;
     for (const Scan& s : scans) all.push_back(&s);
     RoomOptions options;
     options.voxelMeters = cubeMeters;
     float voxel;
     Mesh seen = FuseScans(all, info.depthCamera, options, voxel);
-    room = TwinRoom();
+    TwinRoom room;
     if (info.finished) room.firstCamera = info.firstCamera;
     else
     {
@@ -91,7 +104,7 @@ bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoo
     }
     // Each corner faces the sum of its triangles' facings (13's ICP measures along it).
     std::vector<cv::Point3f> facing(seen.points.size(), cv::Point3f(0, 0, 0));
-    for (const auto& [name, triangles] : seen.groups)
+    for (const auto& [group, triangles] : seen.groups)
         for (const cv::Vec3i& t : triangles)
         {
             cv::Point3f n = (seen.points[t[1]] - seen.points[t[0]]).cross(seen.points[t[2]] - seen.points[t[0]]);
@@ -105,8 +118,8 @@ bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoo
         room.normals.push_back(room.firstCamera * (facing[i] * (float)(1 / length)));
         room.colours.push_back(seen.colours[i]);
     }
-    room.from = cv::format("%s (%zu scans, %.0f cm cubes)", folder.filename().string().c_str(), scans.size(), voxel * 100);
-    return !room.points.empty();
+    room.from = cv::format("%s (%zu scans, %.0f cm cubes)", name.c_str(), scans.size(), voxel * 100);
+    return room;
 }
 
 TwinRoom OneViewRoom(const std::vector<cv::Point3f>& cloud, const cv::Mat& colours, int width, float levelDegrees)

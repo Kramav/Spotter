@@ -301,6 +301,63 @@ inline void AddScan(Session& s, spotter::Scan scan)
     s.saved = false;
 }
 
+// --- Continuing a saved room (2026-11-16, after the crash at scan 81) ---
+
+//bool ContinueRoom(Session& s, const std::filesystem::path& from, std::string& problem){
+//
+//@param1 - s: a session with no scans yet, its camera set from the Kinect; the saved room's scans, landmarks and colour
+//          model are added
+//@param2 - from: a room folder 13e saved (format 2)
+//@param3 - problem: why it failed, for the console
+//
+//@brief - every scan of the saved room loaded whole (LoadWholeScan: cloud, pictures, features, pose, flags) in order,
+//         its far landmarks (LoadLandmarks), and the colour model refitted from its last scan; then the next-shot
+//         advice. New scans are placed against them as if they'd never been saved. Nothing counts as on disk: the
+//         session's folder (another one) gets every scan at the first save. Refuses a room from another depth
+//         camera (its clouds wouldn't line up with new ones), a format 1 room, or a scan that won't load (all or
+//         nothing). Prints its progress. O(scans x pixels).
+inline bool ContinueRoom(Session& s, const std::filesystem::path& from, std::string& problem)
+{
+    spotter::RoomInfo saved;
+    if (!spotter::ReadRoomInfo(from, saved, problem)) return false;
+    if (saved.format != 2) { problem = "it's a format 1 room (legacy 13c-13e): only format 2 rooms can be scanned on"; return false; }
+    const spotter::PinholeCamera& a = saved.depthCamera;
+    const spotter::PinholeCamera& b = s.camera;
+    if (a.width != b.width || a.height != b.height || std::abs(a.fx - b.fx) > 0.5f || std::abs(a.fy - b.fy) > 0.5f ||
+        std::abs(a.cx - b.cx) > 0.5f || std::abs(a.cy - b.cy) > 0.5f)
+    {
+        problem = cv::format("it was scanned with another depth camera (fx %.1f, cx %.1f; this Kinect: fx %.1f, cx %.1f)", a.fx, a.cx, b.fx, b.cx);
+        return false;
+    }
+    const std::vector<std::filesystem::path> folders = spotter::ScanFolders(from);
+    if (folders.empty()) { problem = "it holds no scans"; return false; }
+    std::vector<spotter::Scan> loaded(folders.size());
+    auto start = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < folders.size(); i++)
+    {
+        int number = 0;
+        if (!spotter::LoadWholeScan(folders[i], saved, loaded[i], number, problem))
+        {
+            problem = folders[i].filename().string() + ": " + problem;
+            return false;
+        }
+        if (number != (int)i + 1) { problem = cv::format("scan %d is missing (found %s next)", (int)i + 1, folders[i].filename().string().c_str()); return false; }
+        if ((i + 1) % 10 == 0 || i + 1 == folders.size()) std::printf("  loaded %zu of %zu scans\n", i + 1, folders.size());
+    }
+    for (spotter::Scan& scan : loaded) AddScan(s, std::move(scan));
+    s.landmarks = spotter::LoadLandmarks(from, saved);
+    const spotter::Scan& last = s.scans.back();
+    spotter::ColourModel fitted = spotter::FitColourModel(last.cloud, last.colourIndex, last.fullPicture.cols);
+    if (fitted.ok) s.colourModel = fitted;
+    int excluded = 0, suspicious = 0;
+    for (const spotter::Scan& scan : s.scans) { excluded += scan.excluded; suspicious += scan.suspicious; }
+    std::printf("Continuing %s: %zu scans (%d excluded, %d suspicious) and %zu far landmarks loaded in %.0f s.\n", from.string().c_str(),
+                s.scans.size(), excluded, suspicious, s.landmarks.size(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    Say(s, cv::format("Continuing the room: %zu scans loaded. Aim at something already scanned until the anchors are green, then SPACE.", s.scans.size()));
+    Recommend(s);
+    return true;
+}
+
 // --- Placing in the background ---
 
 //void StartPlacing(Session& s, spotter::Scan scan, int again){
@@ -310,10 +367,11 @@ inline void AddScan(Session& s, spotter::Scan scan)
 //@param3 - again: the index of the scan being placed again, or -1 for a new one
 //
 //@brief - starts PlaceScan on a background thread (so the windows keep working); `again` leaves that scan and its
-//         landmarks out of the matching. O(1) here.
+//         landmarks out of the matching. It doesn't wait for a live check or the advice still running: like placing,
+//         they only read `scans` and `landmarks` (it used to wait, up to ~2 s with 80 scans, the windows frozen;
+//         2026-11-16). Whatever changes them waits for every reader (TakePlacement, AddScan). O(1) here.
 inline void StartPlacing(Session& s, spotter::Scan scan, int again)
 {
-    WaitForReaders(s);
     s.placing = std::async(std::launch::async, [&s, again](spotter::Scan scan) {
         Session::Job job;
         std::mt19937 random((unsigned)s.scans.size() + 11);
@@ -727,7 +785,7 @@ inline bool EndSession(Session& s, const std::string& why, const std::vector<std
         }
     }
     std::printf("\n=================================================================\n"
-                "Every scan is in %s\n(13z rebuilds the room from it; 13w, 13x and the demos open it.)\n"
+                "Every scan is in %s\n(13z rebuilds the room from it; 13w, 13v and Demo 7 open it; 13e can continue it.)\n"
                 "=================================================================\n", s.folder.u8string().c_str());
     return true;
 }

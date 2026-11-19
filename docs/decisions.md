@@ -1407,3 +1407,55 @@ as possible.
   ceiling stays). 13v and Demo 7 ran without a Kinect on a synthetic room folder. A harness render of the
   same library calls was checked by eye: the walls and the fill reach the ceiling (highest filled point
   1.30 m, the ceiling at 1.30 m). The live part (visitors, unplugging) wasn't run on the sensor.
+
+## D59: Demo 8 stands the scans up straight, finds the ceiling spot by spot, and lifts what hangs (2026-11-18, the user's ask)
+
+**Why:** the user scanned a big hall (`Kautz-11-16_2105`, 80 scans) with hanging lights and a curved wall. In Demo 7
+the ceiling was "lifted off (6.14 m up)" yet still there. The user allowed tests on that scanned room this once;
+they ran on numbers only (no picture of the room was opened).
+- **What the numbers showed:** the reconstruction leaned. From x = 4 m on, the floor, the ceiling and the walls all
+  tilted the same way, about 6 degrees by 8-12 m (walls 7-8 degrees at the far end), and the camera "climbed" 0.87 m
+  across the hall. Real walls stay plumb even on a ramp, so it was the placing, not the room. Per scan: scans 1-35
+  within about 1 degree, a 6.5 degree jump at scan 36, 8.5-9.6 degrees for scans 43-61, 3-5 for 62-80. Each scan is
+  placed against earlier ones, so a tilt is handed on. Where the floor was seen, the camera stood 1.45 m above it
+  every time. The ceiling wasn't one height either: 4.6-5.3 m once straightened, with lower parts (2.2, 2.8, 4.0 m)
+  and readings sloping towards the walls. Demo 7's `FindCeiling` takes the highest layer covering 0.5 m^2, so it
+  took 6.14 m on the leaning end and kept everything lower.
+- **The curved wall:** the fill's wall step traces any path from above, so it copes. It reported the curve as
+  several walls bending 68-146 cm. Leaning walls broke the wall finder more (it looks for points stacked straight
+  up). A curved wall may still let ICP slip sideways along it; straightening doesn't touch that (only tilt and height).
+
+**Decided (Demo 8 · Straight Room Twin, `examples/demos/Demo8_Straight_Room_Twin`, Demo 7 kept as it is):**
+- **1. Straighten, before merging** (`Straighten`): each scan's tilt fitted by least squares (level readings
+  straight up or down, upright ones straight sideways; small angles), leaning on the previous scan's for a
+  direction one wall can't tell, and undone about its own camera. Then each scan's floor is believed if the
+  camera stands about as high over it as over the last few (within 15 cm), and the scan lifted onto the room's
+  floor (the median of the first 3 believed: the earliest scans have handed on the least). The others are lifted
+  in proportion between their neighbours. A setting turns it off, to compare.
+- **2. The ceiling map** (`FindCeilingMap`): a height per 25 cm cell from readings facing down within 60 degrees (a
+  sloping ceiling counts), 95% up each cell's readings; small lower pieces (under 0.5 m^2) cleared as lamps; gaps
+  filled from the highest neighbour. A point is ceiling if level or facing down within 15 cm under its spot's
+  height, or over it.
+- **3. Hanging** (`HangingPoints`): points over 2.1 m in touching 8 cm cubes that reach down to nothing (a lamp, a
+  duct, a sloped ceiling's edge). C cycles: the ceiling and what hangs lifted off (start) / the ceiling only /
+  nothing.
+- **The fill** goes up to the highest ceiling and is then cut to each spot's (on the hall, 27 m^2 dropped).
+- **Library:** `LoadTwinRoom` split into `LoadTwinScans` + `MergeTwinRoom` (same results; `room_twin.hpp` now
+  includes `room_folder.hpp` and `room_scan.hpp`). The three steps live in `straight_room.hpp` beside Demo 8
+  (D50's pattern), not in the library: only Demo 8 uses them yet.
+
+**Verified:**
+- `check_straight_room` (new; ctest 15/15, check_structure 357 s): four of six shots tilted up to 8.7 degrees and lifted
+  up to 20 cm come back within 0.14 degrees and 0.2 cm. A made-up hall's two ceiling heights are found, its
+  unseen hole too. A lamp under the ceiling, and one under the hole, aren't taken for it. Both lamps hang; the
+  walls and a 2.4 m cabinet don't. Three mutations (tilt sign, no small-piece rule, everything hangs) each fail it.
+- On the real hall, through Demo 8's own `LoadTwin` (a harness, no window): straightened in a 12 s load. The floor
+  lean is under 0.5 degrees in every 2 m band (was up to 6.8), and the walls' under 1.1 (was 8.2). The floor's
+  biggest flat piece grew from 14.6 to 16.3 m^2. The ceiling has 11 pieces of 1 m^2 or more, the biggest 34.7 m^2
+  at 4.88 m. 81k ceiling points and 31k hanging in 230 pieces. No filled point above its spot's ceiling.
+- The 24-scan room of the same hall needed at most 2.4 degrees. The Ambulance room's floor lean fell from up to
+  6.7 to at most 1.4 degrees. The full build has 0 warnings (Demo 7 not relinked: it was open).
+- **Not done:** the window wasn't opened or looked at, and the live part wasn't run.
+
+**Open:** fix the lean at the source: the level constraint inside `PlaceScan` while scanning (ideas.md). A real
+ramp or steps in a floor would be flattened by step 1.

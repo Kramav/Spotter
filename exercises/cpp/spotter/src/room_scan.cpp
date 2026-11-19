@@ -278,8 +278,12 @@ std::vector<size_t> Shortlist(const cv::Mat& descriptors, const std::vector<Scan
         all.push_back(both);
         owner.insert(owner.end(), both.rows, s);
     }
+    // Voting needs only a sample of the new features: every shortlistEvery-th (they only rank the scans).
+    cv::Mat voters;
+    if (options.shortlistEvery <= 1) voters = descriptors;
+    else for (int r = 0; r < descriptors.rows; r += options.shortlistEvery) voters.push_back(descriptors.row(r));
     std::vector<int> votes(scans.size(), 0);
-    for (const cv::DMatch& m : NearestFeatures(descriptors, all))
+    for (const cv::DMatch& m : NearestFeatures(voters, all))
         if (m.distance <= options.shortlistHamming) votes[owner[m.trainIdx]]++;
     std::vector<size_t> order(scans.size());
     std::iota(order.begin(), order.end(), 0);

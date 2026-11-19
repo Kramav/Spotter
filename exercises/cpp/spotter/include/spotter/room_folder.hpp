@@ -179,6 +179,20 @@ bool ReadRoomInfo(const std::filesystem::path& room, RoomInfo& info, std::string
 //         Format 1 is mirrored back. O(pixels).
 bool LoadScan(const std::filesystem::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem, bool picture = true);
 
+//bool LoadWholeScan(const std::filesystem::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem){
+//
+//@param1 - folder: a scan folder (scan_005) of a format 2 room
+//@param2 - info: the room's room.txt
+//@param3 - scan: filled with everything WriteScan wrote: LoadScan's cloud, picture, pose and flags, plus the near and far
+//          features (features.yml), the full colour picture and the colour index
+//@param4 - number: set to the scan's number
+//@param5 - problem: why it failed, for the console
+//
+//@brief - a scan as 13e held it, so a saved room can be scanned on (13e continuing a room): placing needs the features,
+//         and saving to another folder needs the full picture and the index. Refuses format 1 (its features are
+//         mirrored) and a scan missing any of these. O(pixels + features).
+bool LoadWholeScan(const std::filesystem::path& folder, const RoomInfo& info, Scan& scan, int& number, std::string& problem);
+
 //bool SetExcluded(const std::filesystem::path& scanFolder, bool excluded){
 //
 //@param1 - scanFolder: a scan folder

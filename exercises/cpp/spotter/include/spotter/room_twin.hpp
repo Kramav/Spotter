@@ -5,6 +5,8 @@
 
 #include "spotter/frame.hpp"
 #include "spotter/geometry.hpp"
+#include "spotter/room_folder.hpp"   // RoomInfo
+#include "spotter/room_scan.hpp"     // Scan
 
 #include <filesystem>
 #include <string>
@@ -54,6 +56,27 @@ std::filesystem::path ChooseRoom(int argc, char** argv, const std::string& rooms
 //         the sum of its triangles' facings, turned by room.txt's first camera turn (BuildRoom's when the
 //         folder isn't finished). False if nothing could be loaded. FuseScans dominates: O(scans x voxels).
 bool LoadTwinRoom(const std::filesystem::path& folder, float cubeMeters, TwinRoom& room, std::string& problem);
+
+// LoadTwinRoom in two halves, for a program that changes the scans in between (Demo 8 straightens them).
+//bool LoadTwinScans(const std::filesystem::path& folder, RoomInfo& info, std::vector<Scan>& scans, std::string& problem){
+//
+//@param1 - folder: a room folder (13e's)
+//@param2 - info: set to its room.txt
+//@param3 - scans: set to every included scan, in order (no full colour pictures); a damaged one is skipped with a line
+//@param4 - problem: why it failed, for the console
+//
+//@brief - LoadTwinRoom's first half. False if room.txt can't be read or no scan loads. O(scans x pixels).
+bool LoadTwinScans(const std::filesystem::path& folder, RoomInfo& info, std::vector<Scan>& scans, std::string& problem);
+
+//TwinRoom MergeTwinRoom(const std::vector<Scan>& scans, const RoomInfo& info, float cubeMeters, const std::string& name){
+//
+//@param1 - scans: the placed scans
+//@param2 - info: their room.txt (its first camera turn, if finished; else BuildRoom's)
+//@param3 - cubeMeters: the merge's cube size
+//@param4 - name: the room's name, for `from`
+//
+//@brief - LoadTwinRoom's second half: FuseScans, each corner's facing, turned into the room. O(scans x voxels).
+TwinRoom MergeTwinRoom(const std::vector<Scan>& scans, const RoomInfo& info, float cubeMeters, const std::string& name);
 
 //TwinRoom OneViewRoom(const std::vector<cv::Point3f>& cloud, const cv::Mat& colours, int width, float levelDegrees){
 //

@@ -6,6 +6,10 @@
 //  memory (nothing is written while you scan) and the folder is written in
 //  one go on K, on Q, when the Kinect is lost, or on any error (D39).
 //
+//    0. Continue?     (2026-11-16) a saved room can be scanned on: name its folder on the
+//                     command line, or answer Yes at start and choose it. Its scans, features
+//                     and far landmarks are loaded; new scans are placed against them, and the
+//                     whole room goes to a NEW folder (the saved one is left as it is).
 //    1. Folder first  a Save As window before the windows open (it starts in the
 //                     repo's room_scans/, the name room_<date>_<time>). The folder
 //                     is checked: not inside build/, writable, room on the disk
@@ -62,6 +66,8 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "spotter/file_dialog.hpp"   // Confirm, Tell
+#include "spotter/room_twin.hpp"     // ChooseRoom: the room to continue
 #include "spotter/source_freenect2.hpp"
 #include "spotter/track.hpp"   // ColourForId
 #include "spotter/view.hpp"
@@ -253,19 +259,56 @@ void ShowCamera(const Session& s, const spotter::RgbdFrame& frame, const std::st
 //  Setup and main operation
 // ---------------------------------------------------------------------
 
-//bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame){
+//std::filesystem::path RoomToContinue(int argc, char** argv){
 //
-//@param1 - s: the session; its folder and camera info are filled
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional room folder to continue
+//
+//@brief - which saved room to scan on, if any: the folder on the command line, else a Yes / No question (No, the
+//         default, = a new room) and then a Select Folder window (ChooseRoom). Empty = a new room. O(1) plus the waits.
+std::filesystem::path RoomToContinue(int argc, char** argv)
+{
+    if (argc <= 1 && !spotter::Confirm("13e: continue a room?", "Continue a room you saved before, scanning on from where it ended?\n\n"
+                                                                "Yes = choose the room; it's copied into a new folder, and the saved one is left as it is.\nNo = a new room."))
+        return {};
+    std::filesystem::path from = spotter::ChooseRoom(argc, argv, SaveFolder, "13e: continue");
+    if (from.empty()) std::printf("No room chosen to continue: starting a new room.\n");
+    return from;
+}
+
+//bool SameFolder(const std::filesystem::path& a, const std::filesystem::path& b){
+//
+//@brief - true if the two name the same folder, or one is inside the other (compared as absolute, normalised paths). O(1).
+bool SameFolder(const std::filesystem::path& a, const std::filesystem::path& b)
+{
+    std::error_code error;
+    const std::string x = std::filesystem::weakly_canonical(a, error).string() + "\\", y = std::filesystem::weakly_canonical(b, error).string() + "\\";
+    return x.rfind(y, 0) == 0 || y.rfind(x, 0) == 0;
+}
+
+//bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame, const std::filesystem::path& from){
+//
+//@param1 - s: the session; its folder and camera info are filled (and, continuing, the saved room's scans)
 //@param2 - kinect: the open Kinect
 //@param3 - frame: set to the first frame
+//@param4 - from: a saved room to continue, or empty for a new room
 //
-//@brief - the folder (asked first in a Save As window and checked, AskRoomFolder), then the first frame for the
-//         cameras' numbers and the device's calibration text. False, with the reason printed, if the answer was
-//         cancel or no frame came. O(1).
-bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
+//@brief - the folder (asked first in a Save As window and checked, AskRoomFolder; never the room being continued, which
+//         Save As would offer to replace), then the first frame for the cameras' numbers and the device's calibration
+//         text, then the room being continued (ContinueRoom). False, with the reason printed (and shown, for a room that
+//         won't load), if the answer was cancel, no frame came, or the room couldn't be continued. O(1), plus O(scans x
+//         pixels) continuing.
+bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame, const std::filesystem::path& from)
 {
     s.roomsFolder = SaveFolder;
-    s.folder = spotter::AskRoomFolder(SaveFolder);
+    const int toWrite = from.empty() ? 1 : (int)spotter::ScanFolders(from).size() + 1;
+    while (true)
+    {
+        s.folder = spotter::AskRoomFolder(SaveFolder, {}, toWrite);
+        if (s.folder.empty() || from.empty() || !SameFolder(s.folder, from)) break;
+        spotter::Tell("13e: choose another folder", "That's the room being continued (or a folder around it or inside it).\n\n"
+                                                     "Choose a new folder: the saved room stays as it is.");
+    }
     if (s.folder.empty()) { std::printf("No folder chosen, so nothing can be saved: not starting.\n"); return false; }
     if (!kinect.Next(frame)) { std::printf("The Kinect gave no first frame: not starting.\n"); return false; }
     CheckFolderNow(s);
@@ -273,6 +316,17 @@ bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
     s.info.colourSize = frame.colour.size();
     s.info.program = "13e_Room_Scan";
     s.info.calibration = kinect.CalibrationText();
+    if (!from.empty())
+    {
+        std::printf("Loading %s to continue it...\n", from.string().c_str());
+        std::string problem;
+        if (!ContinueRoom(s, from, problem))
+        {
+            std::printf("Can't continue %s: %s. Not starting.\n", from.string().c_str(), problem.c_str());
+            spotter::Tell("13e: can't continue that room", "Can't continue " + from.string() + ":\n" + problem + "\n\nNothing was changed. 13e will close.");
+            return false;
+        }
+    }
     std::printf("\n=================================================================\nThe room will be saved to\n  %s\n"
                 "(on K, Q, a lost Kinect or an error; room for about %d scans there)\n=================================================================\n%s\n",
                 s.folder.string().c_str(), s.scansThatFit, s.message.c_str());
@@ -287,12 +341,15 @@ bool Start(Session& s, spotter::KinectSource& kinect, spotter::RgbdFrame& frame)
 //         features) and whenever a live check is due. O(1).
 bool NeedBigdepth(const Session& s) { return s.averager.Added() == s.averager.Frames() - 1 || LiveCheckDue(s); }
 
-//int main(){
+//int main(int argc, char** argv){
+//
+//@param1 - argc: how many command-line words there are
+//@param2 - argv: the words: an optional saved room folder to continue
 //
 //@brief - the program: 13e · Room Scan. Our most advanced room scanner: use this one for real rooms. Scan the room
 //         from many spots; each scan is placed by itself. Setup, main loop and clean-up are laid out in the file's
 //         sections. Returns 0 on a normal exit, 1 if it couldn't start.
-int main()
+int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     spotter::KinectSource::Options kinectOptions;
@@ -304,7 +361,7 @@ int main()
     s.liveEveryMs = LiveEveryMs;
     s.showStep = ShowStep;
     spotter::RgbdFrame frame;
-    if (!kinect.IsOpen() || !Start(s, kinect, frame)) { std::printf("Nothing scanned.\n"); return 1; }
+    if (!kinect.IsOpen() || !Start(s, kinect, frame, RoomToContinue(argc, argv))) { std::printf("Nothing scanned.\n"); return 1; }
 
     cv::namedWindow(Viewer);
     cv::namedWindow(CameraWindow);

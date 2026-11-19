@@ -33,6 +33,8 @@ struct ScanOptions
     float maxDepthMeters = 6.0f;
     int placeCandidates = 4;                 // full matching only against the 4 scans that win a quick vote...
     int shortlistHamming = 50;               // ...votes from twins within 50 bits of 256
+    int shortlistEvery = 3;                  // ...cast by every 3rd of the new scan's features (on the user's 80-scan room: the same
+                                             // matched scan on all 79 placements as every feature, 3x faster; every 4th: 78/79)
     float thinMeters = 0.01f;                // ICP's target: one point per 1 cm cube...
     float cropMarginShare = 0.1f;            // ...of what the rough pose can see, plus 10% round the edges
     float suspiciousMoveMeters = 0.10f;      // red: ICP moved it this far from the features' guess...
@@ -161,8 +163,8 @@ FeatureMatch FeaturePose(const Scan& b, const Scan& a, std::mt19937& random, int
 //         scan holding its nearest twin (NearestFeatures over every scan's descriptors stacked), if within
 //         shortlistHamming bits. Up to k scan indices with votes, best first. Excluded scans and `skip` get
 //         no votes. O(n x M) for n descriptors and M descriptors in all the scans.
-// ponytail: stacks every scan's descriptors per call (fine for tens of scans); keep a persistent
-// index if sessions grow to hundreds.
+// ponytail: stacks every scan's descriptors per call. Over OpenCV's 262,144-row limit (about 80 scans: 13e
+// crashed at scan 81, 2026-11-16) NearestFeatures matches in blocks; keep a persistent index if sessions grow to hundreds.
 std::vector<size_t> Shortlist(const cv::Mat& descriptors, const std::vector<Scan>& scans, int k, int skip, const ScanOptions& options);
 
 struct Placement
